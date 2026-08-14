@@ -124,7 +124,34 @@ class SelfCheckInController extends Controller
             'accuracy' => 'nullable|numeric',
             'altitude' => 'nullable|numeric',
             'device_timestamp' => 'nullable|numeric',
+            'device_id' => 'nullable|string|max:255',
         ]);
+
+        // === ONE DEVICE ONE ATTENDANCE ENFORCEMENT ===
+        // Buat device hash dari kombinasi device_id yang dikirim + User-Agent
+        $rawDeviceId = $request->input('device_id', '');
+        $userAgent = $request->userAgent() ?? '';
+        $ipAddress = $request->ip();
+        $deviceHash = hash('sha256', $rawDeviceId . '|' . $userAgent);
+
+        // Cek apakah device ini sudah pernah presensi di event aktif ini
+        $deviceAttendance = Attendance::where('event_id', $activeEvent->id)
+            ->where('device_hash', $deviceHash)
+            ->with('participant')
+            ->first();
+
+        if ($deviceAttendance && $deviceAttendance->participant) {
+            $lockedParticipant = $deviceAttendance->participant;
+            return response()->json([
+                'status' => 'device_locked',
+                'message' => 'Perangkat ini sudah digunakan untuk presensi atas nama ' . $lockedParticipant->nama . ' (' . $lockedParticipant->nis_nip . '). 1 perangkat hanya diizinkan untuk 1 kali presensi per event.',
+                'locked_participant' => [
+                    'nama' => $lockedParticipant->nama,
+                    'nis_nip' => $lockedParticipant->nis_nip,
+                    'waktu_hadir' => $deviceAttendance->waktu_hadir->format('H:i:s'),
+                ],
+            ], 403);
+        }
 
         // Validasi Anti-Fake GPS & Mock Location
         if ($request->has('accuracy')) {
@@ -211,11 +238,13 @@ class SelfCheckInController extends Controller
             ]);
         }
 
-        // Catat kehadiran untuk event aktif
+        // Catat kehadiran untuk event aktif (beserta device_hash & IP untuk lock)
         $attendance = Attendance::create([
             'event_id' => $activeEvent->id,
             'participant_id' => $participant->id,
             'waktu_hadir' => now(),
+            'device_hash' => $deviceHash,
+            'ip_address' => $ipAddress,
         ]);
 
         return response()->json([

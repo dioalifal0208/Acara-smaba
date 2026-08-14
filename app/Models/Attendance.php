@@ -13,6 +13,8 @@ class Attendance extends Model
         'event_id',
         'participant_id',
         'waktu_hadir',
+        'device_hash',
+        'ip_address',
     ];
 
     protected $casts = [
