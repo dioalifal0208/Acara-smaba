@@ -10,8 +10,8 @@ export default function AuthenticatedLayout({ header, children }) {
     return (
         <div className="h-screen bg-slate-50 text-slate-900 flex flex-col justify-between overflow-hidden relative">
             {/* Background decorative glow (subtle) */}
-            <div className="absolute top-0 left-0 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full bg-indigo-500/5 blur-3xl pointer-events-none"></div>
-            <div className="absolute bottom-0 right-0 translate-x-1/2 translate-y-1/2 w-[500px] h-[500px] rounded-full bg-purple-500/5 blur-3xl pointer-events-none"></div>
+            <div className="absolute top-0 left-0 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full bg-emerald-500/5 blur-3xl pointer-events-none"></div>
+            <div className="absolute bottom-0 right-0 translate-x-1/2 translate-y-1/2 w-[500px] h-[500px] rounded-full bg-green-500/5 blur-3xl pointer-events-none"></div>
 
             <div className="w-full flex-1 flex flex-col overflow-hidden">
                 {/* Navbar */}

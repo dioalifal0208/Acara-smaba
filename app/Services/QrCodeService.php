@@ -7,7 +7,7 @@ use SimpleSoftwareIO\QrCode\Facades\QrCode;
 class QrCodeService
 {
     /**
-     * Generate QR code SVG dari token.
+     * Generate QR code SVG dari token (Default Hitam).
      */
     public function generate(string $token, int $size = 300): string
     {
@@ -15,8 +15,42 @@ class QrCodeService
             ->size($size)
             ->errorCorrection('H')
             ->margin(1)
-            ->color(55, 48, 163) // Indigo-700
+            ->color(0, 0, 0) // Hitam Pekat
             ->generate($token);
+    }
+
+    /**
+     * Generate Master QR code SVG dengan Logo Sekolah di bagian tengah.
+     */
+    public function generateWithLogo(string $token, int $size = 400): string
+    {
+        $qrSvg = $this->generate($token, $size);
+
+        // Logo sekolah di tengah QR dengan background bulat putih & border halus
+        $logoSize = (int) round($size * 0.22); // 22% dari ukuran QR
+        $logoPos = (int) round(($size - $logoSize) / 2);
+        $circleRadius = (int) round(($logoSize / 2) + 4);
+        $circleCenter = (int) round($size / 2);
+
+        $logoPath = public_path('images/logo.png');
+        $logoBase64 = '';
+        if (file_exists($logoPath)) {
+            $logoData = file_get_contents($logoPath);
+            $logoBase64 = 'data:image/png;base64,' . base64_encode($logoData);
+        } else {
+            $logoBase64 = '/images/logo.png';
+        }
+
+        // Sisipkan elemen logo di tengah SVG
+        $centerLogoSvg = <<<SVG
+        <g id="center-school-logo">
+            <circle cx="{$circleCenter}" cy="{$circleCenter}" r="{$circleRadius}" fill="#ffffff" stroke="#e2e8f0" stroke-width="2"/>
+            <image href="{$logoBase64}" x="{$logoPos}" y="{$logoPos}" width="{$logoSize}" height="{$logoSize}" preserveAspectRatio="xMidYMid meet"/>
+        </g>
+        </svg>
+        SVG;
+
+        return str_replace('</svg>', $centerLogoSvg, $qrSvg);
     }
 
     /**
@@ -37,8 +71,8 @@ class QrCodeService
             <g transform="translate(0, 0)">
                 {$qrSvg}
             </g>
-            <text x="{($size/2)}" y="{($size + 30)}" text-anchor="middle" font-family="Arial, sans-serif" font-size="{$fontSize}" font-weight="bold" fill="#1e1b4b">{$nama}</text>
-            <text x="{($size/2)}" y="{($size + 55)}" text-anchor="middle" font-family="Arial, sans-serif" font-size="{$subFontSize}" fill="#6366f1">{$nisNip}</text>
+            <text x="{($size/2)}" y="{($size + 30)}" text-anchor="middle" font-family="Arial, sans-serif" font-size="{$fontSize}" font-weight="bold" fill="#0f172a">{$nama}</text>
+            <text x="{($size/2)}" y="{($size + 55)}" text-anchor="middle" font-family="Arial, sans-serif" font-size="{$subFontSize}" fill="#475569">{$nisNip}</text>
         </svg>
         SVG;
     }
@@ -55,7 +89,7 @@ class QrCodeService
                 ->size($size)
                 ->errorCorrection('H')
                 ->margin(1)
-                ->color(55, 48, 163)
+                ->color(0, 0, 0)
                 ->generate($token);
         }
 

@@ -99,7 +99,24 @@ export default function SelfCheckInForm({ token, activeEvent }) {
 
         navigator.geolocation.getCurrentPosition(
             async (position) => {
-                const { latitude, longitude } = position.coords;
+                const { latitude, longitude, accuracy, altitude, heading, speed } = position.coords;
+                const deviceTimestamp = position.timestamp || Date.now();
+
+                // Anti-Mock Check 1: Sinyal / Akurasi abnormal (Ciri khas injector / cell tower kasar)
+                if (accuracy === 0) {
+                    setIsLocating(false);
+                    setErrorMsg('Peringatan Keamanan: Terdeteksi manipulasi lokasi / Mock Location (Akurasi 0). Matikan aplikasi Fake GPS pada perangkat Anda.');
+                    playAudio('error');
+                    return;
+                }
+
+                if (accuracy > 100) {
+                    setIsLocating(false);
+                    setErrorMsg(`Sinyal GPS kurang presisi (akurasi: ±${Math.round(accuracy)}m). Mohon pastikan GPS dalam mode Akurasi Tinggi (High Accuracy) dan berada di area terbuka.`);
+                    playAudio('error');
+                    return;
+                }
+
                 try {
                     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
                     const response = await fetch(route('self-checkin.submit', token), {
@@ -109,7 +126,16 @@ export default function SelfCheckInForm({ token, activeEvent }) {
                             'X-CSRF-TOKEN': csrfToken,
                             'Accept': 'application/json',
                         },
-                        body: JSON.stringify({ nis_nip: data.nis_nip, latitude, longitude }),
+                        body: JSON.stringify({
+                            nis_nip: data.nis_nip,
+                            latitude,
+                            longitude,
+                            accuracy: accuracy ? Math.round(accuracy * 10) / 10 : null,
+                            altitude: altitude !== null ? Math.round(altitude * 10) / 10 : null,
+                            heading: heading !== null ? heading : null,
+                            speed: speed !== null ? speed : null,
+                            device_timestamp: deviceTimestamp,
+                        }),
                     });
 
                     const resData = await response.json();
@@ -152,11 +178,11 @@ export default function SelfCheckInForm({ token, activeEvent }) {
                 let msg = 'Gagal mendapatkan lokasi GPS Anda.';
                 if (error.code === 1) msg = 'Akses lokasi ditolak. Aktifkan izin lokasi (GPS) pada browser/perangkat Anda.';
                 else if (error.code === 2) msg = 'Sinyal GPS tidak ditemukan atau tidak stabil.';
-                else if (error.code === 3) msg = 'Waktu permintaan lokasi habis (timeout).';
+                else if (error.code === 3) msg = 'Waktu permintaan lokasi habis (timeout). Silakan coba lagi.';
                 setErrorMsg(msg);
                 playAudio('error');
             },
-            { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+            { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
         );
     };
 

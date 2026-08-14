@@ -273,6 +273,17 @@ export default function EventsIndex({ events }) {
                                             </div>
 
                                             <div className="flex items-center gap-2">
+                                                <a
+                                                    href={route('events.export', event.id)}
+                                                    className="rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100 transition inline-flex items-center gap-1 shadow-xs"
+                                                    title="Export Bukti Hadir Excel (.xlsx)"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                                    </svg>
+                                                    <span>Export</span>
+                                                </a>
+
                                                 {event.is_active ? (
                                                     <button
                                                         onClick={() => handleDeactivate(event.id, event.nama_event)}

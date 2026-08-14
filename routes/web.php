@@ -78,6 +78,8 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
 
     // Report routes
     Route::get('/report', [AttendanceController::class, 'report'])->name('report');
+    Route::get('/events/{event}/export', [AttendanceController::class, 'exportAttendance'])->name('events.export');
+    Route::get('/events/{event}/qr-signature', [AttendanceController::class, 'qrSignature'])->name('events.qr-signature');
 });
 
 Route::middleware('auth')->group(function () {

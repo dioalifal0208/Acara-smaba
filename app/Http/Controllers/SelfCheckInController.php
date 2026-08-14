@@ -34,8 +34,8 @@ class SelfCheckInController extends Controller
         // Buat URL check-in menggunakan host saat ini
         $checkInUrl = url("/self-checkin/{$token}");
         
-        // Generate QR code SVG untuk URL tersebut
-        $qrCodeSvg = $qrCodeService->generate($checkInUrl, 400);
+        // Generate QR code SVG untuk URL tersebut dengan Logo Sekolah di tengahnya
+        $qrCodeSvg = $qrCodeService->generateWithLogo($checkInUrl, 400);
 
         return Inertia::render('Admin/MasterQr', [
             'activeEvent' => $activeEvent,
@@ -121,7 +121,45 @@ class SelfCheckInController extends Controller
             'nis_nip' => 'required|string|max:50',
             'latitude' => 'nullable|numeric',
             'longitude' => 'nullable|numeric',
+            'accuracy' => 'nullable|numeric',
+            'altitude' => 'nullable|numeric',
+            'device_timestamp' => 'nullable|numeric',
         ]);
+
+        // Validasi Anti-Fake GPS & Mock Location
+        if ($request->has('accuracy')) {
+            $accuracy = (float) $request->input('accuracy');
+            
+            // Mock Location Injector sering menghasilkan accuracy 0 persis
+            if ($accuracy <= 0) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Peringatan Keamanan: Terdeteksi manipulasi lokasi (Mock Location). Matikan aplikasi Fake GPS pada perangkat Anda.',
+                ], 403);
+            }
+
+            // Batas toleransi akurasi maksimal (120 meter) untuk mencegah spoofing berbasis jaringan/BTS jauh
+            if ($accuracy > 120) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Akurasi sinyal GPS perangkat Anda terlalu rendah (±' . round($accuracy) . 'm). Pastikan fitur Lokasi Akurasi Tinggi diaktifkan dan Anda berada di area terbuka.',
+                ], 400);
+            }
+        }
+
+        // Cek anomali waktu sensor GPS (Anti-Replay / Clock Skew > 2 menit)
+        if ($request->has('device_timestamp')) {
+            $deviceTimeSec = (int) ($request->input('device_timestamp') / 1000);
+            $serverTimeSec = now()->timestamp;
+            $timeDiff = abs($serverTimeSec - $deviceTimeSec);
+
+            if ($timeDiff > 120) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Waktu pada perangkat Anda tidak sinkron dengan server (selisih > 2 menit). Mohon atur jam perangkat ke otomatis/WIB.',
+                ], 400);
+            }
+        }
 
         // Cek batasan radius (jika event memiliki setingan koordinat)
         if ($activeEvent->latitude && $activeEvent->longitude) {
