@@ -66,6 +66,7 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
 
     // Participant management routes
     Route::get('/participants', [ParticipantController::class, 'index'])->name('participants.index');
+    Route::get('/participants/template', [ParticipantController::class, 'downloadTemplate'])->name('participants.template');
     Route::post('/participants', [ParticipantController::class, 'store'])->name('participants.store');
     Route::post('/participants/import', [ParticipantController::class, 'import'])->name('participants.import');
     Route::put('/participants/{participant}', [ParticipantController::class, 'update'])->name('participants.update');

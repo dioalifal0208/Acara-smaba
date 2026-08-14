@@ -16,6 +16,7 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
     const [cooldownActive, setCooldownActive] = useState(false);
     const [scanCount, setScanCount] = useState(0);
     const [scanLock, setScanLock] = useState({ active: false, style: null });
+    const [showFullscreenWarning, setShowFullscreenWarning] = useState(true);
 
     const html5QrCodeRef = useRef(null);
     const isProcessingRef = useRef(false);
@@ -206,7 +207,6 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
                 { facingMode: 'environment' },
                 {
                     fps: 10,
-                    aspectRatio: 1.0,
                 },
                 (decodedText, decodedResult) => {
                     handleScan(decodedText, decodedResult);
@@ -233,6 +233,35 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
         }
         setIsScanning(false);
         setIsCameraLoading(false);
+    };
+
+    // ─── Fullscreen Logic ───
+    useEffect(() => {
+        const checkFullscreen = () => {
+            // Check HTML5 fullscreen API or window inner height vs screen height (F11 detection)
+            const isFull = document.fullscreenElement != null || Math.abs(window.innerHeight - window.screen.height) < 5;
+            setShowFullscreenWarning(!isFull);
+        };
+        
+        checkFullscreen();
+        window.addEventListener('resize', checkFullscreen);
+        document.addEventListener('fullscreenchange', checkFullscreen);
+        
+        return () => {
+            window.removeEventListener('resize', checkFullscreen);
+            document.removeEventListener('fullscreenchange', checkFullscreen);
+        };
+    }, []);
+
+    const handleEnterFullscreen = () => {
+        if (document.documentElement.requestFullscreen) {
+            document.documentElement.requestFullscreen().catch((err) => {
+                console.warn(`Fullscreen error: ${err.message}`);
+                setShowFullscreenWarning(false); // Allow bypass if browser blocks it
+            });
+        } else {
+            setShowFullscreenWarning(false); // Allow bypass if not supported
+        }
     };
 
     useEffect(() => {
@@ -279,12 +308,12 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
                     </div>
                     <div className="flex items-center gap-2">
                         {isScanning && (
-                            <span className="flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
-                                <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500"></span>
+                            <span className="flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 shadow-sm border border-emerald-200">
+                                <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.8)]"></span>
                                 Kamera Aktif
                             </span>
                         )}
-                        <span className="rounded-full bg-indigo-100 px-3 py-1 text-xs font-semibold text-indigo-700">
+                        <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-indigo-700 shadow-sm border border-indigo-100">
                             {scanCount} scan
                         </span>
                     </div>
@@ -293,239 +322,274 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
         >
             <Head title="Scanner Presensi" />
 
-            <div className="py-6 flex-1 overflow-y-auto w-full">
-                <div className="mx-auto max-w-7xl sm:px-6 lg:px-8 h-full space-y-4">
-
-                    {!activeEvent && (
-                        <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-amber-900 flex items-center justify-between gap-4 shadow-sm">
-                            <div className="flex items-center gap-3">
-                                <span className="text-xl">⚠️</span>
-                                <div>
-                                    <p className="text-xs font-bold">Presensi terkunci karena belum ada Event Aktif.</p>
-                                    <p className="text-[11px] text-amber-700">Admin harus memilih atau mengaktifkan event terlebih dahulu.</p>
-                                </div>
-                            </div>
-                            <a
-                                href={route('events.index')}
-                                className="rounded-xl bg-amber-600 px-3 py-1.5 text-xs font-bold text-white shadow hover:bg-amber-700 shrink-0"
-                            >
-                                Kelola Event
-                            </a>
+            {/* ─── Fullscreen Overlay Warning ─── */}
+            {showFullscreenWarning && (
+                <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-gray-900/95 backdrop-blur-md p-6">
+                    <div className="w-full max-w-md bg-white rounded-3xl p-8 shadow-2xl text-center transform transition-all">
+                        <div className="mx-auto w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mb-6">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                            </svg>
                         </div>
-                    )}
-                    
-                    <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                        <h2 className="text-2xl font-black text-gray-800 mb-3">Mode Fullscreen</h2>
+                        <p className="text-gray-500 text-sm mb-8 leading-relaxed">
+                            Demi kenyamanan dan agar seluruh antarmuka scanner terlihat sempurna tanpa terpotong, silakan masuk ke mode layar penuh (Fullscreen) atau tekan tombol <kbd className="bg-gray-100 border border-gray-300 rounded px-2 py-0.5 text-xs font-mono font-bold text-gray-700">F11</kbd>.
+                        </p>
+                        
+                        <div className="flex flex-col gap-3">
+                            <button
+                                onClick={handleEnterFullscreen}
+                                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 px-6 rounded-xl shadow-lg shadow-indigo-200 transition-all active:scale-95"
+                            >
+                                Masuk Fullscreen Sekarang
+                            </button>
+                            <button
+                                onClick={() => setShowFullscreenWarning(false)}
+                                className="w-full bg-white hover:bg-gray-50 text-gray-500 font-bold py-3 px-6 rounded-xl transition-all text-xs"
+                            >
+                                Lanjutkan tanpa Fullscreen
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
-                        {/* ── Left: Scanner + Stats ── */}
-                        <div className="lg:col-span-2 space-y-4">
-                            {/* Live Stats Bar */}
-                            <div className="grid grid-cols-3 gap-3">
-                                <div className="rounded-xl bg-white p-4 shadow-md">
-                                    <p className="text-xs font-medium text-gray-500">Total</p>
-                                    <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
-                                </div>
-                                <div className="rounded-xl bg-white p-4 shadow-md">
-                                    <p className="text-xs font-medium text-gray-500">Hadir</p>
-                                    <p className="text-2xl font-bold text-emerald-600">{stats.hadir}</p>
-                                </div>
-                                <div className="rounded-xl bg-white p-4 shadow-md">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <p className="text-xs font-medium text-gray-500">Progress</p>
-                                            <p className="text-2xl font-bold text-indigo-600">{attendancePercentage}%</p>
+            {/* Main container: Allow scroll if screen is too small, but aim for full screen */}
+            <div className="p-4 sm:p-6 w-full max-w-7xl mx-auto flex flex-col gap-4 lg:gap-6 min-h-[calc(100vh-100px)]">
+                
+                {!activeEvent && (
+                    <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-amber-900 flex items-center justify-between gap-4 shadow-sm shrink-0">
+                        <div className="flex items-center gap-3">
+                            <span className="text-2xl">⚠️</span>
+                            <div>
+                                <p className="text-sm font-bold">Presensi terkunci karena belum ada Event Aktif.</p>
+                                <p className="text-xs text-amber-700 mt-0.5">Admin harus memilih atau mengaktifkan event terlebih dahulu.</p>
+                            </div>
+                        </div>
+                        <a
+                            href={route('events.index')}
+                            className="rounded-lg bg-amber-600 px-4 py-2 text-xs font-bold text-white shadow hover:bg-amber-700 shrink-0 transition-colors"
+                        >
+                            Kelola Event
+                        </a>
+                    </div>
+                )}
+                
+                {/* Compact Stats Bar (1 row) - Shrinks if needed */}
+                <div className="shrink-0 flex flex-wrap sm:flex-nowrap items-center justify-between rounded-2xl bg-white p-4 shadow-sm border border-gray-100 gap-4 sm:gap-6">
+                    <div className="flex items-center gap-6 px-2 w-full sm:w-auto justify-around sm:justify-start">
+                        <div className="text-center sm:text-left">
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Total Peserta</p>
+                            <p className="text-2xl font-black text-gray-800 leading-none mt-1">{stats.total}</p>
+                        </div>
+                        <div className="w-px h-10 bg-gray-200 hidden sm:block"></div>
+                        <div className="text-center sm:text-left">
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Telah Hadir</p>
+                            <p className="text-2xl font-black text-emerald-600 leading-none mt-1">{stats.hadir}</p>
+                        </div>
+                    </div>
+                    <div className="w-px h-10 bg-gray-200 hidden sm:block"></div>
+                    <div className="flex-1 px-2 w-full sm:w-auto">
+                        <div className="flex items-center justify-between mb-2">
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Progress Presensi</p>
+                            <p className="text-sm font-black text-indigo-600">{attendancePercentage}%</p>
+                        </div>
+                        <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-100 shadow-inner">
+                            <div
+                                className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-700 ease-out"
+                                style={{ width: `${attendancePercentage}%` }}
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Golden Ratio Grid (~61.8% / 38.2% -> 7.4/4.6 -> 7.5/4.5 -> Col 8 / Col 4 is 66%/33% close enough) */}
+                <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[1.618fr_1fr] gap-4 lg:gap-6 items-stretch">
+                    
+                    {/* ── Left: Scanner Card (Golden Ratio: Larger Part) ── */}
+                    <div className="overflow-hidden rounded-2xl bg-white shadow-sm border border-gray-100 flex flex-col h-full">
+                        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-3 flex items-center justify-between shrink-0">
+                            <div className="flex items-center gap-2 text-white">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 opacity-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                                <span className="text-sm font-bold tracking-wide">
+                                    {cooldownActive ? 'Memproses QR...' : 'Kamera Scanner'}
+                                </span>
+                            </div>
+                            {cooldownActive && (
+                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></div>
+                            )}
+                        </div>
+
+                        <div className="p-4 flex flex-col gap-4">
+                            {/* Camera View Wrapper - Predictable height using aspect ratio */}
+                            <div className="relative overflow-hidden rounded-xl bg-gray-950 w-full aspect-[4/3] lg:aspect-video flex items-center justify-center transition-all duration-300 shadow-inner">
+                                {/* Target container for Html5Qrcode scanner. */}
+                                {isScanning && (
+                                    <div
+                                        id="qr-reader"
+                                        className="w-full h-full absolute inset-0 flex items-center justify-center"
+                                    />
+                                )}
+
+                                {isScanning && !isCameraLoading && (
+                                    <div className={`scanner-search-overlay ${scanLock.active ? 'is-locked' : 'is-searching'}`} aria-hidden="true">
+                                        <div className="scanner-search-box" style={scanLock.style || undefined}>
+                                            <span className="scanner-search-corner scanner-search-corner-tl"></span>
+                                            <span className="scanner-search-corner scanner-search-corner-tr"></span>
+                                            <span className="scanner-search-corner scanner-search-corner-bl"></span>
+                                            <span className="scanner-search-corner scanner-search-corner-br"></span>
+                                            <span className="scanner-search-line"></span>
+                                            <span className="scanner-lock-pulse"></span>
                                         </div>
                                     </div>
-                                    <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-gray-200">
-                                        <div
-                                            className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-700"
-                                            style={{ width: `${attendancePercentage}%` }}
-                                        />
+                                )}
+
+                                {/* Loading overlay */}
+                                {isScanning && isCameraLoading && (
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-950/80 text-white z-10 backdrop-blur-sm">
+                                        <div className="mb-4 h-10 w-10 animate-spin rounded-full border-3 border-white/20 border-t-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.5)]"></div>
+                                        <p className="text-sm text-gray-200 font-medium tracking-wide animate-pulse">Menghubungkan ke kamera...</p>
                                     </div>
-                                </div>
+                                )}
+
+                                {/* Inactive State */}
+                                {!isScanning && (
+                                    <div className="flex flex-col items-center justify-center py-6 text-gray-500 absolute inset-0">
+                                        <div className="w-16 h-16 bg-gray-800/50 rounded-full flex items-center justify-center mb-3">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            </svg>
+                                        </div>
+                                        <p className="text-sm font-semibold text-gray-400">Kamera Offline</p>
+                                        <p className="text-xs text-gray-500 mt-1">Klik tombol di bawah untuk memulai</p>
+                                    </div>
+                                )}
                             </div>
 
-                            {/* Scanner Card */}
-                            <div className="overflow-hidden rounded-2xl bg-white shadow-lg">
-                                <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-3">
-                                    <div className="flex items-center justify-between text-white">
-                                        <div className="flex items-center gap-3">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                                            </svg>
-                                            <span className="text-sm font-semibold">
-                                                {cooldownActive ? 'Memproses...' : 'Arahkan ke QR Code'}
-                                            </span>
-                                        </div>
-                                        {cooldownActive && (
-                                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="p-4">
-                                    {/* Camera View Wrapper */}
-                                    <div className="relative overflow-hidden rounded-xl bg-gray-950 w-full flex items-center justify-center" style={{ minHeight: isScanning ? '320px' : '0px' }}>
-                                        {/* Target container for Html5Qrcode scanner. Must be mounted when isScanning is true */}
-                                        {isScanning && (
-                                            <div
-                                                id="qr-reader"
-                                                className="w-full text-center"
-                                            />
-                                        )}
-
-                                        {isScanning && !isCameraLoading && (
-                                            <div className={`scanner-search-overlay ${scanLock.active ? 'is-locked' : 'is-searching'}`} aria-hidden="true">
-                                                <div className="scanner-search-box" style={scanLock.style || undefined}>
-                                                    <span className="scanner-search-corner scanner-search-corner-tl"></span>
-                                                    <span className="scanner-search-corner scanner-search-corner-tr"></span>
-                                                    <span className="scanner-search-corner scanner-search-corner-bl"></span>
-                                                    <span className="scanner-search-corner scanner-search-corner-br"></span>
-                                                    <span className="scanner-search-line"></span>
-                                                    <span className="scanner-lock-pulse"></span>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Loading overlay inside the camera block */}
-                                        {isScanning && isCameraLoading && (
-                                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-950 text-white z-10">
-                                                <div className="mb-3 h-8 w-8 animate-spin rounded-full border-3 border-white/20 border-t-indigo-500"></div>
-                                                <p className="text-sm text-gray-400">Menghubungkan ke kamera...</p>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Inactive State Display */}
-                                    {!isScanning && (
-                                        <div className="flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 py-12">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="mb-4 h-16 w-16 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                                            </svg>
-                                            <p className="text-sm text-gray-500">Kamera belum aktif</p>
-                                            <p className="text-xs text-gray-600">Tekan tombol di bawah untuk mulai scan</p>
-                                        </div>
-                                    )}
-
-                                    {error && (
-                                        <div className="mt-4 rounded-xl bg-red-50 p-4">
-                                            <div className="flex items-start gap-3">
-                                                <svg className="mt-0.5 h-5 w-5 shrink-0 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                </svg>
-                                                <div>
-                                                    <p className="text-sm font-medium text-red-800">{error}</p>
-                                                    <button
-                                                        onClick={startScanner}
-                                                        className="mt-2 text-sm font-semibold text-red-600 underline hover:text-red-700"
-                                                    >
-                                                        Coba lagi
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Control Button */}
-                                    <div className="mt-4">
-                                        {isScanning ? (
-                                            <button
-                                                onClick={stopScanner}
-                                                className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-100 px-4 py-2.5 text-sm font-semibold text-red-700 transition-all hover:bg-red-200"
-                                            >
-                                                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clipRule="evenodd" />
-                                                </svg>
-                                                Hentikan Kamera
-                                            </button>
-                                        ) : (
+                            {error && (
+                                <div className="shrink-0 rounded-lg bg-red-50 p-3 border border-red-100">
+                                    <div className="flex items-start gap-3">
+                                        <svg className="mt-0.5 h-4 w-4 shrink-0 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <div>
+                                            <p className="text-xs font-medium text-red-800">{error}</p>
                                             <button
                                                 onClick={startScanner}
-                                                className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg transition-all hover:bg-indigo-700"
+                                                className="mt-1 text-xs font-bold text-red-600 hover:text-red-700 underline"
                                             >
-                                                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                                </svg>
-                                                Mulai Scan
+                                                Coba akses lagi
                                             </button>
-                                        )}
+                                        </div>
                                     </div>
                                 </div>
+                            )}
+
+                            {/* Control Button */}
+                            <div className="shrink-0">
+                                {isScanning ? (
+                                    <button
+                                        onClick={stopScanner}
+                                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-600 transition-all hover:bg-red-100 border border-red-100 shadow-sm"
+                                    >
+                                        <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clipRule="evenodd" />
+                                        </svg>
+                                        Hentikan Kamera
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={startScanner}
+                                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white shadow-md transition-all hover:bg-indigo-700 hover:shadow-lg active:scale-[0.99]"
+                                    >
+                                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                        </svg>
+                                        Mulai Scan QR Code
+                                    </button>
+                                )}
                             </div>
                         </div>
+                    </div>
 
-                        {/* ── Right: Scan History ── */}
-                        <div className="lg:col-span-1">
-                            <div className="sticky top-4 overflow-hidden rounded-2xl bg-white shadow-lg">
-                                <div className="border-b border-gray-100 px-5 py-3">
-                                    <div className="flex items-center justify-between">
-                                        <h3 className="text-sm font-semibold text-gray-900">Riwayat Scan</h3>
-                                        {scanHistory.length > 0 && (
-                                            <button
-                                                onClick={() => setScanHistory([])}
-                                                className="text-xs font-semibold text-gray-600 hover:text-gray-900"
-                                            >
-                                                Bersihkan
-                                            </button>
-                                        )}
+                    {/* ── Right: Scan History (Golden Ratio: Smaller Part) ── */}
+                    {/* Flex column taking full height of grid cell */}
+                    <div className="flex flex-col h-[450px] lg:h-full rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
+                        <div className="bg-white border-b border-gray-100 px-5 py-3.5 shrink-0 flex items-center justify-between z-10">
+                            <h3 className="text-sm font-bold text-gray-800">Riwayat Scan</h3>
+                            {scanHistory.length > 0 && (
+                                <button
+                                    onClick={() => setScanHistory([])}
+                                    className="text-[11px] font-bold text-gray-500 hover:text-gray-800 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition-colors"
+                                >
+                                    Bersihkan
+                                </button>
+                            )}
+                        </div>
+
+                        {/* This area flex-grows to take all remaining vertical space inside the history card */}
+                        <div className="flex-1 overflow-y-auto bg-gray-50/50 min-h-0 h-0">
+                            {scanHistory.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center h-full text-center px-6 py-10">
+                                    <div className="w-16 h-16 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center mb-4">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                        </svg>
                                     </div>
+                                    <p className="text-sm font-bold text-gray-600">Belum ada riwayat</p>
+                                    <p className="text-[11px] text-gray-400 mt-1 leading-relaxed">Hasil scan presensi akan muncul di sini.</p>
                                 </div>
-
-                                <div className="max-h-[calc(100vh-300px)] overflow-y-auto">
-                                    {scanHistory.length === 0 ? (
-                                        <div className="flex flex-col items-center justify-center py-12 text-center">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="mb-3 h-10 w-10 text-gray-200" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                                            </svg>
-                                            <p className="text-xs text-gray-600">Belum ada scan</p>
-                                            <p className="text-[10px] text-gray-500">Scan QR untuk memulai</p>
-                                        </div>
-                                    ) : (
-                                        <div className="divide-y divide-gray-50">
-                                            {scanHistory.map((item, index) => (
-                                                <div
-                                                    key={item.id}
-                                                    className={`flex items-center gap-3 px-5 py-3 transition-colors hover:bg-gray-50 ${index === 0 ? 'bg-indigo-50/50' : ''}`}
-                                                >
-                                                    <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                                                        item.status === 'success' ? 'bg-emerald-100 text-emerald-600' :
-                                                        item.status === 'already' ? 'bg-amber-100 text-amber-600' :
-                                                        'bg-red-100 text-red-600'
-                                                    }`}>
-                                                        {item.nama?.charAt(0)?.toUpperCase() || '?'}
-                                                    </div>
-                                                    <div className="min-w-0 flex-1">
-                                                        <p className="truncate text-sm font-medium text-gray-900">{item.nama}</p>
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-xs text-gray-600">{item.nis_nip}</span>
-                                                            {getStatusBadge(item.status)}
-                                                        </div>
-                                                    </div>
-                                                    <span className="shrink-0 text-[10px] font-semibold text-gray-500">{item.timestamp}</span>
+                            ) : (
+                                <div className="divide-y divide-gray-100">
+                                    {scanHistory.map((item, index) => (
+                                        <div
+                                            key={item.id}
+                                            className={`flex items-center gap-3 px-5 py-3 transition-colors hover:bg-white ${index === 0 ? 'bg-indigo-50/30' : ''}`}
+                                        >
+                                            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold shadow-sm ${
+                                                item.status === 'success' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
+                                                item.status === 'already' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
+                                                'bg-red-100 text-red-700 border border-red-200'
+                                            }`}>
+                                                {item.nama?.charAt(0)?.toUpperCase() || '?'}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <p className="truncate text-[13px] font-bold text-gray-900">{item.nama}</p>
+                                                <div className="flex items-center gap-2 mt-0.5">
+                                                    <span className="text-[11px] text-gray-500 font-medium">{item.nis_nip}</span>
+                                                    {getStatusBadge(item.status)}
                                                 </div>
-                                            ))}
+                                            </div>
+                                            <div className="shrink-0">
+                                                <span className="text-[10px] font-bold text-gray-400 bg-white border border-gray-100 px-1.5 py-1 rounded shadow-sm">
+                                                    {item.timestamp}
+                                                </span>
+                                            </div>
                                         </div>
-                                    )}
+                                    ))}
                                 </div>
+                            )}
+                        </div>
 
-                                {/* Panduan Mini */}
-                                <div className="border-t border-gray-100 bg-gray-50/50 px-5 py-3">
-                                    <p className="text-[10px] font-bold uppercase tracking-wider text-gray-600">Panduan</p>
-                                    <div className="mt-1 space-y-1">
-                                        <p className="flex items-center gap-1.5 text-[11px] text-gray-500">
-                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                                            Hijau = Berhasil dicatat
-                                        </p>
-                                        <p className="flex items-center gap-1.5 text-[11px] text-gray-500">
-                                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500"></span>
-                                            Kuning = Sudah hadir sebelumnya
-                                        </p>
-                                        <p className="flex items-center gap-1.5 text-[11px] text-gray-500">
-                                            <span className="h-1.5 w-1.5 rounded-full bg-red-500"></span>
-                                            Merah = QR tidak valid
-                                        </p>
-                                    </div>
-                                </div>
+                        {/* Mini Legend */}
+                        <div className="bg-white border-t border-gray-100 px-5 py-3 shrink-0 z-10">
+                            <div className="flex items-center justify-between">
+                                <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.6)]"></span>
+                                    Berhasil
+                                </p>
+                                <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                                    <span className="h-2.5 w-2.5 rounded-full bg-amber-500 shadow-[0_0_4px_rgba(245,158,11,0.6)]"></span>
+                                    Duplikat
+                                </p>
+                                <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                                    <span className="h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_4px_rgba(239,68,68,0.6)]"></span>
+                                    Gagal
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -533,17 +597,30 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
             </div>
 
             <style>{`
-                #qr-reader video {
-                    border-radius: 12px !important;
+                /* Ensure Html5Qrcode video respects wrapper height and avoids scroll */
+                #qr-reader {
+                    position: absolute !important;
+                    top: 0; left: 0; right: 0; bottom: 0;
+                    background: transparent;
+                    border: none !important;
                     width: 100% !important;
-                    height: auto !important;
-                    object-fit: cover !important;
+                    height: 100% !important;
                 }
                 #qr-reader__scan_region {
-                    min-height: 280px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
+                    width: 100% !important;
+                    height: 100% !important;
+                    min-height: unset !important;
+                    display: flex !important;
+                    align-items: center !important;
+                    justify-content: center !important;
+                    overflow: hidden !important;
+                }
+                #qr-reader video {
+                    width: 100% !important;
+                    height: 100% !important;
+                    object-fit: cover !important;
+                    border-radius: 0 !important;
+                    margin: 0 !important;
                 }
                 #qr-reader__dashboard_section_swaplink,
                 #qr-reader__status_span,
@@ -554,26 +631,28 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
                     padding: 0 !important;
                     display: none !important;
                 }
+
+                /* Scanner Overlays */
                 .scanner-search-overlay {
                     position: absolute;
                     inset: 0;
                     z-index: 5;
                     pointer-events: none;
                     overflow: hidden;
-                    background:
-                        radial-gradient(circle at center, transparent 0 34%, rgba(3, 7, 18, 0.18) 35% 100%);
+                    background: radial-gradient(circle at center, transparent 0 32%, rgba(3, 7, 18, 0.3) 33% 100%);
                 }
                 .scanner-search-box {
                     position: absolute;
                     left: 50%;
                     top: 50%;
-                    width: clamp(150px, 42%, 250px);
+                    width: min(280px, 60%);
                     aspect-ratio: 1 / 1;
+                    max-height: 80%;
                     border: 2px solid rgba(99, 102, 241, 0.95);
-                    border-radius: 18px;
-                    box-shadow: 0 0 0 999px rgba(3, 7, 18, 0.12), 0 0 28px rgba(99, 102, 241, 0.45);
+                    border-radius: 16px;
+                    box-shadow: 0 0 0 999px rgba(3, 7, 18, 0.15), 0 0 24px rgba(99, 102, 241, 0.45);
                     transform: translate(-50%, -50%);
-                    transition: left 180ms ease, top 180ms ease, width 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
+                    transition: all 180ms ease;
                     animation: qr-search-focus 2.4s ease-in-out infinite;
                 }
                 .scanner-search-line {
@@ -581,23 +660,23 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
                     left: 12%;
                     right: 12%;
                     top: 14%;
-                    height: 3px;
+                    height: 2px;
                     border-radius: 999px;
                     background: linear-gradient(90deg, transparent, #22c55e, #a7f3d0, transparent);
-                    box-shadow: 0 0 18px rgba(34, 197, 94, 0.9);
+                    box-shadow: 0 0 12px rgba(34, 197, 94, 0.9);
                     animation: qr-search-line 1.6s ease-in-out infinite;
                 }
                 .scanner-lock-pulse {
                     position: absolute;
-                    inset: -8px;
+                    inset: -6px;
                     border: 2px solid rgba(34, 197, 94, 0);
-                    border-radius: 22px;
+                    border-radius: 20px;
                     opacity: 0;
                 }
                 .scanner-search-overlay.is-locked .scanner-search-box {
-                    width: clamp(130px, 34%, 230px);
+                    width: min(260px, 55%);
                     border-color: rgba(34, 197, 94, 1);
-                    box-shadow: 0 0 0 999px rgba(3, 7, 18, 0.24), 0 0 36px rgba(34, 197, 94, 0.75);
+                    box-shadow: 0 0 0 999px rgba(3, 7, 18, 0.25), 0 0 28px rgba(34, 197, 94, 0.75);
                     animation: qr-lock-box 420ms cubic-bezier(0.2, 0.9, 0.2, 1) both;
                 }
                 .scanner-search-overlay.is-locked .scanner-search-line {
@@ -609,59 +688,59 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
                 }
                 .scanner-search-overlay.is-locked .scanner-search-corner {
                     border-color: #22c55e;
-                    filter: drop-shadow(0 0 8px rgba(34, 197, 94, 0.9));
+                    filter: drop-shadow(0 0 6px rgba(34, 197, 94, 0.9));
                 }
                 .scanner-search-corner {
                     position: absolute;
-                    width: 28px;
-                    height: 28px;
+                    width: 24px;
+                    height: 24px;
                     border-color: #ffffff;
-                    filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.85));
+                    filter: drop-shadow(0 0 6px rgba(99, 102, 241, 0.85));
                 }
                 .scanner-search-corner-tl {
                     left: -2px;
                     top: -2px;
-                    border-left: 4px solid;
-                    border-top: 4px solid;
-                    border-top-left-radius: 18px;
+                    border-left: 3px solid;
+                    border-top: 3px solid;
+                    border-top-left-radius: 16px;
                 }
                 .scanner-search-corner-tr {
                     right: -2px;
                     top: -2px;
-                    border-right: 4px solid;
-                    border-top: 4px solid;
-                    border-top-right-radius: 18px;
+                    border-right: 3px solid;
+                    border-top: 3px solid;
+                    border-top-right-radius: 16px;
                 }
                 .scanner-search-corner-bl {
                     left: -2px;
                     bottom: -2px;
-                    border-left: 4px solid;
-                    border-bottom: 4px solid;
-                    border-bottom-left-radius: 18px;
+                    border-left: 3px solid;
+                    border-bottom: 3px solid;
+                    border-bottom-left-radius: 16px;
                 }
                 .scanner-search-corner-br {
                     right: -2px;
                     bottom: -2px;
-                    border-right: 4px solid;
-                    border-bottom: 4px solid;
-                    border-bottom-right-radius: 18px;
+                    border-right: 3px solid;
+                    border-bottom: 3px solid;
+                    border-bottom-right-radius: 16px;
                 }
                 @keyframes qr-search-focus {
                     0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.9; }
-                    50% { transform: translate(-50%, -50%) scale(0.96); opacity: 1; }
+                    50% { transform: translate(-50%, -50%) scale(0.97); opacity: 1; }
                 }
                 @keyframes qr-lock-box {
-                    0% { transform: translate(-50%, -50%) scale(1.18); opacity: 0.45; }
-                    70% { transform: translate(-50%, -50%) scale(0.92); opacity: 1; }
+                    0% { transform: translate(-50%, -50%) scale(1.1); opacity: 0.5; }
+                    70% { transform: translate(-50%, -50%) scale(0.95); opacity: 1; }
                     100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
                 }
                 @keyframes qr-search-line {
-                    0%, 100% { top: 14%; opacity: 0.45; }
+                    0%, 100% { top: 14%; opacity: 0.3; }
                     50% { top: 84%; opacity: 1; }
                 }
                 @keyframes qr-lock-pulse {
-                    0% { transform: scale(0.9); border-color: rgba(34, 197, 94, 0.75); opacity: 1; }
-                    100% { transform: scale(1.18); border-color: rgba(34, 197, 94, 0); opacity: 0; }
+                    0% { transform: scale(0.9); border-color: rgba(34, 197, 94, 0.8); opacity: 1; }
+                    100% { transform: scale(1.15); border-color: rgba(34, 197, 94, 0); opacity: 0; }
                 }
             `}</style>
         </AuthenticatedLayout>

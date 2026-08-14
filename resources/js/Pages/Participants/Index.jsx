@@ -3,12 +3,14 @@ import { Head, useForm, router, usePage } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 import { useToast } from '@/Components/Toast';
 import { useConfirm } from '@/Components/ConfirmDialog';
+import ImportModal from '@/Components/ImportModal';
 
 export default function ParticipantsIndex({ participants }) {
     const { flash } = usePage().props;
     const { toast } = useToast();
     const confirm = useConfirm();
     const [showModal, setShowModal] = useState(false);
+    const [showImportModal, setShowImportModal] = useState(false);
     const [showQr, setShowQr] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [editParticipant, setEditParticipant] = useState(null);
@@ -34,27 +36,7 @@ export default function ParticipantsIndex({ participants }) {
         }
     }, [flash]);
 
-    const handleFileChange = (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
 
-        const formData = new FormData();
-        formData.append('file', file);
-
-        router.post(route('participants.import'), formData, {
-            forceFormData: true,
-            onStart: () => {
-                toast.info('Mengimpor data, harap tunggu...');
-            },
-            onSuccess: () => {
-                e.target.value = '';
-            },
-            onError: (errs) => {
-                toast.error(errs.file || 'Gagal mengimpor data.');
-                e.target.value = '';
-            }
-        });
-    };
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -156,18 +138,12 @@ export default function ParticipantsIndex({ participants }) {
                         Kelola Data Peserta
                     </h2>
                     <div className="flex items-center gap-3">
-                        <input
-                            type="file"
-                            id="excel-upload-input"
-                            accept=".xlsx,.xls,.csv"
-                            onChange={handleFileChange}
-                            className="hidden"
-                        />
                         <button
-                            onClick={() => document.getElementById('excel-upload-input').click()}
-                            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-slate-900 shadow-sm focus:outline-none transition-all"
+                            type="button"
+                            onClick={() => setShowImportModal(true)}
+                            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-slate-900 shadow-sm focus:outline-none transition-all active:scale-95 cursor-pointer"
                         >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                             </svg>
                             Impor Excel
@@ -597,6 +573,12 @@ export default function ParticipantsIndex({ participants }) {
                     </div>
                 </div>
             )}
+
+            {/* Import Excel Modal */}
+            <ImportModal
+                isOpen={showImportModal}
+                onClose={() => setShowImportModal(false)}
+            />
 
             <style>{`
                 @keyframes fadeIn {

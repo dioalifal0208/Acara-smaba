@@ -12,7 +12,7 @@ $SSH_HOST = "45.90.229.210"
 $SSH_PORT = "65002"
 $SSH_USER = "u203096280"
 $SSH_PASS = "@Sumowiharjo01"
-$REMOTE_DIR = "public_html/acara"
+$REMOTE_DIR = "domains/acara.smanegeri1babatlmg.sch.id/acara-app"
 $GITHUB_REPO = "https://github.com/dioalifal0208/Acara-smaba.git"
 # ---------------------
 
@@ -76,7 +76,7 @@ php artisan config:cache &&
 php artisan route:cache &&
 php artisan view:cache &&
 php artisan migrate --force &&
-chmod -R 775 storage bootstrap/cache &&
+chmod -R 775 storage bootstrap/cache && cp -r public/. ~/domains/acara.smanegeri1babatlmg.sch.id/public_html/ && sed -i 's|/../vendor|/../acara-app/vendor|g' ~/domains/acara.smanegeri1babatlmg.sch.id/public_html/index.php && sed -i 's|/../bootstrap|/../acara-app/bootstrap|g' ~/domains/acara.smanegeri1babatlmg.sch.id/public_html/index.php &&
 echo DEPLOY_SUCCESS
 "@
 
@@ -97,7 +97,7 @@ result = subprocess.run(
     ['ssh', '-o', 'StrictHostKeyChecking=no', '-o', 'PasswordAuthentication=yes',
      '-o', 'BatchMode=no', '-p', '$SSH_PORT',
      '$SSH_USER@$SSH_HOST',
-     'cd ~/$REMOTE_DIR && git pull origin main && composer install --no-dev --optimize-autoloader --no-interaction && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan migrate --force && chmod -R 775 storage bootstrap/cache && echo DEPLOY_SUCCESS'],
+     'cd ~/$REMOTE_DIR && git pull origin main && composer install --no-dev --optimize-autoloader --no-interaction && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan migrate --force && chmod -R 775 storage bootstrap/cache && cp -r public/. ~/domains/acara.smanegeri1babatlmg.sch.id/public_html/ && sed -i 's|/../vendor|/../acara-app/vendor|g' ~/domains/acara.smanegeri1babatlmg.sch.id/public_html/index.php && sed -i 's|/../bootstrap|/../acara-app/bootstrap|g' ~/domains/acara.smanegeri1babatlmg.sch.id/public_html/index.php && echo DEPLOY_SUCCESS'],
     capture_output=True, text=True
 )
 print(result.stdout)
@@ -111,7 +111,7 @@ $plinkAvailable = Get-Command plink -ErrorAction SilentlyContinue
 if ($plinkAvailable) {
     Write-Host "  Menggunakan PuTTY Plink..." -ForegroundColor DarkGray
     $sshResult = plink -ssh -P $SSH_PORT -l $SSH_USER -pw $SSH_PASS $SSH_HOST `
-        "cd ~/$REMOTE_DIR && git pull origin main && composer install --no-dev --optimize-autoloader --no-interaction && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan migrate --force && chmod -R 775 storage bootstrap/cache && echo DEPLOY_SUCCESS" 2>&1
+        "cd ~/$REMOTE_DIR && git pull origin main && composer install --no-dev --optimize-autoloader --no-interaction && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan migrate --force && chmod -R 775 storage bootstrap/cache && cp -r public/. ~/domains/acara.smanegeri1babatlmg.sch.id/public_html/ && sed -i 's|/../vendor|/../acara-app/vendor|g' ~/domains/acara.smanegeri1babatlmg.sch.id/public_html/index.php && sed -i 's|/../bootstrap|/../acara-app/bootstrap|g' ~/domains/acara.smanegeri1babatlmg.sch.id/public_html/index.php && echo DEPLOY_SUCCESS" 2>&1
 } else {
     # Gunakan ssh dengan PasswordAuthentication (membutuhkan input manual)
     Write-Host ""
@@ -119,7 +119,7 @@ if ($plinkAvailable) {
     Write-Host "  Masukkan password SSH saat diminta: $SSH_PASS" -ForegroundColor Yellow
     Write-Host ""
     $sshResult = ssh -o StrictHostKeyChecking=no -p $SSH_PORT "${SSH_USER}@${SSH_HOST}" `
-        "cd ~/$REMOTE_DIR && git pull origin main && composer install --no-dev --optimize-autoloader --no-interaction && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan migrate --force && chmod -R 775 storage bootstrap/cache && echo DEPLOY_SUCCESS" 2>&1
+        "cd ~/$REMOTE_DIR && git pull origin main && composer install --no-dev --optimize-autoloader --no-interaction && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan migrate --force && chmod -R 775 storage bootstrap/cache && cp -r public/. ~/domains/acara.smanegeri1babatlmg.sch.id/public_html/ && sed -i 's|/../vendor|/../acara-app/vendor|g' ~/domains/acara.smanegeri1babatlmg.sch.id/public_html/index.php && sed -i 's|/../bootstrap|/../acara-app/bootstrap|g' ~/domains/acara.smanegeri1babatlmg.sch.id/public_html/index.php && echo DEPLOY_SUCCESS" 2>&1
 }
 
 if ($sshResult -match "DEPLOY_SUCCESS") {
@@ -139,3 +139,5 @@ Write-Host "   ✅ PROSES DEPLOY SELESAI!" -ForegroundColor Green
 Write-Host "   🌐 https://acara.smanegeri1babatlmg.sch.id" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Magenta
 Write-Host ""
+
+

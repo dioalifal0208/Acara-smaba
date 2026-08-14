@@ -1,13 +1,15 @@
 import { Link, Head } from '@inertiajs/react';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useToast } from '@/Components/Toast';
+import LoginModal from '@/Components/LoginModal';
 
-export default function Welcome({ auth, stats: initialStats }) {
+export default function Welcome({ auth, stats: initialStats, canResetPassword = true }) {
     const { user } = auth;
     const isAdmin = user && user.isAdmin;
 
     const [stats, setStats] = useState(initialStats || { total: 0, hadir: 0, belum: 0 });
     const attendancePercentage = stats.total > 0 ? Math.round((stats.hadir / stats.total) * 100) : 0;
+    const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
     // Scanner states (Admin-only)
     const { addToast } = useToast();
@@ -376,12 +378,13 @@ export default function Welcome({ auth, stats: initialStats }) {
                                 </Link>
                             </>
                         ) : (
-                            <Link
-                                href={route('login')}
-                                className="rounded-xl bg-indigo-700 px-5 py-2.5 text-sm font-bold text-white transition-all hover:bg-indigo-800 shadow-md shadow-indigo-500/10"
+                            <button
+                                type="button"
+                                onClick={() => setIsLoginModalOpen(true)}
+                                className="rounded-xl bg-indigo-700 px-5 py-2.5 text-sm font-bold text-white transition-all hover:bg-indigo-800 shadow-md shadow-indigo-500/10 active:scale-95 cursor-pointer"
                             >
-                                Login Panitia
-                            </Link>
+                                Login
+                            </button>
                         )}
                     </div>
                 </nav>
@@ -811,6 +814,13 @@ export default function Welcome({ auth, stats: initialStats }) {
                     50% { top: 84%; opacity: 1; }
                 }
             `}</style>
+
+            {/* Login Popup Modal with Backdrop Blur */}
+            <LoginModal
+                isOpen={isLoginModalOpen}
+                onClose={() => setIsLoginModalOpen(false)}
+                canResetPassword={canResetPassword}
+            />
         </>
     );
 }

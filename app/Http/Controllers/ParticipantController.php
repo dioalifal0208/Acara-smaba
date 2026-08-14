@@ -7,6 +7,11 @@ use App\Services\QrCodeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
 
 class ParticipantController extends Controller
 {
@@ -261,5 +266,83 @@ class ParticipantController extends Controller
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Gagal memproses file Excel: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Download format / template file Excel untuk acuan impor peserta.
+     */
+    public function downloadTemplate()
+    {
+        try {
+            if (class_exists('PhpOffice\PhpSpreadsheet\Spreadsheet')) {
+                $spreadsheet = new Spreadsheet();
+                $sheet = $spreadsheet->getActiveSheet();
+                $sheet->setTitle('Data Peserta');
+
+                // Header kolom terpisah: Kolom A = Nama, Kolom B = NIP, Kolom C = Keterangan
+                $sheet->setCellValue('A1', 'Nama');
+                $sheet->setCellValue('B1', 'NIP');
+                $sheet->setCellValue('C1', 'Keterangan');
+
+                // Format kolom B (NIP) sebagai Text agar angka panjang tidak terpotong
+                $sheet->getStyle('B:B')->getNumberFormat()->setFormatCode('@');
+
+                // Contoh baris data terpisah per kolom
+                $sheet->setCellValueExplicit('A2', 'Drs. H. Ahmad Fauzi, M.Pd', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('B2', '197503122000031002', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('C2', 'Guru Matematika', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+
+                $sheet->setCellValueExplicit('A3', 'Siti Nurhaliza, S.Pd', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('B3', '198504152010012004', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('C3', 'Guru Bahasa Indonesia', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+
+                $sheet->setCellValueExplicit('A4', 'Bambang Sudarsono, S.T', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('B4', '198207182008011007', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('C4', 'Staf Tata Usaha', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+
+                // Styling header
+                $headerStyle = [
+                    'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+                    'fill' => [
+                        'fillType' => Fill::FILL_SOLID,
+                        'startColor' => ['rgb' => '4F46E5'],
+                    ],
+                    'alignment' => [
+                        'horizontal' => Alignment::HORIZONTAL_CENTER,
+                    ],
+                ];
+                $sheet->getStyle('A1:C1')->applyFromArray($headerStyle);
+                $sheet->getColumnDimension('A')->setWidth(32);
+                $sheet->getColumnDimension('B')->setWidth(26);
+                $sheet->getColumnDimension('C')->setWidth(26);
+
+                $writer = new Xlsx($spreadsheet);
+                $filename = 'template_import_peserta.xlsx';
+
+                return response()->streamDownload(function () use ($writer) {
+                    $writer->save('php://output');
+                }, $filename, [
+                    'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    'Cache-Control' => 'max-age=0',
+                ]);
+            }
+        } catch (\Throwable $e) {
+            // Fallback
+        }
+
+        // Native CSV Fallback with UTF-8 BOM
+        $csvFilename = 'template_import_peserta.csv';
+        return response()->streamDownload(function () {
+            $handle = fopen('php://output', 'w');
+            fputs($handle, "\xEF\xBB\xBF"); // UTF-8 BOM for Excel
+            fputcsv($handle, ['Nama', 'NIP', 'Keterangan']);
+            fputcsv($handle, ['Drs. H. Ahmad Fauzi, M.Pd', '197503122000031002', 'Guru Matematika']);
+            fputcsv($handle, ['Siti Nurhaliza, S.Pd', '198504152010012004', 'Guru Bahasa Indonesia']);
+            fputcsv($handle, ['Bambang Sudarsono, S.T', '198207182008011007', 'Staf Tata Usaha']);
+            fclose($handle);
+        }, $csvFilename, [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Cache-Control' => 'max-age=0',
+        ]);
     }
 }
