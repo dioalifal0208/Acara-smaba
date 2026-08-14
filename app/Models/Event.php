@@ -12,11 +12,17 @@ class Event extends Model
     protected $fillable = [
         'nama_event',
         'deskripsi',
+        'latitude',
+        'longitude',
+        'radius_meters',
         'is_active',
     ];
 
     protected $casts = [
         'is_active' => 'boolean',
+        'latitude' => 'decimal:8',
+        'longitude' => 'decimal:8',
+        'radius_meters' => 'integer',
     ];
 
     /**

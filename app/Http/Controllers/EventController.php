@@ -31,6 +31,9 @@ class EventController extends Controller
         $validated = $request->validate([
             'nama_event' => 'required|string|max:255',
             'deskripsi' => 'nullable|string|max:1000',
+            'latitude' => 'nullable|numeric',
+            'longitude' => 'nullable|numeric',
+            'radius_meters' => 'nullable|integer|min:1',
             'set_active' => 'boolean',
         ]);
 
@@ -43,6 +46,9 @@ class EventController extends Controller
         $event = Event::create([
             'nama_event' => $validated['nama_event'],
             'deskripsi' => $validated['deskripsi'] ?? null,
+            'latitude' => $validated['latitude'] ?? null,
+            'longitude' => $validated['longitude'] ?? null,
+            'radius_meters' => $validated['radius_meters'] ?? 50,
             'is_active' => $setActive,
         ]);
 

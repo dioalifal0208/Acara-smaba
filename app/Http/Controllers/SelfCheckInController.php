@@ -74,6 +74,27 @@ class SelfCheckInController extends Controller
     }
 
     /**
+     * Hitung jarak dua titik dengan Haversine formula (dalam meter).
+     */
+    private function calculateDistance($lat1, $lon1, $lat2, $lon2)
+    {
+        $earthRadius = 6371000; // Radius bumi dalam meter
+        
+        $latFrom = deg2rad($lat1);
+        $lonFrom = deg2rad($lon1);
+        $latTo = deg2rad($lat2);
+        $lonTo = deg2rad($lon2);
+        
+        $latDelta = $latTo - $latFrom;
+        $lonDelta = $lonTo - $lonFrom;
+        
+        $angle = 2 * asin(sqrt(pow(sin($latDelta / 2), 2) +
+            cos($latFrom) * cos($latTo) * pow(sin($lonDelta / 2), 2)));
+            
+        return $angle * $earthRadius;
+    }
+
+    /**
      * Proses input NIS/NIP untuk absen mandiri per Event.
      */
     public function submitForm(Request $request, $token)
@@ -98,7 +119,34 @@ class SelfCheckInController extends Controller
 
         $request->validate([
             'nis_nip' => 'required|string|max:50',
+            'latitude' => 'nullable|numeric',
+            'longitude' => 'nullable|numeric',
         ]);
+
+        // Cek batasan radius (jika event memiliki setingan koordinat)
+        if ($activeEvent->latitude && $activeEvent->longitude) {
+            if (!$request->filled('latitude') || !$request->filled('longitude')) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Gagal mendapatkan lokasi GPS dari perangkat Anda. Pastikan izin lokasi diaktifkan.',
+                ], 400);
+            }
+
+            $distance = $this->calculateDistance(
+                $activeEvent->latitude, $activeEvent->longitude,
+                $request->latitude, $request->longitude
+            );
+
+            $radiusLimit = $activeEvent->radius_meters ?? 100;
+            
+            if ($distance > $radiusLimit) {
+                $distanceFmt = number_format($distance, 0);
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "Anda berada di luar radius presensi ({$distanceFmt} meter). Anda harus berada dalam radius {$radiusLimit} meter dari lokasi acara.",
+                ], 403);
+            }
+        }
 
         $nisNip = trim($request->input('nis_nip'));
 
