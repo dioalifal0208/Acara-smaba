@@ -108,9 +108,11 @@ class FaceRecognitionController extends Controller
 
         $inputDescriptor = $request->input('descriptor');
 
+        $isAdmin = auth()->check() && (auth()->user()->role === 'admin' || auth()->user()->role === 'superadmin');
+
         // === Validasi GPS (Mirip Self Check-in) ===
-        // Bypassed jika yang melakukan scan adalah Admin (auth()->check() == true)
-        if (!auth()->check()) {
+        // Bypassed jika yang melakukan scan adalah Admin
+        if (!$isAdmin) {
             if ($request->has('accuracy')) {
                 $accuracy = (float) $request->input('accuracy');
                 
@@ -210,14 +212,19 @@ class FaceRecognitionController extends Controller
             ]);
         }
 
-        // Lakukan penguncian 1 perangkat 1 presensi seperti Self Check-in
-        // Bypassed jika yang melakukan scan adalah Admin (auth()->check() == true)
-        if (!auth()->check()) {
-            $rawDeviceId = $request->input('device_id', '');
-            $userAgent = $request->userAgent() ?? '';
-            $ipAddress = $request->ip();
-            $deviceHash = hash('sha256', $rawDeviceId . '|' . $userAgent);
+        // Persiapkan data device dan IP untuk record Attendance (selalu dibutuhkan)
+        $rawDeviceId = $request->input('device_id', '');
+        $userAgent = $request->userAgent() ?? '';
+        $ipAddress = $request->ip();
+        $deviceHash = hash('sha256', $rawDeviceId . '|' . $userAgent);
 
+        // Lakukan penguncian 1 perangkat 1 presensi seperti Self Check-in
+        // Bypassed jika yang melakukan scan adalah Admin (auth()->check() == true dan isAdmin() atau role tertentu)
+        // Kita cukup cek !auth()->check() karena peserta tidak punya akses ke scanner panitia, tapi karena peserta punya auth, kita cek role-nya.
+        // Sebenarnya $request->user() bisa kita cek rolenya. Untuk amannya, kita anggap auth()->check() && auth()->user()->role === 'admin' bypass ini.
+        $isAdmin = auth()->check() && (auth()->user()->role === 'admin' || auth()->user()->role === 'superadmin');
+
+        if (!$isAdmin) {
             $deviceAttendance = Attendance::where('event_id', $activeEvent->id)
                 ->where('device_hash', $deviceHash)
                 ->with('participant')
