@@ -84,6 +84,30 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::get('/report', [AttendanceController::class, 'report'])->name('report');
     Route::get('/events/{event}/export', [AttendanceController::class, 'exportAttendance'])->name('events.export');
     Route::get('/events/{event}/qr-signature', [AttendanceController::class, 'qrSignature'])->name('events.qr-signature');
+    // Scanner routes (Admin only)
+    Route::get('/scanner', [AttendanceController::class, 'scanner'])->name('scanner');
+    Route::post('/scan', [AttendanceController::class, 'scan'])->name('scan');
+    Route::post('/api/scan', [AttendanceController::class, 'apiScan'])->name('api.scan');
+});
+
+Route::middleware(['auth', 'verified', 'role:participant'])->group(function () {
+    // Participant Dashboard
+    Route::get('/participant/dashboard', function () {
+        $activeEvent = \App\Models\Event::getActive();
+        return Inertia::render('Participant/Dashboard', [
+            'activeEvent' => $activeEvent,
+            'participant' => auth()->user()->participant,
+        ]);
+    })->name('participant.dashboard');
+
+    // Participant Face Scanner (Self Check-in)
+    Route::get('/participant/face-scanner', function () {
+        $activeEvent = \App\Models\Event::getActive();
+        return Inertia::render('Participant/FaceScanner', [
+            'activeEvent' => $activeEvent,
+            'participant' => auth()->user()->participant,
+        ]);
+    })->name('participant.face-scanner');
 });
 
 Route::middleware('auth')->group(function () {
@@ -91,12 +115,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
-
-    // Scanner routes
-    Route::get('/scanner', [AttendanceController::class, 'scanner'])->name('scanner');
-    
-    Route::post('/scan', [AttendanceController::class, 'scan'])->name('scan');
-    Route::post('/api/scan', [AttendanceController::class, 'apiScan'])->name('api.scan');
 });
 
 // Public Self Check-In routes (no login required)

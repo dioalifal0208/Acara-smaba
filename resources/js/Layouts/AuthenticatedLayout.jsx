@@ -32,56 +32,83 @@ export default function AuthenticatedLayout({ header, children }) {
                                 </Link>
 
                                 <div className="hidden space-x-6 sm:-my-px sm:flex h-full">
-                                    <Link
-                                        href={route('dashboard')}
-                                        className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-semibold transition-all ${
-                                            route().current('dashboard')
-                                                ? 'border-indigo-600 text-indigo-600'
-                                                : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
-                                        }`}
-                                    >
-                                        Dashboard
-                                    </Link>
-                                    <Link
-                                        href={route('events.index')}
-                                        className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-semibold transition-all ${
-                                            route().current('events.index')
-                                                ? 'border-indigo-600 text-indigo-600'
-                                                : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
-                                        }`}
-                                    >
-                                        Kelola Event
-                                    </Link>
-                                    <Link
-                                        href={route('participants.index')}
-                                        className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-semibold transition-all ${
-                                            route().current('participants.index')
-                                                ? 'border-indigo-600 text-indigo-600'
-                                                : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
-                                        }`}
-                                    >
-                                        Peserta
-                                    </Link>
-                                    <Link
-                                        href={route('admin.master-qr')}
-                                        className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-semibold transition-all ${
-                                            route().current('admin.master-qr')
-                                                ? 'border-indigo-600 text-indigo-600'
-                                                : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
-                                        }`}
-                                    >
-                                        Master QR
-                                    </Link>
-                                    <Link
-                                        href={route('report')}
-                                        className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-semibold transition-all ${
-                                            route().current('report')
-                                                ? 'border-indigo-600 text-indigo-600'
-                                                : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
-                                        }`}
-                                    >
-                                        Laporan
-                                    </Link>
+                                    {user.role === 'participant' ? (
+                                        <>
+                                            <Link
+                                                href={route('participant.dashboard')}
+                                                className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-semibold transition-all ${
+                                                    route().current('participant.dashboard')
+                                                        ? 'border-indigo-600 text-indigo-600'
+                                                        : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
+                                                }`}
+                                            >
+                                                Dashboard
+                                            </Link>
+                                            <Link
+                                                href={route('participant.face-scanner')}
+                                                className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-semibold transition-all ${
+                                                    route().current('participant.face-scanner')
+                                                        ? 'border-indigo-600 text-indigo-600'
+                                                        : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
+                                                }`}
+                                            >
+                                                Presensi Wajah
+                                            </Link>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Link
+                                                href={route('dashboard')}
+                                                className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-semibold transition-all ${
+                                                    route().current('dashboard')
+                                                        ? 'border-indigo-600 text-indigo-600'
+                                                        : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
+                                                }`}
+                                            >
+                                                Dashboard
+                                            </Link>
+                                            <Link
+                                                href={route('events.index')}
+                                                className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-semibold transition-all ${
+                                                    route().current('events.index')
+                                                        ? 'border-indigo-600 text-indigo-600'
+                                                        : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
+                                                }`}
+                                            >
+                                                Kelola Event
+                                            </Link>
+                                            <Link
+                                                href={route('participants.index')}
+                                                className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-semibold transition-all ${
+                                                    route().current('participants.index')
+                                                        ? 'border-indigo-600 text-indigo-600'
+                                                        : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
+                                                }`}
+                                            >
+                                                Peserta
+                                            </Link>
+                                            <Link
+                                                href={route('admin.master-qr')}
+                                                className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-semibold transition-all ${
+                                                    route().current('admin.master-qr')
+                                                        ? 'border-indigo-600 text-indigo-600'
+                                                        : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
+                                                }`}
+                                            >
+                                                Master QR
+                                            </Link>
+                                            <Link
+                                                href={route('report')}
+                                                className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-semibold transition-all ${
+                                                    route().current('report')
+                                                        ? 'border-indigo-600 text-indigo-600'
+                                                        : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
+                                                }`}
+                                            >
+                                                Laporan
+                                            </Link>
+                                        </>
+                                    )}
                                 </div>
                             </div>
 
@@ -177,56 +204,83 @@ export default function AuthenticatedLayout({ header, children }) {
                     {/* Mobile Dropdown */}
                     <div className={showingNavigationDropdown ? 'block' : 'hidden'}>
                         <div className="space-y-1 pb-3 pt-2 px-4 border-t border-slate-200 bg-white">
-                            <Link
-                                href={route('dashboard')}
-                                className={`block pl-3 pr-4 py-2.5 border-l-4 text-base font-semibold rounded-r-lg ${
-                                    route().current('dashboard')
-                                        ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                                        : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-                                }`}
-                            >
-                                Dashboard
-                            </Link>
-                            <Link
-                                href={route('events.index')}
-                                className={`block pl-3 pr-4 py-2.5 border-l-4 text-base font-semibold rounded-r-lg ${
-                                    route().current('events.index')
-                                        ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                                        : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-                                }`}
-                            >
-                                Kelola Event
-                            </Link>
-                            <Link
-                                href={route('participants.index')}
-                                className={`block pl-3 pr-4 py-2.5 border-l-4 text-base font-semibold rounded-r-lg ${
-                                    route().current('participants.index')
-                                        ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                                        : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-                                }`}
-                            >
-                                Peserta
-                            </Link>
-                            <Link
-                                href={route('admin.master-qr')}
-                                className={`block pl-3 pr-4 py-2.5 border-l-4 text-base font-semibold rounded-r-lg ${
-                                    route().current('admin.master-qr')
-                                        ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                                        : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-                                }`}
-                            >
-                                Master QR
-                            </Link>
-                            <Link
-                                href={route('report')}
-                                className={`block pl-3 pr-4 py-2.5 border-l-4 text-base font-semibold rounded-r-lg ${
-                                    route().current('report')
-                                        ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                                        : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-                                }`}
-                            >
-                                Laporan
-                            </Link>
+                            {user.role === 'participant' ? (
+                                <>
+                                    <Link
+                                        href={route('participant.dashboard')}
+                                        className={`block pl-3 pr-4 py-2.5 border-l-4 text-base font-semibold rounded-r-lg ${
+                                            route().current('participant.dashboard')
+                                                ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                                                : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                                        }`}
+                                    >
+                                        Dashboard
+                                    </Link>
+                                    <Link
+                                        href={route('participant.face-scanner')}
+                                        className={`block pl-3 pr-4 py-2.5 border-l-4 text-base font-semibold rounded-r-lg ${
+                                            route().current('participant.face-scanner')
+                                                ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                                                : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                                        }`}
+                                    >
+                                        Presensi Wajah
+                                    </Link>
+                                </>
+                            ) : (
+                                <>
+                                    <Link
+                                        href={route('dashboard')}
+                                        className={`block pl-3 pr-4 py-2.5 border-l-4 text-base font-semibold rounded-r-lg ${
+                                            route().current('dashboard')
+                                                ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                                                : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                                        }`}
+                                    >
+                                        Dashboard
+                                    </Link>
+                                    <Link
+                                        href={route('events.index')}
+                                        className={`block pl-3 pr-4 py-2.5 border-l-4 text-base font-semibold rounded-r-lg ${
+                                            route().current('events.index')
+                                                ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                                                : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                                        }`}
+                                    >
+                                        Kelola Event
+                                    </Link>
+                                    <Link
+                                        href={route('participants.index')}
+                                        className={`block pl-3 pr-4 py-2.5 border-l-4 text-base font-semibold rounded-r-lg ${
+                                            route().current('participants.index')
+                                                ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                                                : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                                        }`}
+                                    >
+                                        Peserta
+                                    </Link>
+                                    <Link
+                                        href={route('admin.master-qr')}
+                                        className={`block pl-3 pr-4 py-2.5 border-l-4 text-base font-semibold rounded-r-lg ${
+                                            route().current('admin.master-qr')
+                                                ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                                                : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                                        }`}
+                                    >
+                                        Master QR
+                                    </Link>
+                                    <Link
+                                        href={route('report')}
+                                        className={`block pl-3 pr-4 py-2.5 border-l-4 text-base font-semibold rounded-r-lg ${
+                                            route().current('report')
+                                                ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                                                : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+                                        }`}
+                                    >
+                                        Laporan
+                                    </Link>
+                                </>
+                            )}
                         </div>
 
                         <div className="border-t border-slate-200 pb-3 pt-4 px-4 bg-slate-50">

@@ -21,6 +21,9 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'role',
+        'username',
+        'participant_id',
     ];
 
     /**
@@ -51,6 +54,14 @@ class User extends Authenticatable
      */
     public function isAdmin(): bool
     {
-        return $this->email === 'admin@smaba.sch.id';
+        return $this->role === 'admin' || $this->email === 'admin@smaba.sch.id';
+    }
+
+    /**
+     * Get the participant associated with the user.
+     */
+    public function participant()
+    {
+        return $this->belongsTo(Participant::class);
     }
 }

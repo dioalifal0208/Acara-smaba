@@ -7,6 +7,8 @@ use App\Services\QrCodeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
+use App\Models\User;
+use Illuminate\Support\Facades\Hash;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -52,10 +54,22 @@ class ParticipantController extends Controller
         ]);
 
         // QR token di-generate otomatis oleh Participant model boot()
-        Participant::create($validated);
+        $participant = Participant::create($validated);
+
+        // Buat akun user
+        User::firstOrCreate(
+            ['username' => $participant->nis_nip],
+            [
+                'name' => $participant->nama,
+                'email' => null,
+                'password' => Hash::make($participant->nis_nip),
+                'role' => 'participant',
+                'participant_id' => $participant->id,
+            ]
+        );
 
         return redirect()->route('participants.index')
-            ->with('success', 'Peserta berhasil ditambahkan! QR Code siap diunduh.');
+            ->with('success', 'Peserta berhasil ditambahkan! Akun peserta (username & password: NIS/NIP) siap digunakan.');
     }
 
     /**
@@ -249,7 +263,7 @@ class ParticipantController extends Controller
                 }
 
                 // Update data jika NIP/NIS sudah terdaftar, atau buat baru jika belum
-                Participant::updateOrCreate(
+                $participant = Participant::updateOrCreate(
                     ['nis_nip' => $nisNip],
                     [
                         'nama' => $nama,
@@ -257,11 +271,23 @@ class ParticipantController extends Controller
                     ]
                 );
 
+                // Buat akun user
+                User::firstOrCreate(
+                    ['username' => $nisNip],
+                    [
+                        'name' => $nama,
+                        'email' => null,
+                        'password' => Hash::make($nisNip),
+                        'role' => 'participant',
+                        'participant_id' => $participant->id,
+                    ]
+                );
+
                 $successCount++;
             }
 
             return redirect()->route('participants.index')
-                ->with('success', $successCount . ' data peserta berhasil diproses (diimpor/diperbarui).');
+                ->with('success', $successCount . ' data peserta berhasil diproses (diimpor/diperbarui). Akun peserta siap digunakan.');
 
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Gagal memproses file Excel: ' . $e->getMessage());
