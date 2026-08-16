@@ -15,6 +15,11 @@ class Participant extends Model
         'nis_nip',
         'keterangan',
         'qr_token',
+        'face_descriptor',
+    ];
+
+    protected $casts = [
+        'face_descriptor' => 'array',
     ];
 
     /**

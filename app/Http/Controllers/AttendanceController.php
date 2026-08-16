@@ -11,6 +11,26 @@ use Inertia\Inertia;
 class AttendanceController extends Controller
 {
     /**
+     * Hitung jarak dua titik dengan Haversine formula (dalam meter).
+     */
+    private function calculateDistance($lat1, $lon1, $lat2, $lon2)
+    {
+        $earthRadius = 6371000;
+        
+        $latFrom = deg2rad($lat1);
+        $lonFrom = deg2rad($lon1);
+        $latTo = deg2rad($lat2);
+        $lonTo = deg2rad($lon2);
+        
+        $latDelta = $latTo - $latFrom;
+        $lonDelta = $lonTo - $lonFrom;
+        
+        $angle = 2 * asin(sqrt(pow(sin($latDelta / 2), 2) +
+            cos($latFrom) * cos($latTo) * pow(sin($lonDelta / 2), 2)));
+            
+        return $angle * $earthRadius;
+    }
+    /**
      * Tampilkan halaman scanner QR.
      */
     public function scanner()
@@ -54,7 +74,34 @@ class AttendanceController extends Controller
 
         $request->validate([
             'qr_token' => 'required|string',
+            'latitude' => 'nullable|numeric',
+            'longitude' => 'nullable|numeric',
+            'accuracy' => 'nullable|numeric',
         ]);
+
+        if ($activeEvent->latitude && $activeEvent->longitude) {
+            if (!$request->filled('latitude') || !$request->filled('longitude')) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Gagal mendapatkan lokasi GPS dari Scanner Admin. Pastikan izin lokasi diaktifkan pada browser Admin.',
+                ], 400);
+            }
+
+            $distance = $this->calculateDistance(
+                $activeEvent->latitude, $activeEvent->longitude,
+                $request->latitude, $request->longitude
+            );
+
+            $radiusLimit = $activeEvent->radius_meters ?? 100;
+            
+            if ($distance > $radiusLimit) {
+                $distanceFmt = number_format($distance, 0);
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "Scanner Admin berada di luar radius presensi ({$distanceFmt} meter). Admin harus berada dalam radius {$radiusLimit} meter dari lokasi acara.",
+                ], 403);
+            }
+        }
 
         $token = trim($request->input('qr_token'));
 
@@ -70,54 +117,223 @@ class AttendanceController extends Controller
             ], 404);
         }
 
-        // Cek apakah sudah presensi pada event ini
-        $existingAttendance = Attendance::where('event_id', $activeEvent->id)
-            ->where('participant_id', $participant->id)
-            ->first();
+        if ($activeEvent->kategori === 'harian') {
+            // Cek hari aktif
+            $hariAktif = $activeEvent->hari_aktif ?? [];
+            $currentDay = now()->dayOfWeekIso; // 1 (Mon) - 7 (Sun)
+            if (!empty($hariAktif) && !in_array($currentDay, $hariAktif)) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Hari ini bukan hari kerja untuk presensi harian.',
+                    'participant' => null,
+                ], 403);
+            }
 
-        if ($existingAttendance) {
+            $currentTime = now()->format('H:i:s');
+            $jamDatangMulai = $activeEvent->jam_datang_mulai ?? '06:00:00';
+            $jamDatangSelesai = $activeEvent->jam_datang_selesai ?? '07:00:00';
+            $jamPulangMulai = $activeEvent->jam_pulang_mulai ?? '15:30:00';
+            $jamPulangSelesai = $activeEvent->jam_pulang_selesai ?? '22:00:00';
+
+            // Cek apakah sekarang sebelum jam datang mulai
+            if ($currentTime < $jamDatangMulai) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "Presensi datang belum dibuka. Jadwal absen datang dimulai pukul " . substr($jamDatangMulai, 0, 5) . " WIB.",
+                    'participant' => null,
+                ], 403);
+            }
+
+            // Cek apakah sekarang sudah melewati batas jam pulang selesai
+            if ($currentTime > $jamPulangSelesai) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => "Sesi presensi harian hari ini telah ditutup (pukul " . substr($jamPulangSelesai, 0, 5) . " WIB).",
+                    'participant' => null,
+                ], 403);
+            }
+
+            // Cek data presensi hari ini
+            $attendance = Attendance::where('event_id', $activeEvent->id)
+                ->where('participant_id', $participant->id)
+                ->whereDate('created_at', now()->toDateString())
+                ->first();
+
+            // Sesi Pulang: Jika waktu saat ini berada di rentang [jam_pulang_mulai, jam_pulang_selesai]
+            if ($currentTime >= $jamPulangMulai && $currentTime <= $jamPulangSelesai) {
+                if ($attendance && $attendance->waktu_pulang) {
+                    return response()->json([
+                        'status' => 'already',
+                        'message' => $participant->nama . ' sudah absen pulang hari ini (pukul ' . $attendance->waktu_pulang->format('H:i:s') . ').',
+                        'participant' => [
+                            'id' => $participant->id,
+                            'nama' => $participant->nama,
+                            'nis_nip' => $participant->nis_nip,
+                            'waktu_hadir' => $attendance->waktu_pulang->format('H:i:s'),
+                        ],
+                        'timestamp' => now()->format('H:i:s'),
+                    ], 200);
+                }
+
+                if ($attendance) {
+                    $attendance->update(['waktu_pulang' => now()]);
+                } else {
+                    $attendance = Attendance::create([
+                        'event_id' => $activeEvent->id,
+                        'participant_id' => $participant->id,
+                        'waktu_pulang' => now(),
+                    ]);
+                }
+
+                $totalParticipants = Participant::count();
+                $totalAttended = Attendance::where('event_id', $activeEvent->id)
+                    ->distinct('participant_id')
+                    ->count('participant_id');
+
+                return response()->json([
+                    'status' => 'success',
+                    'message' => 'Absen pulang ' . $participant->nama . ' berhasil dicatat!',
+                    'participant' => [
+                        'id' => $participant->id,
+                        'nama' => $participant->nama,
+                        'nis_nip' => $participant->nis_nip,
+                        'waktu_hadir' => $attendance->waktu_pulang->format('d M Y H:i:s'),
+                    ],
+                    'stats' => [
+                        'total' => $totalParticipants,
+                        'hadir' => $totalAttended,
+                        'belum' => $totalParticipants - $totalAttended,
+                    ],
+                    'timestamp' => now()->format('H:i:s'),
+                ], 200);
+            }
+
+            // Sesi Datang: Jika waktu saat ini berada di rentang [jam_datang_mulai, jam_pulang_mulai)
+            // Meliputi jam datang tepat waktu (06:00-07:00) dan jam kerja (07:00-15:30) sebagai Terlambat
+            if ($currentTime >= $jamDatangMulai && $currentTime < $jamPulangMulai) {
+                if ($attendance && $attendance->waktu_hadir) {
+                    return response()->json([
+                        'status' => 'already',
+                        'message' => $participant->nama . ' sudah absen datang hari ini (pukul ' . $attendance->waktu_hadir->format('H:i:s') . ').',
+                        'participant' => [
+                            'id' => $participant->id,
+                            'nama' => $participant->nama,
+                            'nis_nip' => $participant->nis_nip,
+                            'waktu_hadir' => $attendance->waktu_hadir->format('H:i:s'),
+                        ],
+                        'timestamp' => now()->format('H:i:s'),
+                    ], 200);
+                }
+
+                $isLate = false;
+                $lateMinutes = 0;
+                $lateFormatted = '';
+
+                // Cek keterlambatan jika scan setelah jam_datang_selesai (misal lewat dari 07:00)
+                if ($currentTime > $jamDatangSelesai) {
+                    $isLate = true;
+                    $targetDatangSelesai = \Carbon\Carbon::parse(now()->format('Y-m-d') . ' ' . $jamDatangSelesai);
+                    $lateMinutes = (int) max(1, round($targetDatangSelesai->diffInMinutes(now())));
+
+                    $hours = floor($lateMinutes / 60);
+                    $mins = $lateMinutes % 60;
+                    if ($hours > 0) {
+                        $lateFormatted = $hours . ' jam' . ($mins > 0 ? ' ' . $mins . ' menit' : '');
+                    } else {
+                        $lateFormatted = $mins . ' menit';
+                    }
+                }
+
+                if ($attendance) {
+                    $attendance->update(['waktu_hadir' => now()]);
+                } else {
+                    $attendance = Attendance::create([
+                        'event_id' => $activeEvent->id,
+                        'participant_id' => $participant->id,
+                        'waktu_hadir' => now(),
+                    ]);
+                }
+
+                $totalParticipants = Participant::count();
+                $totalAttended = Attendance::where('event_id', $activeEvent->id)
+                    ->distinct('participant_id')
+                    ->count('participant_id');
+
+                $statusResponse = $isLate ? 'warning' : 'success';
+                $messageResponse = $isLate
+                    ? "Presensi datang {$participant->nama} berhasil dicatat! (Terlambat {$lateFormatted})"
+                    : "Presensi datang {$participant->nama} berhasil dicatat tepat waktu!";
+
+                return response()->json([
+                    'status' => $statusResponse,
+                    'is_late' => $isLate,
+                    'late_minutes' => $lateMinutes,
+                    'late_formatted' => $lateFormatted,
+                    'message' => $messageResponse,
+                    'participant' => [
+                        'id' => $participant->id,
+                        'nama' => $participant->nama,
+                        'nis_nip' => $participant->nis_nip,
+                        'waktu_hadir' => $attendance->waktu_hadir->format('d M Y H:i:s'),
+                    ],
+                    'stats' => [
+                        'total' => $totalParticipants,
+                        'hadir' => $totalAttended,
+                        'belum' => $totalParticipants - $totalAttended,
+                    ],
+                    'timestamp' => now()->format('H:i:s'),
+                ], 200);
+            }
+        } else {
+            // Logika event acara biasa (sekali scan)
+            $existingAttendance = Attendance::where('event_id', $activeEvent->id)
+                ->where('participant_id', $participant->id)
+                ->first();
+
+            if ($existingAttendance) {
+                return response()->json([
+                    'status' => 'already',
+                    'message' => $participant->nama . ' sudah absen pada event "' . $activeEvent->nama_event . '".',
+                    'participant' => [
+                        'id' => $participant->id,
+                        'nama' => $participant->nama,
+                        'nis_nip' => $participant->nis_nip,
+                        'waktu_hadir' => $existingAttendance->waktu_hadir ? $existingAttendance->waktu_hadir->format('d M Y H:i:s') : '-',
+                    ],
+                    'timestamp' => now()->format('H:i:s'),
+                ], 200);
+            }
+
+            // Catat kehadiran
+            $attendance = Attendance::create([
+                'event_id' => $activeEvent->id,
+                'participant_id' => $participant->id,
+                'waktu_hadir' => now(),
+            ]);
+
+            // Hitung stats terbaru untuk event ini
+            $totalParticipants = Participant::count();
+            $totalAttended = Attendance::where('event_id', $activeEvent->id)
+                ->distinct('participant_id')
+                ->count('participant_id');
+
             return response()->json([
-                'status' => 'already',
-                'message' => $participant->nama . ' sudah absen pada event "' . $activeEvent->nama_event . '".',
+                'status' => 'success',
+                'message' => 'Presensi ' . $participant->nama . ' berhasil dicatat untuk event "' . $activeEvent->nama_event . '"!',
                 'participant' => [
                     'id' => $participant->id,
                     'nama' => $participant->nama,
                     'nis_nip' => $participant->nis_nip,
-                    'waktu_hadir' => $existingAttendance->waktu_hadir->format('d M Y H:i:s'),
+                    'waktu_hadir' => $attendance->waktu_hadir->format('d M Y H:i:s'),
+                ],
+                'stats' => [
+                    'total' => $totalParticipants,
+                    'hadir' => $totalAttended,
+                    'belum' => $totalParticipants - $totalAttended,
                 ],
                 'timestamp' => now()->format('H:i:s'),
             ], 200);
         }
-
-        // Catat kehadiran
-        $attendance = Attendance::create([
-            'event_id' => $activeEvent->id,
-            'participant_id' => $participant->id,
-            'waktu_hadir' => now(),
-        ]);
-
-        // Hitung stats terbaru untuk event ini
-        $totalParticipants = Participant::count();
-        $totalAttended = Attendance::where('event_id', $activeEvent->id)
-            ->distinct('participant_id')
-            ->count('participant_id');
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Presensi ' . $participant->nama . ' berhasil dicatat untuk event "' . $activeEvent->nama_event . '"!',
-            'participant' => [
-                'id' => $participant->id,
-                'nama' => $participant->nama,
-                'nis_nip' => $participant->nis_nip,
-                'waktu_hadir' => $attendance->waktu_hadir->format('d M Y H:i:s'),
-            ],
-            'stats' => [
-                'total' => $totalParticipants,
-                'hadir' => $totalAttended,
-                'belum' => $totalParticipants - $totalAttended,
-            ],
-            'timestamp' => now()->format('H:i:s'),
-        ], 200);
     }
 
     /**

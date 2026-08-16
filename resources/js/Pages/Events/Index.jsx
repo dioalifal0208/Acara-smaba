@@ -100,11 +100,26 @@ export default function EventsIndex({ events }) {
     const { data, setData, post, processing, errors, reset } = useForm({
         nama_event: '',
         deskripsi: '',
+        kategori: 'acara',
+        hari_aktif: [1,2,3,4,5],
+        jam_datang_mulai: '06:00',
+        jam_datang_selesai: '07:00',
+        jam_pulang_mulai: '15:30',
+        jam_pulang_selesai: '22:00',
         latitude: '',
         longitude: '',
         radius_meters: 100,
         set_active: true,
     });
+
+    const handleToggleDay = (day) => {
+        const days = [...data.hari_aktif];
+        if (days.includes(day)) {
+            setData('hari_aktif', days.filter(d => d !== day));
+        } else {
+            setData('hari_aktif', [...days, day]);
+        }
+    };
 
     useEffect(() => {
         if (flash?.success) {
@@ -238,18 +253,29 @@ export default function EventsIndex({ events }) {
                                     >
                                         <div>
                                             <div className="flex items-start justify-between gap-2 mb-2">
-                                                <span
-                                                    className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
-                                                        event.is_active
-                                                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                                            : 'bg-slate-100 text-slate-600'
-                                                    }`}
-                                                >
-                                                    <span className={`h-1.5 w-1.5 rounded-full ${event.is_active ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
-                                                    {event.is_active ? 'AKTIF' : 'Non-Aktif'}
-                                                </span>
+                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                    <span
+                                                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                                                            event.is_active
+                                                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                                                : 'bg-slate-100 text-slate-600'
+                                                        }`}
+                                                    >
+                                                        <span className={`h-1.5 w-1.5 rounded-full ${event.is_active ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
+                                                        {event.is_active ? 'AKTIF' : 'Non-Aktif'}
+                                                    </span>
+                                                    {event.kategori === 'harian' ? (
+                                                        <span className="inline-flex items-center rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[10px] font-bold text-blue-700">
+                                                            Harian
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-600">
+                                                            Acara
+                                                        </span>
+                                                    )}
+                                                </div>
 
-                                                <span className="text-[10px] text-slate-400 font-semibold">
+                                                <span className="text-[10px] text-slate-400 font-semibold shrink-0">
                                                     {new Date(event.created_at).toLocaleDateString('id-ID', {
                                                         day: 'numeric',
                                                         month: 'short',
@@ -265,6 +291,19 @@ export default function EventsIndex({ events }) {
                                             <p className="text-xs text-slate-500 mt-1 line-clamp-2 min-h-[32px]">
                                                 {event.deskripsi || 'Tidak ada deskripsi.'}
                                             </p>
+
+                                            {event.kategori === 'harian' && (
+                                                <div className="mt-2.5 flex flex-col gap-1 rounded-lg bg-blue-50/60 border border-blue-100 p-2 text-[11px] text-blue-900 font-medium">
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-slate-500 text-[10px]">Datang:</span>
+                                                        <span className="font-bold font-mono">{event.jam_datang_mulai?.substring(0,5) || '06:00'} - {event.jam_datang_selesai?.substring(0,5) || '07:00'}</span>
+                                                    </div>
+                                                    <div className="flex items-center justify-between">
+                                                        <span className="text-slate-500 text-[10px]">Pulang:</span>
+                                                        <span className="font-bold font-mono">{event.jam_pulang_mulai?.substring(0,5) || '15:30'} - {event.jam_pulang_selesai?.substring(0,5) || '22:00'}</span>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
 
                                         <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
@@ -321,92 +360,256 @@ export default function EventsIndex({ events }) {
 
             {/* Modal Buat Event Baru */}
             {showCreateModal && (
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setShowCreateModal(false)} />
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 md:p-8 overflow-y-auto">
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowCreateModal(false)} />
 
-                    <div className="relative w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl transition-all border border-slate-200 animate-[fadeIn_0.2s_ease-out] flex flex-col max-h-[90vh]">
+                    <div className="relative w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl transition-all border border-slate-200/80 animate-[fadeIn_0.2s_ease-out] flex flex-col my-auto">
                         {/* Header */}
-                        <div className="flex shrink-0 items-center justify-between border-b border-slate-100 bg-slate-50/50 px-6 py-4">
-                            <div>
-                                <h3 className="text-lg font-extrabold text-slate-800">Buat Event Baru</h3>
-                                <p className="text-xs text-slate-500 font-medium mt-0.5">Atur detail acara dan batasan presensi geolokasi</p>
+                        <div className="flex shrink-0 items-center justify-between border-b border-slate-100 bg-slate-50/90 px-6 py-3">
+                            <div className="flex items-center gap-2.5">
+                                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-500/20">
+                                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h3 className="text-sm font-extrabold text-slate-800">Buat Event Baru</h3>
+                                    <p className="text-[11px] text-slate-500 font-medium">Konfigurasi jadwal waktu & batasan radius presensi</p>
+                                </div>
                             </div>
-                            <button onClick={() => setShowCreateModal(false)} className="rounded-full bg-white p-2 text-slate-400 shadow-sm border border-slate-200 hover:text-red-500 hover:bg-red-50 transition-colors">
+                            <button 
+                                type="button"
+                                onClick={() => setShowCreateModal(false)} 
+                                className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+                            >
                                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                             </button>
                         </div>
 
-                        {/* Body (Scrollable) */}
-                        <div className="flex-1 overflow-y-auto p-6">
-                            <form id="create-event-form" onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                {/* Left Column: Text Inputs */}
-                                <div className="space-y-5">
+                        {/* Body */}
+                        <div className="p-5 sm:p-6">
+                            <form id="create-event-form" onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+                                {/* Left Column (7 cols) */}
+                                <div className="lg:col-span-7 flex flex-col justify-between space-y-3">
+                                    {/* Nama Event */}
                                     <div>
-                                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                                        <label className="block text-[10px] font-extrabold text-slate-700 uppercase tracking-wider mb-1">
                                             Nama Event / Acara <span className="text-red-500">*</span>
                                         </label>
                                         <input
                                             type="text"
                                             required
-                                            placeholder="Contoh: Upacara Bendera..."
+                                            placeholder="Contoh: Presensi Harian Guru & Karyawan / Upacara..."
                                             value={data.nama_event}
                                             onChange={(e) => setData('nama_event', e.target.value)}
-                                            className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-800 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 font-medium shadow-sm transition-all"
+                                            className="w-full rounded-xl border border-slate-200 px-3.5 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 font-medium shadow-2xs transition-all"
                                         />
-                                        {errors.nama_event && <p className="mt-1.5 text-xs text-red-600 font-bold">{errors.nama_event}</p>}
+                                        {errors.nama_event && <p className="mt-1 text-[10px] text-red-600 font-bold">{errors.nama_event}</p>}
                                     </div>
 
+                                    {/* Deskripsi Singkat */}
                                     <div>
-                                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                                        <label className="block text-[10px] font-extrabold text-slate-700 uppercase tracking-wider mb-1">
                                             Deskripsi (Opsional)
                                         </label>
-                                        <textarea
-                                            rows="4"
+                                        <input
+                                            type="text"
                                             placeholder="Keterangan singkat mengenai event ini..."
                                             value={data.deskripsi}
                                             onChange={(e) => setData('deskripsi', e.target.value)}
-                                            className="mt-2 w-full rounded-xl border border-slate-200 px-4 py-3 text-sm text-slate-800 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 font-medium shadow-sm transition-all resize-none"
+                                            className="w-full rounded-xl border border-slate-200 px-3.5 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 font-medium shadow-2xs transition-all"
                                         />
                                     </div>
 
-                                    <div className="pt-2">
-                                        <label className="flex items-start gap-3 cursor-pointer group">
-                                            <div className="relative flex items-center justify-center mt-0.5">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={data.set_active}
-                                                    onChange={(e) => setData('set_active', e.target.checked)}
-                                                    className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border-2 border-slate-300 checked:border-indigo-600 checked:bg-indigo-600 transition-all focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:ring-offset-1"
-                                                />
-                                                <svg className="absolute h-3 w-3 text-white opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                                </svg>
-                                            </div>
-                                            <div className="flex flex-col">
-                                                <span className="text-sm font-bold text-slate-800 group-hover:text-indigo-700 transition-colors">Langsung Aktifkan Presensi</span>
-                                                <span className="text-xs text-slate-500 font-medium">Event ini akan langsung muncul di halaman utama dan bisa digunakan untuk absensi.</span>
-                                            </div>
+                                    {/* Segmented Kategori Switch */}
+                                    <div>
+                                        <label className="block text-[10px] font-extrabold text-slate-700 uppercase tracking-wider mb-1">
+                                            Kategori Presensi <span className="text-red-500">*</span>
                                         </label>
-                                    </div>
-                                </div>
-
-                                {/* Right Column: Map Input */}
-                                <div className="flex flex-col h-full bg-slate-50/50 p-4 rounded-2xl border border-slate-100">
-                                    <div className="mb-3 flex items-start justify-between gap-2">
-                                        <div>
-                                            <label className="flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-wider">
-                                                <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                                                Lokasi Event (Titik Absen)
-                                            </label>
-                                            <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed font-medium">Geser dan paskan titik biru pada lokasi acara. Hanya peserta dalam jarak <span className="font-bold text-indigo-600">100 meter</span> dari titik ini yang bisa melakukan presensi mandiri.</p>
+                                        <div className="grid grid-cols-2 gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/80">
+                                            <button
+                                                type="button"
+                                                onClick={() => setData('kategori', 'acara')}
+                                                className={`flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-bold transition-all ${
+                                                    data.kategori === 'acara'
+                                                        ? 'bg-white text-indigo-700 shadow-sm ring-1 ring-slate-200/80'
+                                                        : 'text-slate-600 hover:text-slate-900'
+                                                }`}
+                                            >
+                                                <span>📅</span>
+                                                <span>Absen Acara (1x)</span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setData('kategori', 'harian')}
+                                                className={`flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-bold transition-all ${
+                                                    data.kategori === 'harian'
+                                                        ? 'bg-blue-600 text-white shadow-sm'
+                                                        : 'text-slate-600 hover:text-slate-900'
+                                                }`}
+                                            >
+                                                <span>⏰</span>
+                                                <span>Presensi Harian</span>
+                                            </button>
                                         </div>
                                     </div>
-                                    
-                                    <div className="flex-1 w-full min-h-[200px] rounded-xl overflow-hidden border border-slate-200 z-0 relative shadow-inner">
+
+                                    {/* Seamless Configuration Box (Fixed identical height for both tabs) */}
+                                    <div className="h-[138px]">
+                                        {data.kategori === 'acara' ? (
+                                            <div className="rounded-xl border border-indigo-200/80 bg-indigo-50/40 p-2.5 h-full flex flex-col justify-between animate-[fadeIn_0.15s_ease-out]">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-[10px] font-extrabold text-indigo-900 uppercase tracking-wider flex items-center gap-1.5">
+                                                        <span>📌</span> Mode Presensi Sekali
+                                                    </span>
+                                                    <span className="text-[10px] text-indigo-700 font-bold bg-indigo-100/70 px-2 py-0.5 rounded-md">
+                                                        1x Scan / Peserta
+                                                    </span>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-2 flex-1 mt-1.5">
+                                                    <div className="bg-white rounded-lg p-2 border border-indigo-100/80 shadow-2xs flex flex-col justify-center">
+                                                        <span className="block text-[10px] font-bold text-indigo-700 uppercase tracking-wider mb-0.5">
+                                                            🎯 Mekanisme
+                                                        </span>
+                                                        <p className="text-[11px] text-slate-600 leading-snug">
+                                                            Peserta cukup scan 1 kali. Kehadiran langsung tercatat sebagai <b>HADIR</b>.
+                                                        </p>
+                                                    </div>
+                                                    <div className="bg-white rounded-lg p-2 border border-indigo-100/80 shadow-2xs flex flex-col justify-center">
+                                                        <span className="block text-[10px] font-bold text-indigo-700 uppercase tracking-wider mb-0.5">
+                                                            💡 Penggunaan
+                                                        </span>
+                                                        <p className="text-[11px] text-slate-600 leading-snug">
+                                                            Upacara bendera, seminar, rapat pleno, ujian sekolah, dan kegiatan insidental.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="rounded-xl border border-blue-200/80 bg-blue-50/50 p-2.5 h-full flex flex-col justify-between animate-[fadeIn_0.15s_ease-out]">
+                                                {/* Hari Aktif Buttons */}
+                                                <div>
+                                                    <div className="flex items-center justify-between mb-1">
+                                                        <span className="text-[10px] font-extrabold text-blue-900 uppercase tracking-wider">Hari Kerja Aktif</span>
+                                                        <span className="text-[10px] text-blue-600 font-bold bg-blue-100/70 px-2 py-0.5 rounded-md">{data.hari_aktif.length} hari aktif</span>
+                                                    </div>
+                                                    <div className="grid grid-cols-7 gap-1">
+                                                        {[
+                                                            { id: 1, name: 'Sen' },
+                                                            { id: 2, name: 'Sel' },
+                                                            { id: 3, name: 'Rab' },
+                                                            { id: 4, name: 'Kam' },
+                                                            { id: 5, name: 'Jum' },
+                                                            { id: 6, name: 'Sab' },
+                                                            { id: 7, name: 'Min' },
+                                                        ].map((day) => {
+                                                            const isSelected = data.hari_aktif.includes(day.id);
+                                                            return (
+                                                                <button
+                                                                    type="button"
+                                                                    key={day.id}
+                                                                    onClick={() => handleToggleDay(day.id)}
+                                                                    className={`py-1 text-[11px] font-bold rounded-md border transition-all text-center ${
+                                                                        isSelected
+                                                                            ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                                                                            : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
+                                                                    }`}
+                                                                >
+                                                                    {day.name}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                </div>
+
+                                                {/* Jam Datang & Pulang In 2 Small Columns */}
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    {/* Datang */}
+                                                    <div className="bg-white rounded-lg p-1.5 border border-blue-100 shadow-2xs">
+                                                        <span className="block text-[10px] font-bold text-emerald-700 uppercase tracking-wider mb-0.5">
+                                                            🟢 Jam Datang
+                                                        </span>
+                                                        <div className="flex items-center gap-1">
+                                                            <input
+                                                                type="time"
+                                                                value={data.jam_datang_mulai}
+                                                                onChange={(e) => setData('jam_datang_mulai', e.target.value)}
+                                                                className="w-full min-w-0 rounded border border-slate-200 px-1 py-0.5 text-[11px] font-bold font-mono text-slate-800 focus:border-blue-500 shadow-2xs"
+                                                                required={data.kategori === 'harian'}
+                                                            />
+                                                            <span className="text-[10px] font-bold text-slate-400">-</span>
+                                                            <input
+                                                                type="time"
+                                                                value={data.jam_datang_selesai}
+                                                                onChange={(e) => setData('jam_datang_selesai', e.target.value)}
+                                                                className="w-full min-w-0 rounded border border-slate-200 px-1 py-0.5 text-[11px] font-bold font-mono text-slate-800 focus:border-blue-500 shadow-2xs"
+                                                                required={data.kategori === 'harian'}
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Pulang */}
+                                                    <div className="bg-white rounded-lg p-1.5 border border-blue-100 shadow-2xs">
+                                                        <span className="block text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-0.5">
+                                                            🟠 Jam Pulang
+                                                        </span>
+                                                        <div className="flex items-center gap-1">
+                                                            <input
+                                                                type="time"
+                                                                value={data.jam_pulang_mulai}
+                                                                onChange={(e) => setData('jam_pulang_mulai', e.target.value)}
+                                                                className="w-full min-w-0 rounded border border-slate-200 px-1 py-0.5 text-[11px] font-bold font-mono text-slate-800 focus:border-blue-500 shadow-2xs"
+                                                                required={data.kategori === 'harian'}
+                                                            />
+                                                            <span className="text-[10px] font-bold text-slate-400">-</span>
+                                                            <input
+                                                                type="time"
+                                                                value={data.jam_pulang_selesai}
+                                                                onChange={(e) => setData('jam_pulang_selesai', e.target.value)}
+                                                                className="w-full min-w-0 rounded border border-slate-200 px-1 py-0.5 text-[11px] font-bold font-mono text-slate-800 focus:border-blue-500 shadow-2xs"
+                                                                required={data.kategori === 'harian'}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Activate Checkbox */}
+                                    <label className="flex items-center gap-2 cursor-pointer pt-0.5 select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={data.set_active}
+                                            onChange={(e) => setData('set_active', e.target.checked)}
+                                            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                        />
+                                        <span className="text-xs font-bold text-slate-700">Langsung jadikan Event Aktif</span>
+                                    </label>
+                                </div>
+
+                                {/* Right Column: Map (5 cols) */}
+                                <div className="lg:col-span-5 flex flex-col justify-between bg-slate-50/80 p-3 rounded-2xl border border-slate-200 gap-2">
+                                    <div className="flex items-center justify-between">
+                                        <span className="flex items-center gap-1.5 text-[10px] font-extrabold text-slate-700 uppercase tracking-wider">
+                                            <svg className="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
+                                            Titik Presensi (Radius 100m)
+                                        </span>
+                                        {mapPosition ? (
+                                            <span className="text-[10px] font-extrabold text-indigo-600 font-mono bg-indigo-50 px-1.5 py-0.5 rounded-md border border-indigo-100">
+                                                {mapPosition.lat.toFixed(4)}, {mapPosition.lng.toFixed(4)}
+                                            </span>
+                                        ) : (
+                                            <span className="text-[10px] font-bold text-red-500">Belum diset</span>
+                                        )}
+                                    </div>
+
+                                    <div className="w-full h-[200px] sm:h-[215px] rounded-xl overflow-hidden border border-slate-200 relative shadow-inner bg-slate-100">
                                         <MapErrorBoundary>
-                                            <MapContainer center={[-6.2088, 106.8456]} zoom={14} scrollWheelZoom={true} style={{ height: '100%', width: '100%', minHeight: '200px' }}>
+                                            <MapContainer center={[-6.2088, 106.8456]} zoom={14} scrollWheelZoom={true} style={{ height: '100%', width: '100%' }}>
                                                 <TileLayer
                                                     attribution='&copy; OpenStreetMap contributors'
                                                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -415,27 +618,20 @@ export default function EventsIndex({ events }) {
                                             </MapContainer>
                                         </MapErrorBoundary>
                                     </div>
-                                    
-                                    <div className="mt-3 flex items-center justify-between bg-white px-3 py-2 rounded-lg border border-slate-100 shadow-sm">
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Koordinat Dipilih</span>
-                                        {mapPosition ? (
-                                            <span className="text-xs font-extrabold text-indigo-600 font-mono tracking-tight bg-indigo-50 px-2 py-1 rounded">
-                                                {mapPosition.lat.toFixed(5)}, {mapPosition.lng.toFixed(5)}
-                                            </span>
-                                        ) : (
-                                            <span className="text-xs font-bold text-red-500">Belum dipilih</span>
-                                        )}
-                                    </div>
+
+                                    <p className="text-[10px] text-slate-400 text-center leading-tight">
+                                        Klik pada peta untuk memindahkan titik lokasi.
+                                    </p>
                                 </div>
                             </form>
                         </div>
 
-                        {/* Footer / Actions */}
-                        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-slate-100 bg-slate-50/80 px-6 py-4">
+                        {/* Footer */}
+                        <div className="flex shrink-0 items-center justify-end gap-2.5 border-t border-slate-100 bg-slate-50/90 px-6 py-2.5">
                             <button
                                 type="button"
                                 onClick={() => setShowCreateModal(false)}
-                                className="rounded-xl border border-slate-200 bg-white px-6 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm"
+                                className="rounded-xl border border-slate-200 bg-white px-4 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 transition shadow-2xs"
                             >
                                 Batal
                             </button>
@@ -443,17 +639,9 @@ export default function EventsIndex({ events }) {
                                 type="submit"
                                 form="create-event-form"
                                 disabled={processing}
-                                className="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-indigo-500/30 hover:bg-indigo-700 hover:shadow-indigo-500/40 disabled:opacity-50 transition-all"
+                                className="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-5 py-1.5 text-xs font-bold text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-700 disabled:opacity-50 transition"
                             >
-                                {processing ? (
-                                    <>
-                                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                        </svg>
-                                        Menyimpan...
-                                    </>
-                                ) : 'Simpan & Aktifkan'}
+                                {processing ? 'Menyimpan...' : 'Simpan & Aktifkan'}
                             </button>
                         </div>
                     </div>

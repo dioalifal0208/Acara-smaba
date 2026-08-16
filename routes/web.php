@@ -72,6 +72,10 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::put('/participants/{participant}', [ParticipantController::class, 'update'])->name('participants.update');
     Route::delete('/participants/{participant}', [ParticipantController::class, 'destroy'])->name('participants.destroy');
 
+    // Face Registration routes (Admin)
+    Route::post('/api/participants/{participant}/face', [\App\Http\Controllers\FaceRecognitionController::class, 'register'])->name('participants.face.register');
+    Route::delete('/api/participants/{participant}/face', [\App\Http\Controllers\FaceRecognitionController::class, 'deleteFace'])->name('participants.face.delete');
+
     // Master QR routes
     Route::get('/admin/master-qr', [SelfCheckInController::class, 'masterQr'])->name('admin.master-qr');
     Route::post('/admin/master-qr/regenerate', [SelfCheckInController::class, 'regenerateToken'])->name('admin.master-qr.regenerate');
@@ -100,4 +104,6 @@ Route::get('/api/participants/search', [ParticipantController::class, 'search'])
 Route::get('/self-checkin/{token}', [SelfCheckInController::class, 'showForm'])->name('self-checkin.show');
 Route::post('/self-checkin/{token}', [SelfCheckInController::class, 'submitForm'])->name('self-checkin.submit');
 
+// Public Face Recognition routes
+Route::post('/api/face/match', [\App\Http\Controllers\FaceRecognitionController::class, 'match'])->name('face.match');
 require __DIR__.'/auth.php';

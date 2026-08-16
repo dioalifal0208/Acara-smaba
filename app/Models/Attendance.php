@@ -13,12 +13,14 @@ class Attendance extends Model
         'event_id',
         'participant_id',
         'waktu_hadir',
+        'waktu_pulang',
         'device_hash',
         'ip_address',
     ];
 
     protected $casts = [
         'waktu_hadir' => 'datetime',
+        'waktu_pulang' => 'datetime',
     ];
 
     /**

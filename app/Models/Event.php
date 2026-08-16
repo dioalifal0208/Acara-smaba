@@ -12,6 +12,12 @@ class Event extends Model
     protected $fillable = [
         'nama_event',
         'deskripsi',
+        'kategori',
+        'hari_aktif',
+        'jam_datang_mulai',
+        'jam_datang_selesai',
+        'jam_pulang_mulai',
+        'jam_pulang_selesai',
         'latitude',
         'longitude',
         'radius_meters',
@@ -23,6 +29,7 @@ class Event extends Model
         'latitude' => 'decimal:8',
         'longitude' => 'decimal:8',
         'radius_meters' => 'integer',
+        'hari_aktif' => 'array',
     ];
 
     /**

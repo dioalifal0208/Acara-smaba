@@ -74,6 +74,24 @@ class SelfCheckInController extends Controller
     }
 
     /**
+     * Tampilkan halaman form Face Check-In.
+     */
+    public function showFaceForm($token)
+    {
+        $activeToken = $this->getEventToken();
+        $activeEvent = Event::getActive();
+
+        if ($token !== $activeToken) {
+            abort(403, 'Tautan presensi tidak valid atau telah kadaluarsa.');
+        }
+
+        return Inertia::render('SelfCheckIn/FaceForm', [
+            'activeEvent' => $activeEvent,
+            'token' => $token,
+        ]);
+    }
+
+    /**
      * Hitung jarak dua titik dengan Haversine formula (dalam meter).
      */
     private function calculateDistance($lat1, $lon1, $lat2, $lon2)
@@ -115,6 +133,13 @@ class SelfCheckInController extends Controller
                 'status' => 'error',
                 'message' => 'Belum ada Event yang aktif. Presensi mandiri saat ini ditutup.',
             ], 400);
+        }
+
+        if ($activeEvent->kategori === 'harian') {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Presensi harian hanya dapat dilakukan melalui scan QR Code Pribadi oleh petugas/admin.',
+            ], 403);
         }
 
         $request->validate([

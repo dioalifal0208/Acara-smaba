@@ -2,6 +2,8 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, usePage } from '@inertiajs/react';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useToast } from '@/Components/Toast';
+import * as faceapi from 'face-api.js';
+import axios from 'axios';
 
 // ─── Main Scanner Component ───
 export default function ScannerIndex({ initialStats, activeEvent: propActiveEvent }) {
@@ -10,6 +12,8 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
     const activeEvent = propActiveEvent || globalActiveEvent;
     const [stats, setStats] = useState(initialStats);
     const [isScanning, setIsScanning] = useState(false);
+    const [isFaceModelsLoaded, setIsFaceModelsLoaded] = useState(false);
+    const [isFaceProcessing, setIsFaceProcessing] = useState(false);
     const [isCameraLoading, setIsCameraLoading] = useState(false);
     const [error, setError] = useState(null);
     const [scanHistory, setScanHistory] = useState([]);
@@ -23,6 +27,50 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
     const lastScannedRef = useRef('');
     const cooldownTimerRef = useRef(null);
     const lockTimerRef = useRef(null);
+    const gpsDataRef = useRef(null);
+    const faceIntervalRef = useRef(null);
+    const isFaceProcessingRef = useRef(false);
+
+    // ─── Load Face Models ───
+    useEffect(() => {
+        const loadModels = async () => {
+            try {
+                const MODEL_URL = '/models';
+                await Promise.all([
+                    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+                ]);
+                setIsFaceModelsLoaded(true);
+            } catch (err) {
+                console.error("Gagal memuat Wajah", err);
+            }
+        };
+        loadModels();
+    }, []);
+
+    useEffect(() => {
+        let watchId;
+        if (activeEvent?.latitude && activeEvent?.longitude) {
+            watchId = navigator.geolocation.watchPosition(
+                (pos) => {
+                    gpsDataRef.current = {
+                        latitude: pos.coords.latitude,
+                        longitude: pos.coords.longitude,
+                        accuracy: pos.coords.accuracy
+                    };
+                },
+                (err) => {
+                    console.error("GPS Error:", err);
+                    gpsDataRef.current = null;
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        }
+        return () => {
+            if (watchId) navigator.geolocation.clearWatch(watchId);
+        };
+    }, [activeEvent]);
 
     const getLockStyleFromResult = useCallback((decodedResult) => {
         const bounds = decodedResult?.result?.bounds;
@@ -81,6 +129,13 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
                 gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
                 osc.start(ctx.currentTime);
                 osc.stop(ctx.currentTime + 0.3);
+            } else if (type === 'warning' || type === 'late') {
+                osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+                osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.12); // E5
+                gain.gain.setValueAtTime(0.2, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.35);
             } else if (type === 'already') {
                 osc.frequency.setValueAtTime(440, ctx.currentTime); // A4
                 osc.frequency.setValueAtTime(440, ctx.currentTime + 0.15); // A4
@@ -121,6 +176,15 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
         try {
             const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
             const scanUrl = typeof route === 'function' ? route('scan', undefined, false) : '/scan';
+            
+            let requestBody = { qr_token: decodedText };
+            if (activeEvent?.latitude && activeEvent?.longitude) {
+                if (!gpsDataRef.current) {
+                    throw new Error("Menunggu sinyal GPS atau izin lokasi ditolak.");
+                }
+                requestBody = { ...requestBody, ...gpsDataRef.current };
+            }
+
             const response = await fetch(scanUrl, {
                 method: 'POST',
                 credentials: 'same-origin',
@@ -130,12 +194,12 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
                     'X-Requested-With': 'XMLHttpRequest',
                     'Accept': 'application/json',
                 },
-                body: JSON.stringify({ qr_token: decodedText }),
+                body: JSON.stringify(requestBody),
             });
 
             const data = await response.json().catch(() => ({}));
 
-            if (response.ok && (data.status === 'success' || data.status === 'already')) {
+            if (response.ok && (data.status === 'success' || data.status === 'warning' || data.status === 'already')) {
                 playSound(data.status);
                 setScanCount(prev => prev + 1);
 
@@ -156,6 +220,9 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
                     nama: data.participant?.nama || 'Peserta',
                     nis_nip: data.participant?.nis_nip || '-',
                     status: data.status,
+                    is_late: data.is_late || false,
+                    late_minutes: data.late_minutes || 0,
+                    late_formatted: data.late_formatted || '',
                     timestamp,
                 }, ...prev.slice(0, 49)]);
 
@@ -174,7 +241,7 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
             playSound('error');
             addToast({
                 status: 'error',
-                message: 'Terjadi kesalahan jaringan. Coba lagi.',
+                message: err.message || 'Terjadi kesalahan jaringan. Coba lagi.',
             });
         } finally {
             cooldownTimerRef.current = setTimeout(() => {
@@ -183,6 +250,45 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
             }, 1500);
         }
     }, [playSound, addToast, activeEvent, toast, showScanLock]);
+
+    const handleFaceScanResult = useCallback((data) => {
+        if (data.status === 'success' || data.status === 'warning' || data.status === 'already') {
+            playSound(data.status);
+            setScanCount(prev => prev + 1);
+
+            if (data.stats) {
+                setStats(data.stats);
+            }
+
+            const timestamp = data.timestamp || new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            addToast({
+                status: data.status,
+                message: data.message,
+                participantName: data.participant?.nama,
+                timestamp,
+            });
+
+            setScanHistory(prev => [{
+                id: Date.now(),
+                nama: data.participant?.nama || 'Peserta',
+                nis_nip: data.participant?.nis_nip || '-',
+                status: data.status,
+                is_late: data.is_late || false,
+                late_minutes: data.late_minutes || 0,
+                late_formatted: data.late_formatted || '',
+                timestamp,
+            }, ...prev.slice(0, 49)]);
+
+        } else {
+            playSound('error');
+            const timestamp = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            addToast({
+                status: 'error',
+                message: data.message || 'Gagal memproses Wajah.',
+                timestamp,
+            });
+        }
+    }, [playSound, addToast]);
 
     // ─── Auto-start Scanner ───
     const startScanner = async () => {
@@ -215,6 +321,56 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
             );
 
             setIsCameraLoading(false);
+
+            // Start Face Detection Interval
+            if (faceIntervalRef.current) clearInterval(faceIntervalRef.current);
+            faceIntervalRef.current = setInterval(async () => {
+                if (!isFaceModelsLoaded) return;
+                if (isFaceProcessingRef.current || isProcessingRef.current) return; // don't process if QR is processing or Face is processing
+
+                const video = document.querySelector('#qr-reader video');
+                if (!video || video.paused || video.ended) return;
+
+                const displaySize = { width: video.videoWidth || video.clientWidth, height: video.videoHeight || video.clientHeight };
+                if (displaySize.width === 0) return;
+
+                try {
+                    const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+                        .withFaceLandmarks()
+                        .withFaceDescriptor();
+
+                    if (detection && !isFaceProcessingRef.current && !isProcessingRef.current) {
+                        isFaceProcessingRef.current = true;
+                        setIsFaceProcessing(true);
+
+                        let payload = {
+                            descriptor: Array.from(detection.descriptor),
+                        };
+
+                        if (activeEvent?.latitude && activeEvent?.longitude && gpsDataRef.current) {
+                            payload = { ...payload, ...gpsDataRef.current };
+                        }
+
+                        axios.post('/api/face/match', payload)
+                            .then(response => {
+                                handleFaceScanResult(response.data);
+                            })
+                            .catch(error => {
+                                const errorData = error.response?.data || { status: 'error', message: 'Gagal menghubungi server.' };
+                                handleFaceScanResult(errorData);
+                            })
+                            .finally(() => {
+                                setTimeout(() => {
+                                    isFaceProcessingRef.current = false;
+                                    setIsFaceProcessing(false);
+                                }, 3000); // 3 seconds cooldown for face scan
+                            });
+                    }
+                } catch (e) {
+                    // ignore
+                }
+            }, 600); // Check every 600ms
+
         } catch (err) {
             console.error('Camera Error:', err);
             setIsCameraLoading(false);
@@ -224,6 +380,10 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
     };
 
     const stopScanner = async () => {
+        if (faceIntervalRef.current) {
+            clearInterval(faceIntervalRef.current);
+            faceIntervalRef.current = null;
+        }
         if (html5QrCodeRef.current) {
             try {
                 await html5QrCodeRef.current.stop();
@@ -233,6 +393,8 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
         }
         setIsScanning(false);
         setIsCameraLoading(false);
+        setIsFaceProcessing(false);
+        isFaceProcessingRef.current = false;
     };
 
     // ─── Fullscreen Logic ───
@@ -281,14 +443,36 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
     }, []);
 
     // ─── Status Badge ───
-    const getStatusBadge = (status) => {
+    const getStatusBadge = (item) => {
+        const status = typeof item === 'object' ? item.status : item;
+        const isLate = typeof item === 'object' ? item.is_late : false;
+        const lateMinutes = typeof item === 'object' ? item.late_minutes : 0;
+        const lateFormatted = typeof item === 'object' ? item.late_formatted : '';
+
+        if (status === 'warning' || isLate) {
+            let label = lateFormatted;
+            if (!label) {
+                if (lateMinutes >= 60) {
+                    const j = Math.floor(lateMinutes / 60);
+                    const m = lateMinutes % 60;
+                    label = `${j}j ${m > 0 ? `${m}m` : ''}`;
+                } else if (lateMinutes > 0) {
+                    label = `${lateMinutes}m`;
+                }
+            }
+            return (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 border border-amber-200">
+                    ⏱ TELAT {label ? `(${label})` : ''}
+                </span>
+            );
+        }
         switch (status) {
             case 'success':
-                return <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">✓ HADIR</span>;
+                return <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">✓ HADIR</span>;
             case 'already':
-                return <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">⚠ DUPLIKAT</span>;
+                return <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700 border border-amber-200">⚠ DUPLIKAT</span>;
             default:
-                return <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700">✕ ERROR</span>;
+                return <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700 border border-red-200">✕ ERROR</span>;
         }
     };
 
@@ -415,12 +599,22 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                                 </svg>
                                 <span className="text-sm font-bold tracking-wide">
-                                    {cooldownActive ? 'Memproses QR...' : 'Kamera Scanner'}
+                                    {cooldownActive || isFaceProcessing ? 'Memproses...' : 'Kamera Scanner (QR & Wajah)'}
                                 </span>
                             </div>
-                            {cooldownActive && (
-                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></div>
-                            )}
+                            <div className="flex items-center gap-3">
+                                {isScanning && (
+                                    <div className="flex items-center gap-2">
+                                        <div className={`h-2 w-2 rounded-full ${isFaceModelsLoaded ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-amber-400 animate-pulse'}`}></div>
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-white/80 hidden sm:inline">
+                                            {isFaceModelsLoaded ? 'AI Ready' : 'Load AI...'}
+                                        </span>
+                                    </div>
+                                )}
+                                {(cooldownActive || isFaceProcessing) && (
+                                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></div>
+                                )}
+                            </div>
                         </div>
 
                         <div className="p-4 flex flex-col gap-4">
@@ -446,15 +640,6 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
                                         </div>
                                     </div>
                                 )}
-
-                                {/* Loading overlay */}
-                                {isScanning && isCameraLoading && (
-                                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-950/80 text-white z-10 backdrop-blur-sm">
-                                        <div className="mb-4 h-10 w-10 animate-spin rounded-full border-3 border-white/20 border-t-indigo-500 shadow-[0_0_15px_rgba(99,102,241,0.5)]"></div>
-                                        <p className="text-sm text-gray-200 font-medium tracking-wide animate-pulse">Menghubungkan ke kamera...</p>
-                                    </div>
-                                )}
-
                                 {/* Inactive State */}
                                 {!isScanning && (
                                     <div className="flex flex-col items-center justify-center py-6 text-gray-500 absolute inset-0">
@@ -551,6 +736,7 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
                                             className={`flex items-center gap-3 px-5 py-3 transition-colors hover:bg-white ${index === 0 ? 'bg-indigo-50/30' : ''}`}
                                         >
                                             <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold shadow-sm ${
+                                                item.status === 'warning' || item.is_late ? 'bg-amber-100 text-amber-800 border border-amber-300' :
                                                 item.status === 'success' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
                                                 item.status === 'already' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
                                                 'bg-red-100 text-red-700 border border-red-200'
@@ -561,7 +747,7 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
                                                 <p className="truncate text-[13px] font-bold text-gray-900">{item.nama}</p>
                                                 <div className="flex items-center gap-2 mt-0.5">
                                                     <span className="text-[11px] text-gray-500 font-medium">{item.nis_nip}</span>
-                                                    {getStatusBadge(item.status)}
+                                                    {getStatusBadge(item)}
                                                 </div>
                                             </div>
                                             <div className="shrink-0">

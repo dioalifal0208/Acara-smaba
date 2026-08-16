@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useToast } from '@/Components/Toast';
 import { useConfirm } from '@/Components/ConfirmDialog';
 import ImportModal from '@/Components/ImportModal';
+import FaceRegistrationModal from '@/Components/FaceRegistrationModal';
 
 export default function ParticipantsIndex({ participants }) {
     const { flash } = usePage().props;
@@ -14,6 +15,7 @@ export default function ParticipantsIndex({ participants }) {
     const [showQr, setShowQr] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [editParticipant, setEditParticipant] = useState(null);
+    const [faceRegistrationParticipant, setFaceRegistrationParticipant] = useState(null);
 
     const { data, setData, post, processing, errors, reset } = useForm({
         nama: '',
@@ -256,11 +258,25 @@ export default function ParticipantsIndex({ participants }) {
                                             <tr key={participant.id} className="transition-colors hover:bg-slate-50/50">
                                                 <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-500 font-semibold">{index + 1}</td>
                                                 <td className="whitespace-nowrap px-6 py-3.5">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-50 border border-indigo-100 text-xs font-bold text-indigo-600">
+                                                    <div 
+                                                        className="flex items-center gap-3 cursor-pointer group"
+                                                        onClick={() => setFaceRegistrationParticipant(participant)}
+                                                        title="Klik untuk Registrasi Wajah"
+                                                    >
+                                                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-50 border border-indigo-100 text-xs font-bold text-indigo-600 group-hover:bg-indigo-100 transition-colors">
                                                             {participant.nama.charAt(0).toUpperCase()}
                                                         </div>
-                                                        <span className="text-sm font-bold text-slate-800">{participant.nama}</span>
+                                                        <div className="flex flex-col">
+                                                            <span className="text-sm font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">{participant.nama}</span>
+                                                            {participant.face_descriptor ? (
+                                                                <span className="text-[10px] font-semibold text-emerald-600 flex items-center gap-1 mt-0.5">
+                                                                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                                                                    Wajah Terdaftar
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-[10px] font-medium text-slate-400 mt-0.5">Wajah belum terdaftar</span>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </td>
                                                 <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-600 font-semibold">{participant.nis_nip}</td>
@@ -448,6 +464,7 @@ export default function ParticipantsIndex({ participants }) {
                                         onChange={(e) => editForm.setData('nama', e.target.value)}
                                         className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 font-semibold"
                                         placeholder="Masukkan nama lengkap"
+                                        autoFocus
                                         required
                                     />
                                     {editForm.errors.nama && <p className="mt-1 text-xs text-red-600 font-bold">{editForm.errors.nama}</p>}
@@ -465,28 +482,28 @@ export default function ParticipantsIndex({ participants }) {
                                         placeholder="Masukkan NIS atau NIP"
                                         required
                                     />
-<div>
-    <label htmlFor="edit_keterangan" className="mb-1 block text-sm font-bold text-slate-600">
-        Keterangan
-    </label>
-    <select
-        id="edit_keterangan"
-        value={editForm.data.keterangan}
-        onChange={(e) => editForm.setData('keterangan', e.target.value)}
-        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 font-semibold"
-    >
-        <option value="">-- Pilih Keterangan --</option>
-        <option value="Kepala sekolah">Kepala sekolah</option>
-        <option value="waka kesiswaan">waka kesiswaan</option>
-        <option value="waka humas">waka humas</option>
-        <option value="waka kurikulum">waka kurikulum</option>
-        <option value="waka sarpras">waka sarpras</option>
-        <option value="guru">guru</option>
-        <option value="tendik">tendik</option>
-    </select>
-    {editForm.errors.keterangan && <p className="mt-1 text-xs text-red-600 font-bold">{editForm.errors.keterangan}</p>}
-</div>
                                     {editForm.errors.nis_nip && <p className="mt-1 text-xs text-red-600 font-bold">{editForm.errors.nis_nip}</p>}
+                                </div>
+                                <div>
+                                    <label htmlFor="edit_keterangan" className="mb-1 block text-sm font-bold text-slate-600">
+                                        Keterangan
+                                    </label>
+                                    <select
+                                        id="edit_keterangan"
+                                        value={editForm.data.keterangan}
+                                        onChange={(e) => editForm.setData('keterangan', e.target.value)}
+                                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 font-semibold"
+                                    >
+                                        <option value="">-- Pilih Keterangan --</option>
+                                        <option value="Kepala sekolah">Kepala sekolah</option>
+                                        <option value="waka kesiswaan">waka kesiswaan</option>
+                                        <option value="waka humas">waka humas</option>
+                                        <option value="waka kurikulum">waka kurikulum</option>
+                                        <option value="waka sarpras">waka sarpras</option>
+                                        <option value="guru">guru</option>
+                                        <option value="tendik">tendik</option>
+                                    </select>
+                                    {editForm.errors.keterangan && <p className="mt-1 text-xs text-red-600 font-bold">{editForm.errors.keterangan}</p>}
                                 </div>
                             </div>
 
@@ -503,12 +520,24 @@ export default function ParticipantsIndex({ participants }) {
                                     disabled={editForm.processing}
                                     className="rounded-xl bg-indigo-700 px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-indigo-500/10 hover:bg-indigo-700 transition-all disabled:opacity-50"
                                 >
-                                    {editForm.processing ? 'Menyimpan...' : 'Simpan Perubahan'}
+                                    {editForm.processing ? 'Menyimpan...' : 'Simpan'}
                                 </button>
                             </div>
                         </form>
                     </div>
                 </div>
+            )}
+
+            {/* Face Registration Modal */}
+            {faceRegistrationParticipant && (
+                <FaceRegistrationModal
+                    participant={faceRegistrationParticipant}
+                    onClose={() => setFaceRegistrationParticipant(null)}
+                    onSuccess={() => {
+                        setFaceRegistrationParticipant(null);
+                        router.reload({ only: ['participants'] });
+                    }}
+                />
             )}
 
             {/* QR Code Modal — Enhanced with Download & Print */}
