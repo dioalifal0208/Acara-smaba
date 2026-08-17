@@ -5,7 +5,7 @@ import Checkbox from '@/Components/Checkbox';
 
 export default function LoginModal({ isOpen, onClose, canResetPassword = true }) {
     const { data, setData, post, processing, errors, reset, clearErrors } = useForm({
-        email: '',
+        login: '',
         password: '',
         remember: false,
     });
@@ -78,7 +78,7 @@ export default function LoginModal({ isOpen, onClose, canResetPassword = true })
                 <form onSubmit={submit} className="space-y-4">
                     <div>
                         <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5" htmlFor="modal-email">
-                            Email
+                            Email / NIP
                         </label>
                         <div className="relative">
                             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -88,18 +88,18 @@ export default function LoginModal({ isOpen, onClose, canResetPassword = true })
                             </div>
                             <input
                                 id="modal-email"
-                                type="email"
-                                name="email"
-                                value={data.email}
+                                type="text"
+                                name="login"
+                                value={data.login}
                                 className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium transition-all"
-                                placeholder="nama@smaba.sch.id"
+                                placeholder="Email atau NIP Anda"
                                 autoComplete="username"
                                 autoFocus
                                 required
-                                onChange={(e) => setData('email', e.target.value)}
+                                onChange={(e) => setData('login', e.target.value)}
                             />
                         </div>
-                        <InputError message={errors.email} className="mt-1.5" />
+                        <InputError message={errors.login} className="mt-1.5" />
                     </div>
 
                     <div>

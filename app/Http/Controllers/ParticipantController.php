@@ -32,6 +32,8 @@ class ParticipantController extends Controller
                     'nis_nip' => $participant->nis_nip,
                     'keterangan' => $participant->keterangan,
                     'qr_token' => $participant->qr_token,
+                    'has_face' => $participant->face_descriptor !== null,
+                    'photo_url' => $participant->photo_path ? asset('storage/' . $participant->photo_path) : null,
                     'has_attended' => $participant->attendances_count > 0,
                     'created_at' => $participant->created_at->format('d M Y H:i'),
                 ];
@@ -69,7 +71,7 @@ class ParticipantController extends Controller
         );
 
         return redirect()->route('participants.index')
-            ->with('success', 'Peserta berhasil ditambahkan! Akun peserta (username & password: NIS/NIP) siap digunakan.');
+            ->with('success', 'Peserta berhasil ditambahkan! Akun peserta (username & password: NIP) siap digunakan.');
     }
 
     /**

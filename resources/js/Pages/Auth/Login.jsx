@@ -33,7 +33,7 @@ export default function Login({ status, canResetPassword }) {
 
             <form onSubmit={submit}>
                 <div>
-                    <InputLabel htmlFor="login" value="Email / NIS / NIP" />
+                    <InputLabel htmlFor="login" value="Email / NIP" />
 
                     <TextInput
                         id="login"

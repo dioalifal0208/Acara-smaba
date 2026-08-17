@@ -246,7 +246,7 @@ class SelfCheckInController extends Controller
         if (!$participant) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'NIS/NIP tidak terdaftar. Hubungi panitia.',
+                'message' => 'NIP tidak terdaftar. Hubungi panitia.',
             ], 404);
         }
 

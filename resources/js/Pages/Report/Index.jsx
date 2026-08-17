@@ -26,17 +26,49 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
                 <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${i + 1}</td>
                 <td style="padding: 7px 8px; border: 1px solid #cbd5e1; font-weight: bold; font-size: 11px;">${a.nama}</td>
                 <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-family: monospace; font-size: 11px;">${a.nis_nip}</td>
-                <td style="padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.keterangan || '-'}</td>
-                <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.waktu_hadir}</td>
-                <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; color: #059669; font-weight: bold; font-size: 11px;">Hadir</td>
+                ${selectedEvent.kategori === 'harian' 
+                    ? `
+                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.status === 'alpha' ? '1' : '-'}</td>
+                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.status === 'izin' ? '1' : '-'}</td>
+                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.status === 'sakit' ? '1' : '-'}</td>
+                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.status === 'lupa_absen' ? '1' : '-'}</td>
+                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">-</td>
+                    ` 
+                    : `
+                        <td style="padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.keterangan || '-'}</td>
+                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.waktu_hadir}</td>
+                    `
+                }
+                <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-weight: bold; font-size: 11px;">${a.status.replace('_', ' ').toUpperCase()}</td>
             </tr>
         `).join('');
+
+        const tableHeadersHtml = selectedEvent.kategori === 'harian'
+            ? `
+                <th style="width: 35px;">No</th>
+                <th>Nama Lengkap</th>
+                <th style="width: 150px;">NIP</th>
+                <th style="width: 50px;">Alpha</th>
+                <th style="width: 50px;">Izin</th>
+                <th style="width: 50px;">Sakit</th>
+                <th style="width: 60px;">Lupa Absen</th>
+                <th style="width: 100px;">Total Telat Akumulasi</th>
+                <th style="width: 70px;">Status</th>
+            `
+            : `
+                <th style="width: 35px;">No</th>
+                <th>Nama Lengkap</th>
+                <th style="width: 150px;">NIP</th>
+                <th>Keterangan</th>
+                <th style="width: 130px;">Waktu Presensi</th>
+                <th style="width: 70px;">Status</th>
+            `;
 
         printWindow.document.write(`
             <!DOCTYPE html>
             <html>
             <head>
-                <title>Bukti Daftar Hadir - ${selectedEvent.nama_event}</title>
+                <title>Rekap Presensi - ${selectedEvent.nama_event}</title>
                 <style>
                     @page {
                         size: A4 portrait;
@@ -195,7 +227,7 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
                 </div>
 
                 <div class="title-doc">
-                    <h2>BUKTI DAFTAR HADIR PESERTA ACARA</h2>
+                    <h2>REKAP PRESENSI ${selectedEvent.nama_event.toUpperCase()}</h2>
                 </div>
 
                 <div class="meta-info">
@@ -221,12 +253,7 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th style="width: 35px;">No</th>
-                            <th>Nama Lengkap</th>
-                            <th style="width: 150px;">NIP</th>
-                            <th>Keterangan</th>
-                            <th style="width: 130px;">Waktu Presensi</th>
-                            <th style="width: 70px;">Status</th>
+                            ${tableHeadersHtml}
                         </tr>
                     </thead>
                     <tbody>
@@ -412,7 +439,7 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
                             </svg>
                             <input
                                 type="text"
-                                placeholder="Cari data kehadiran berdasarkan nama atau NIP/NIS..."
+                                placeholder="Cari data kehadiran berdasarkan nama atau NIP..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-11 pr-4 text-sm text-slate-800 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 shadow-sm font-medium"
@@ -429,8 +456,20 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
                                         <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">No</th>
                                         <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Nama Lengkap</th>
                                         <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">NIP</th>
-                                        <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Keterangan</th>
-                                        <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Waktu Hadir</th>
+                                        {selectedEvent?.kategori === 'harian' ? (
+                                            <>
+                                                <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Alpha</th>
+                                                <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Izin</th>
+                                                <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Sakit</th>
+                                                <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Lupa Absen</th>
+                                                <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Total Telat Akumulasi</th>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Keterangan</th>
+                                                <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Waktu Hadir</th>
+                                            </>
+                                        )}
                                         <th className="px-6 py-3 text-center text-xs font-extrabold uppercase tracking-wider text-slate-500">Status</th>
                                     </tr>
                                 </thead>
@@ -457,12 +496,26 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
                                                     </div>
                                                 </td>
                                                 <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-700 font-semibold font-mono">{attendance.nis_nip}</td>
-                                                <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-600">{attendance.keterangan || '-'}</td>
-                                                <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-700 font-mono font-semibold">{attendance.waktu_hadir}</td>
+                                                {selectedEvent?.kategori === 'harian' ? (
+                                                    <>
+                                                        <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-600 font-bold text-center">{attendance.status === 'alpha' ? '1' : '-'}</td>
+                                                        <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-600 font-bold text-center">{attendance.status === 'izin' ? '1' : '-'}</td>
+                                                        <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-600 font-bold text-center">{attendance.status === 'sakit' ? '1' : '-'}</td>
+                                                        <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-600 font-bold text-center">{attendance.status === 'lupa_absen' ? '1' : '-'}</td>
+                                                        <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-700 font-mono font-semibold">-</td>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-600">{attendance.keterangan || '-'}</td>
+                                                        <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-700 font-mono font-semibold">{attendance.waktu_hadir}</td>
+                                                    </>
+                                                )}
                                                 <td className="whitespace-nowrap px-6 py-3.5 text-center">
-                                                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-700">
-                                                        ✓ Hadir
-                                                    </span>
+                                                    {attendance.status === 'hadir' && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-700">✓ Hadir</span>}
+                                                    {attendance.status === 'alpha' && <span className="inline-flex items-center gap-1 rounded-full bg-red-50 border border-red-100 px-2.5 py-0.5 text-xs font-bold text-red-700">✗ Alpha</span>}
+                                                    {attendance.status === 'izin' && <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-700">! Izin</span>}
+                                                    {attendance.status === 'sakit' && <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-100 px-2.5 py-0.5 text-xs font-bold text-blue-700">+ Sakit</span>}
+                                                    {attendance.status === 'lupa_absen' && <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 border border-orange-100 px-2.5 py-0.5 text-xs font-bold text-orange-700">⚠ Lupa Absen</span>}
                                                 </td>
                                             </tr>
                                         ))

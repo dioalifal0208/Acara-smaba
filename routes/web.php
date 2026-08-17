@@ -46,9 +46,12 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
         $totalAttended = $activeEvent
             ? \App\Models\Attendance::where('event_id', $activeEvent->id)->distinct('participant_id')->count('participant_id')
             : 0;
+            
+        $pendingLeaveCount = \App\Models\LeaveRequest::where('status_approval', 'pending')->count();
 
         return Inertia::render('Dashboard', [
             'activeEvent' => $activeEvent,
+            'pendingLeaveCount' => $pendingLeaveCount,
             'stats' => [
                 'total' => $totalParticipants,
                 'hadir' => $totalAttended,
@@ -56,6 +59,11 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
             ],
         ]);
     })->name('dashboard');
+
+    // Leave Approvals
+    Route::get('/admin/leaves', [\App\Http\Controllers\AdminLeaveController::class, 'index'])->name('admin.leave.index');
+    Route::post('/admin/leaves/{leaveRequest}/approve', [\App\Http\Controllers\AdminLeaveController::class, 'approve'])->name('admin.leave.approve');
+    Route::post('/admin/leaves/{leaveRequest}/reject', [\App\Http\Controllers\AdminLeaveController::class, 'reject'])->name('admin.leave.reject');
 
     // Event management routes
     Route::get('/events', [EventController::class, 'index'])->name('events.index');
@@ -108,6 +116,9 @@ Route::middleware(['auth', 'verified', 'role:participant'])->group(function () {
             'participant' => auth()->user()->participant,
         ]);
     })->name('participant.face-scanner');
+
+    // Leave request submission
+    Route::post('/participant/leave', [\App\Http\Controllers\LeaveRequestController::class, 'store'])->name('leave.store');
 });
 
 Route::middleware('auth')->group(function () {

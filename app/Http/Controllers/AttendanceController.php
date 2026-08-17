@@ -362,24 +362,34 @@ class AttendanceController extends Controller
         $totalParticipants = Participant::count();
 
         if ($selectedEventId) {
-            $totalAttended = Attendance::where('event_id', $selectedEventId)
-                ->distinct('participant_id')
-                ->count('participant_id');
-
-            $attendances = Attendance::with('participant')
+            $attendancesRaw = Attendance::with('participant')
                 ->where('event_id', $selectedEventId)
                 ->orderBy('waktu_hadir', 'desc')
-                ->get()
-                ->map(function ($attendance) {
+                ->get();
+                
+            $totalHadir = $attendancesRaw->where('status', 'hadir')->count();
+            $totalAlpha = $attendancesRaw->where('status', 'alpha')->count();
+            $totalIzin = $attendancesRaw->where('status', 'izin')->count();
+            $totalSakit = $attendancesRaw->where('status', 'sakit')->count();
+            $totalLupaAbsen = $attendancesRaw->where('status', 'lupa_absen')->count();
+            $totalAttended = $attendancesRaw->count();
+
+            $attendances = $attendancesRaw->map(function ($attendance) {
                     return [
                         'id' => $attendance->id,
                         'nama' => $attendance->participant->nama ?? 'Tidak Dikenal',
                         'nis_nip' => $attendance->participant->nis_nip ?? '-',
                         'keterangan' => $attendance->participant->keterangan ?? '-',
-                        'waktu_hadir' => $attendance->waktu_hadir->format('d M Y H:i:s'),
+                        'status' => $attendance->status,
+                        'waktu_hadir' => $attendance->waktu_hadir ? $attendance->waktu_hadir->format('d M Y H:i:s') : '-',
                     ];
                 });
         } else {
+            $totalHadir = 0;
+            $totalAlpha = 0;
+            $totalIzin = 0;
+            $totalSakit = 0;
+            $totalLupaAbsen = 0;
             $totalAttended = 0;
             $attendances = collect();
         }
@@ -392,7 +402,11 @@ class AttendanceController extends Controller
             'selectedEvent' => $selectedEvent,
             'stats' => [
                 'total' => $totalParticipants,
-                'hadir' => $totalAttended,
+                'hadir' => $totalHadir,
+                'alpha' => $totalAlpha,
+                'izin' => $totalIzin,
+                'sakit' => $totalSakit,
+                'lupa_absen' => $totalLupaAbsen,
                 'belum' => $totalNotAttended,
             ],
             'attendances' => $attendances,
@@ -418,13 +432,15 @@ class AttendanceController extends Controller
                 $sheet = $spreadsheet->getActiveSheet();
                 $sheet->setTitle('Bukti Kehadiran');
 
+                $lastColumn = $event->kategori === 'harian' ? 'I' : 'F';
+
                 // Header Kop Surat
-                $sheet->mergeCells('A1:F1');
-                $sheet->setCellValue('A1', 'BUKTI DAFTAR HADIR PESERTA ACARA');
+                $sheet->mergeCells('A1:' . $lastColumn . '1');
+                $sheet->setCellValue('A1', 'REKAP PRESENSI ' . mb_strtoupper($event->nama_event));
                 $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14)->getColor()->setRGB('166534');
                 $sheet->getStyle('A1')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
 
-                $sheet->mergeCells('A2:F2');
+                $sheet->mergeCells('A2:' . $lastColumn . '2');
                 $sheet->setCellValue('A2', 'SMA NEGERI 1 BABAT');
                 $sheet->getStyle('A2')->getFont()->setBold(true)->setSize(12);
                 $sheet->getStyle('A2')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
@@ -447,8 +463,13 @@ class AttendanceController extends Controller
                 $sheet->getStyle('A7')->getFont()->setBold(true);
 
                 // Table Headers (Row 9)
-                $headers = ['No', 'Nama Lengkap', 'NIP', 'Keterangan', 'Waktu Presensi', 'Status'];
-                $columns = ['A', 'B', 'C', 'D', 'E', 'F'];
+                if ($event->kategori === 'harian') {
+                    $headers = ['No', 'Nama Lengkap', 'NIP', 'Alpha', 'Izin', 'Sakit', 'Lupa Absen', 'Total Telat', 'Status'];
+                    $columns = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
+                } else {
+                    $headers = ['No', 'Nama Lengkap', 'NIP', 'Keterangan', 'Waktu Presensi', 'Status'];
+                    $columns = ['A', 'B', 'C', 'D', 'E', 'F'];
+                }
 
                 foreach ($headers as $index => $header) {
                     $sheet->setCellValue($columns[$index] . '9', $header);
@@ -466,7 +487,7 @@ class AttendanceController extends Controller
                         'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER,
                     ],
                 ];
-                $sheet->getStyle('A9:F9')->applyFromArray($headerStyle);
+                $sheet->getStyle('A9:' . $lastColumn . '9')->applyFromArray($headerStyle);
                 $sheet->getRowDimension(9)->setRowHeight(24);
 
                 // Format column C (NIP) as Text
@@ -478,21 +499,38 @@ class AttendanceController extends Controller
                     $sheet->setCellValue('A' . $row, $idx + 1);
                     $sheet->setCellValue('B' . $row, $att->participant->nama ?? 'Tidak Dikenal');
                     $sheet->setCellValueExplicit('C' . $row, $att->participant->nis_nip ?? '-', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-                    $sheet->setCellValue('D' . $row, $att->participant->keterangan ?? '-');
-                    $sheet->setCellValue('E' . $row, $att->waktu_hadir->format('d/m/Y H:i:s'));
-                    $sheet->setCellValue('F' . $row, 'Hadir');
+                    if ($event->kategori === 'harian') {
+                        $sheet->setCellValue('D' . $row, $att->status === 'alpha' ? '1' : '-');
+                        $sheet->setCellValue('E' . $row, $att->status === 'izin' ? '1' : '-');
+                        $sheet->setCellValue('F' . $row, $att->status === 'sakit' ? '1' : '-');
+                        $sheet->setCellValue('G' . $row, $att->status === 'lupa_absen' ? '1' : '-');
+                        $sheet->setCellValue('H' . $row, '-');
+                        $sheet->setCellValue('I' . $row, ucwords(str_replace('_', ' ', $att->status)));
 
-                    // Alignments
-                    $sheet->getStyle('A' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-                    $sheet->getStyle('C' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-                    $sheet->getStyle('E' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-                    $sheet->getStyle('F' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+                        $sheet->getStyle('A' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+                        $sheet->getStyle('C' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+                        $sheet->getStyle('D' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+                        $sheet->getStyle('E' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+                        $sheet->getStyle('F' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+                        $sheet->getStyle('G' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+                        $sheet->getStyle('H' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+                        $sheet->getStyle('I' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+                    } else {
+                        $sheet->setCellValue('D' . $row, $att->participant->keterangan ?? '-');
+                        $sheet->setCellValue('E' . $row, $att->waktu_hadir ? $att->waktu_hadir->format('d/m/Y H:i:s') : '-');
+                        $sheet->setCellValue('F' . $row, ucwords(str_replace('_', ' ', $att->status)));
+
+                        $sheet->getStyle('A' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+                        $sheet->getStyle('C' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+                        $sheet->getStyle('E' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+                        $sheet->getStyle('F' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+                    }
 
                     $row++;
                 }
 
                 if ($attendances->isEmpty()) {
-                    $sheet->mergeCells('A10:F10');
+                    $sheet->mergeCells('A10:' . $lastColumn . '10');
                     $sheet->setCellValue('A10', 'Belum ada data presensi untuk event ini.');
                     $sheet->getStyle('A10')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
                     $row = 11;
@@ -507,15 +545,24 @@ class AttendanceController extends Controller
                         ],
                     ],
                 ];
-                $sheet->getStyle('A9:F' . ($row - 1))->applyFromArray($tableStyle);
+                $sheet->getStyle('A9:' . $lastColumn . ($row - 1))->applyFromArray($tableStyle);
 
                 // Width dimensions
                 $sheet->getColumnDimension('A')->setWidth(8);
                 $sheet->getColumnDimension('B')->setWidth(32);
                 $sheet->getColumnDimension('C')->setWidth(26);
-                $sheet->getColumnDimension('D')->setWidth(24);
-                $sheet->getColumnDimension('E')->setWidth(22);
-                $sheet->getColumnDimension('F')->setWidth(14);
+                if ($event->kategori === 'harian') {
+                    $sheet->getColumnDimension('D')->setWidth(10);
+                    $sheet->getColumnDimension('E')->setWidth(10);
+                    $sheet->getColumnDimension('F')->setWidth(10);
+                    $sheet->getColumnDimension('G')->setWidth(12);
+                    $sheet->getColumnDimension('H')->setWidth(26);
+                    $sheet->getColumnDimension('I')->setWidth(14);
+                } else {
+                    $sheet->getColumnDimension('D')->setWidth(24);
+                    $sheet->getColumnDimension('E')->setWidth(22);
+                    $sheet->getColumnDimension('F')->setWidth(14);
+                }
 
                 $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
                 $slug = \Illuminate\Support\Str::slug($event->nama_event);
@@ -538,22 +585,39 @@ class AttendanceController extends Controller
         return response()->streamDownload(function () use ($event, $attendances, $totalAttended, $totalParticipants) {
             $handle = fopen('php://output', 'w');
             fputs($handle, "\xEF\xBB\xBF"); // UTF-8 BOM
-            fputcsv($handle, ['BUKTI DAFTAR HADIR PESERTA ACARA - SMA NEGERI 1 BABAT']);
+            fputcsv($handle, ['REKAP PRESENSI ' . mb_strtoupper($event->nama_event) . ' - SMA NEGERI 1 BABAT']);
             fputcsv($handle, ['Nama Acara', $event->nama_event]);
             fputcsv($handle, ['Tanggal', $event->created_at->format('d/m/Y')]);
             fputcsv($handle, ['Total Kehadiran', $totalAttended . ' dari ' . $totalParticipants . ' peserta']);
             fputcsv($handle, []);
-            fputcsv($handle, ['No', 'Nama Lengkap', 'NIP', 'Keterangan', 'Waktu Presensi', 'Status']);
-
-            foreach ($attendances as $idx => $att) {
-                fputcsv($handle, [
-                    $idx + 1,
-                    $att->participant->nama ?? 'Tidak Dikenal',
-                    $att->participant->nis_nip ?? '-',
-                    $att->participant->keterangan ?? '-',
-                    $att->waktu_hadir->format('d/m/Y H:i:s'),
-                    'Hadir',
-                ]);
+            
+            if ($event->kategori === 'harian') {
+                fputcsv($handle, ['No', 'Nama Lengkap', 'NIP', 'Alpha', 'Izin', 'Sakit', 'Lupa Absen', 'Total Telat', 'Status']);
+                foreach ($attendances as $idx => $att) {
+                    fputcsv($handle, [
+                        $idx + 1,
+                        $att->participant->nama ?? 'Tidak Dikenal',
+                        $att->participant->nis_nip ?? '-',
+                        $att->status === 'alpha' ? '1' : '-',
+                        $att->status === 'izin' ? '1' : '-',
+                        $att->status === 'sakit' ? '1' : '-',
+                        $att->status === 'lupa_absen' ? '1' : '-',
+                        '-',
+                        ucwords(str_replace('_', ' ', $att->status)),
+                    ]);
+                }
+            } else {
+                fputcsv($handle, ['No', 'Nama Lengkap', 'NIP', 'Keterangan', 'Waktu Presensi', 'Status']);
+                foreach ($attendances as $idx => $att) {
+                    fputcsv($handle, [
+                        $idx + 1,
+                        $att->participant->nama ?? 'Tidak Dikenal',
+                        $att->participant->nis_nip ?? '-',
+                        $att->participant->keterangan ?? '-',
+                        $att->waktu_hadir ? $att->waktu_hadir->format('d/m/Y H:i:s') : '-',
+                        ucwords(str_replace('_', ' ', $att->status)),
+                    ]);
+                }
             }
             fclose($handle);
         }, $csvFilename, [
@@ -567,7 +631,7 @@ class AttendanceController extends Controller
      */
     public function qrSignature(Event $event)
     {
-        $verificationData = "DOKUMEN RESMI BUKTI DAFTAR HADIR\n"
+        $verificationData = "DOKUMEN RESMI REKAP PRESENSI\n"
             . "SMA NEGERI 1 BABAT\n"
             . "Acara: " . $event->nama_event . "\n"
             . "Tanggal: " . $event->created_at->format('d/m/Y') . "\n"

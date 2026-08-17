@@ -221,7 +221,7 @@ export default function ParticipantsIndex({ participants }) {
                             </svg>
                             <input
                                 type="text"
-                                placeholder="Cari berdasarkan nama atau NIS/NIP..."
+                                placeholder="Cari berdasarkan nama atau NIP..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-11 pr-4 text-sm text-slate-800 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 shadow-sm font-medium"
@@ -237,16 +237,15 @@ export default function ParticipantsIndex({ participants }) {
                                     <tr>
                                         <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">No</th>
                                         <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Nama</th>
-                                        <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">NIS/NIP</th>
+                                        <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">NIP</th>
                                         <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Keterangan</th>
-                                        <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Status</th>
                                         <th className="px-6 py-3 text-center text-xs font-extrabold uppercase tracking-wider text-slate-500">Aksi</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100 bg-white">
                                     {filteredParticipants.length === 0 ? (
                                         <tr>
-                                            <td colSpan={6} className="px-6 py-10 text-center text-slate-500">
+                                            <td colSpan={5} className="px-6 py-10 text-center text-slate-500">
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-10 w-10 text-slate-400 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                                                 </svg>
@@ -263,12 +262,20 @@ export default function ParticipantsIndex({ participants }) {
                                                         onClick={() => setFaceRegistrationParticipant(participant)}
                                                         title="Klik untuk Registrasi Wajah"
                                                     >
-                                                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-50 border border-indigo-100 text-xs font-bold text-indigo-600 group-hover:bg-indigo-100 transition-colors">
-                                                            {participant.nama.charAt(0).toUpperCase()}
-                                                        </div>
+                                                        {participant.photo_url ? (
+                                                            <img 
+                                                                src={participant.photo_url} 
+                                                                alt={participant.nama} 
+                                                                className="h-8 w-8 rounded-full object-cover border border-slate-200 group-hover:ring-2 group-hover:ring-indigo-500 transition-all"
+                                                            />
+                                                        ) : (
+                                                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-50 border border-indigo-100 text-xs font-bold text-indigo-600 group-hover:bg-indigo-100 transition-colors">
+                                                                {participant.nama.charAt(0).toUpperCase()}
+                                                            </div>
+                                                        )}
                                                         <div className="flex flex-col">
                                                             <span className="text-sm font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">{participant.nama}</span>
-                                                            {participant.face_descriptor ? (
+                                                            {participant.has_face ? (
                                                                 <span className="text-[10px] font-semibold text-emerald-600 flex items-center gap-1 mt-0.5">
                                                                     <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
                                                                     Wajah Terdaftar
@@ -287,23 +294,7 @@ export default function ParticipantsIndex({ participants }) {
                                                         </span>
                                                     ) : null}
                                                 </td>
-                                                <td className="whitespace-nowrap px-6 py-3.5">
-                                                    {participant.has_attended ? (
-                                                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">
-                                                            <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
-                                                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                                            </svg>
-                                                            Hadir
-                                                        </span>
-                                                    ) : (
-                                                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 border border-slate-200 px-2 py-0.5 text-xs font-bold text-slate-500">
-                                                            <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
-                                                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                                                            </svg>
-                                                            Belum
-                                                        </span>
-                                                    )}
-                                                </td>
+
                                                 <td className="whitespace-nowrap px-6 py-3.5 text-center">
                                                     <div className="flex items-center justify-center gap-2">
                                                         <button
@@ -381,7 +372,7 @@ export default function ParticipantsIndex({ participants }) {
                                 </div>
                                 <div>
                                     <label htmlFor="nis_nip" className="mb-1 block text-sm font-bold text-slate-600">
-                                        NIS / NIP
+                                        NIP
                                     </label>
                                     <input
                                         id="nis_nip"
@@ -389,7 +380,7 @@ export default function ParticipantsIndex({ participants }) {
                                         value={data.nis_nip}
                                         onChange={(e) => setData('nis_nip', e.target.value)}
                                         className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 font-semibold"
-                                        placeholder="Masukkan NIS atau NIP"
+                                        placeholder="Masukkan NIP"
                                         required
                                     />
                                     {errors.nis_nip && <p className="mt-1 text-xs text-red-600 font-bold">{errors.nis_nip}</p>}
@@ -471,7 +462,7 @@ export default function ParticipantsIndex({ participants }) {
                                 </div>
                                 <div>
                                     <label htmlFor="edit_nis_nip" className="mb-1 block text-sm font-bold text-slate-600">
-                                        NIS / NIP
+                                        NIP
                                     </label>
                                     <input
                                         id="edit_nis_nip"
@@ -479,7 +470,7 @@ export default function ParticipantsIndex({ participants }) {
                                         value={editForm.data.nis_nip}
                                         onChange={(e) => editForm.setData('nis_nip', e.target.value)}
                                         className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 font-semibold"
-                                        placeholder="Masukkan NIS atau NIP"
+                                        placeholder="Masukkan NIP"
                                         required
                                     />
                                     {editForm.errors.nis_nip && <p className="mt-1 text-xs text-red-600 font-bold">{editForm.errors.nis_nip}</p>}

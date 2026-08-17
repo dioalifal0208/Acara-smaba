@@ -377,7 +377,7 @@ export default function FaceForm({ token, activeEvent }) {
             </div>
             
             <a href={`/self-checkin/${token}`} className="mt-6 text-xs text-white/50 hover:text-white font-semibold transition-colors underline underline-offset-4">
-                Kembali ke Form NIS/NIP
+                Kembali ke Form NIP
             </a>
         </div>
     );

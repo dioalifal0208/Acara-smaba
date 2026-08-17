@@ -14,6 +14,8 @@ class Attendance extends Model
         'participant_id',
         'waktu_hadir',
         'waktu_pulang',
+        'status',
+        'leave_request_id',
         'device_hash',
         'ip_address',
     ];
@@ -37,5 +39,13 @@ class Attendance extends Model
     public function participant()
     {
         return $this->belongsTo(Participant::class);
+    }
+
+    /**
+     * Relasi ke pengajuan izin/sakit.
+     */
+    public function leaveRequest()
+    {
+        return $this->belongsTo(LeaveRequest::class);
     }
 }

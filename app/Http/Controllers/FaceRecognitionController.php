@@ -54,12 +54,35 @@ class FaceRecognitionController extends Controller
         $request->validate([
             'descriptor' => 'required|array',
             'descriptor.*' => 'numeric',
+            'photo' => 'nullable|string'
         ]);
 
-        // Simpan 128-dimensional array
-        $participant->update([
+        $updateData = [
             'face_descriptor' => $request->input('descriptor')
-        ]);
+        ];
+
+        if ($request->has('photo')) {
+            $photoData = $request->input('photo');
+            if (preg_match('/^data:image\/(\w+);base64,/', $photoData, $type)) {
+                $photoData = substr($photoData, strpos($photoData, ',') + 1);
+                $type = strtolower($type[1]);
+                if (in_array($type, ['jpg', 'jpeg', 'png'])) {
+                    $photoData = base64_decode($photoData);
+                    $filename = 'faces/' . $participant->id . '_' . time() . '.' . $type;
+                    \Illuminate\Support\Facades\Storage::disk('public')->put($filename, $photoData);
+                    
+                    // delete old photo if exists
+                    if ($participant->photo_path) {
+                        \Illuminate\Support\Facades\Storage::disk('public')->delete($participant->photo_path);
+                    }
+                    
+                    $updateData['photo_path'] = $filename;
+                }
+            }
+        }
+
+        // Simpan 128-dimensional array dan photo
+        $participant->update($updateData);
 
         return response()->json([
             'status' => 'success',
@@ -72,8 +95,13 @@ class FaceRecognitionController extends Controller
      */
     public function deleteFace(Participant $participant)
     {
+        if ($participant->photo_path) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($participant->photo_path);
+        }
+
         $participant->update([
-            'face_descriptor' => null
+            'face_descriptor' => null,
+            'photo_path' => null
         ]);
 
         return response()->json([
@@ -185,6 +213,9 @@ class FaceRecognitionController extends Controller
             $dbDescriptor = $p->face_descriptor;
             if (is_array($dbDescriptor) && count($dbDescriptor) === 128) {
                 $dist = $this->euclideanDistance($inputDescriptor, $dbDescriptor);
+                
+                \Log::info("Distance computed between input and " . $p->nama . ": " . $dist);
+                
                 if ($dist < $bestDistance) {
                     $bestDistance = $dist;
                     $bestMatch = $p;

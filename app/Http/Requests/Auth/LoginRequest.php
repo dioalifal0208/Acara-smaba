@@ -42,12 +42,12 @@ class LoginRequest extends FormRequest
     {
         $this->ensureIsNotRateLimited();
 
-        $login = $this->input('login');
+        $login = trim($this->input('login'));
         $password = $this->input('password');
         
-        $fieldType = filter_var($login, FILTER_VALIDATE_EMAIL) ? 'email' : 'username';
-
-        if (! Auth::attempt([$fieldType => $login, 'password' => $password], $this->boolean('remember'))) {
+        // Coba login dengan username (NIS/NIP) terlebih dahulu, jika gagal coba dengan email
+        if (! Auth::attempt(['username' => $login, 'password' => $password], $this->boolean('remember')) &&
+            ! Auth::attempt(['email' => $login, 'password' => $password], $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());
 
             throw ValidationException::withMessages([

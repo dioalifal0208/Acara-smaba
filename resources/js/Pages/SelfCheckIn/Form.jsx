@@ -351,7 +351,7 @@ export default function SelfCheckInForm({ token, activeEvent }) {
                                         🟢 {activeEvent.nama_event}
                                     </span>
                                     <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Presensi Mandiri</h2>
-                                    <p className="text-xs text-slate-500 mt-1 font-semibold">Ketik nama atau NIS/NIP untuk memilih</p>
+                                    <p className="text-xs text-slate-500 mt-1 font-semibold">Ketik nama atau NIP untuk memilih</p>
                                 </div>
 
                                 <form onSubmit={handleSubmit} className="space-y-4">

@@ -116,10 +116,26 @@ export default function FaceRegistrationModal({ participant, onClose, onSuccess 
 
         setIsProcessing(true);
         try {
+            // Take a snapshot
+            const video = videoRef.current;
+            const captureCanvas = document.createElement('canvas');
+            captureCanvas.width = video.videoWidth;
+            captureCanvas.height = video.videoHeight;
+            const ctx = captureCanvas.getContext('2d');
+            
+            // Draw video to canvas (handle flip because video is scaled x-1)
+            ctx.translate(captureCanvas.width, 0);
+            ctx.scale(-1, 1);
+            ctx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+            
+            // Get base64 jpeg
+            const photoDataUrl = captureCanvas.toDataURL('image/jpeg', 0.8);
+
             const descriptor = Array.from(detectedFace.descriptor);
             
             const response = await axios.post(`/api/participants/${participant.id}/face`, {
-                descriptor: descriptor
+                descriptor: descriptor,
+                photo: photoDataUrl
             });
 
             toast.success(response.data.message);
@@ -147,7 +163,7 @@ export default function FaceRegistrationModal({ participant, onClose, onSuccess 
         }
     };
 
-    const hasFace = Array.isArray(participant.face_descriptor) && participant.face_descriptor.length > 0;
+    const hasFace = participant.has_face;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm" onClick={onClose}>
