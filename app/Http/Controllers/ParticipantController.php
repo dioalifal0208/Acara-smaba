@@ -30,9 +30,10 @@ class ParticipantController extends Controller
                     'id' => $participant->id,
                     'nama' => $participant->nama,
                     'nis_nip' => $participant->nis_nip,
-                    'keterangan' => $participant->keterangan,
+                    'status' => $participant->status,
                     'qr_token' => $participant->qr_token,
                     'has_face' => $participant->face_descriptor !== null,
+                    'face_status' => $participant->face_status,
                     'photo_url' => $participant->photo_path ? asset('storage/' . $participant->photo_path) : null,
                     'has_attended' => $participant->attendances_count > 0,
                     'created_at' => $participant->created_at->format('d M Y H:i'),
@@ -52,18 +53,17 @@ class ParticipantController extends Controller
         $validated = $request->validate([
             'nama' => 'required|string|max:255',
             'nis_nip' => 'required|string|max:50|unique:participants,nis_nip',
-            'keterangan' => 'nullable|string|max:100',
+            'status' => 'nullable|in:PNS,PPPK,PPPK Paruh Waktu',
         ]);
 
         // QR token di-generate otomatis oleh Participant model boot()
         $participant = Participant::create($validated);
 
         // Buat akun user
-        User::firstOrCreate(
+        User::updateOrCreate(
             ['username' => $participant->nis_nip],
             [
                 'name' => $participant->nama,
-                'email' => null,
                 'password' => Hash::make($participant->nis_nip),
                 'role' => 'participant',
                 'participant_id' => $participant->id,
@@ -82,7 +82,7 @@ class ParticipantController extends Controller
         $validated = $request->validate([
             'nama' => 'required|string|max:255',
             'nis_nip' => 'required|string|max:50|unique:participants,nis_nip,' . $participant->id,
-            'keterangan' => 'nullable|string|max:100',
+            'status' => 'nullable|in:PNS,PPPK,PPPK Paruh Waktu',
         ]);
 
         $participant->update($validated);
@@ -234,7 +234,7 @@ class ParticipantController extends Controller
             // Cari index kolom untuk Nama, NIS/NIP, dan Keterangan
             $namaColKey = null;
             $nisNipColKey = null;
-            $ketColKey = null;
+            $statusColKey = null;
 
             foreach ($headers as $colKey => $headerVal) {
                 if (in_array($headerVal, ['nama', 'name', 'nama lengkap', 'nama_lengkap'])) {
@@ -244,21 +244,21 @@ class ParticipantController extends Controller
                     $nisNipColKey = $colKey;
                 }
                 if (in_array($headerVal, ['keterangan', 'ket', 'status', 'role', 'jabatan'])) {
-                    $ketColKey = $colKey;
+                    $statusColKey = $colKey;
                 }
             }
 
             // Fallback default jika header tidak terdeteksi
             if (!$namaColKey) $namaColKey = 'A';
             if (!$nisNipColKey) $nisNipColKey = 'B';
-            if (!$ketColKey) $ketColKey = 'C';
+            if (!$statusColKey) $statusColKey = 'C';
 
             $successCount = 0;
 
             foreach ($rows as $row) {
                 $nama = trim($row[$namaColKey] ?? '');
                 $nisNip = trim($row[$nisNipColKey] ?? '');
-                $keterangan = isset($row[$ketColKey]) ? trim($row[$ketColKey]) : null;
+                $status = isset($row[$statusColKey]) ? trim($row[$statusColKey]) : null;
 
                 if (empty($nama) || empty($nisNip)) {
                     continue; // Lewati baris kosong
@@ -269,16 +269,15 @@ class ParticipantController extends Controller
                     ['nis_nip' => $nisNip],
                     [
                         'nama' => $nama,
-                        'keterangan' => $keterangan,
+                        'status' => $status,
                     ]
                 );
 
                 // Buat akun user
-                User::firstOrCreate(
+                User::updateOrCreate(
                     ['username' => $nisNip],
                     [
                         'name' => $nama,
-                        'email' => null,
                         'password' => Hash::make($nisNip),
                         'role' => 'participant',
                         'participant_id' => $participant->id,
@@ -310,7 +309,7 @@ class ParticipantController extends Controller
                 // Header kolom terpisah: Kolom A = Nama, Kolom B = NIP, Kolom C = Keterangan
                 $sheet->setCellValue('A1', 'Nama');
                 $sheet->setCellValue('B1', 'NIP');
-                $sheet->setCellValue('C1', 'Keterangan');
+                $sheet->setCellValue('C1', 'Status');
 
                 // Format kolom B (NIP) sebagai Text agar angka panjang tidak terpotong
                 $sheet->getStyle('B:B')->getNumberFormat()->setFormatCode('@');
@@ -318,15 +317,15 @@ class ParticipantController extends Controller
                 // Contoh baris data terpisah per kolom
                 $sheet->setCellValueExplicit('A2', 'Drs. H. Ahmad Fauzi, M.Pd', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
                 $sheet->setCellValueExplicit('B2', '197503122000031002', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-                $sheet->setCellValueExplicit('C2', 'Guru Matematika', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('C2', 'PNS', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
 
                 $sheet->setCellValueExplicit('A3', 'Siti Nurhaliza, S.Pd', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
                 $sheet->setCellValueExplicit('B3', '198504152010012004', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-                $sheet->setCellValueExplicit('C3', 'Guru Bahasa Indonesia', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('C3', 'PPPK', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
 
                 $sheet->setCellValueExplicit('A4', 'Bambang Sudarsono, S.T', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
                 $sheet->setCellValueExplicit('B4', '198207182008011007', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-                $sheet->setCellValueExplicit('C4', 'Staf Tata Usaha', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('C4', 'PPPK Paruh Waktu', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
 
                 // Styling header
                 $headerStyle = [
@@ -363,10 +362,10 @@ class ParticipantController extends Controller
         return response()->streamDownload(function () {
             $handle = fopen('php://output', 'w');
             fputs($handle, "\xEF\xBB\xBF"); // UTF-8 BOM for Excel
-            fputcsv($handle, ['Nama', 'NIP', 'Keterangan']);
-            fputcsv($handle, ['Drs. H. Ahmad Fauzi, M.Pd', '197503122000031002', 'Guru Matematika']);
-            fputcsv($handle, ['Siti Nurhaliza, S.Pd', '198504152010012004', 'Guru Bahasa Indonesia']);
-            fputcsv($handle, ['Bambang Sudarsono, S.T', '198207182008011007', 'Staf Tata Usaha']);
+            fputcsv($handle, ['Nama', 'NIP', 'Status']);
+            fputcsv($handle, ['Drs. H. Ahmad Fauzi, M.Pd', '197503122000031002', 'PNS']);
+            fputcsv($handle, ['Siti Nurhaliza, S.Pd', '198504152010012004', 'PPPK']);
+            fputcsv($handle, ['Bambang Sudarsono, S.T', '198207182008011007', 'PPPK Paruh Waktu']);
             fclose($handle);
         }, $csvFilename, [
             'Content-Type' => 'text/csv; charset=UTF-8',

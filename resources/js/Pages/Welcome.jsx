@@ -308,7 +308,7 @@ export default function Welcome({ auth, stats: initialStats, canResetPassword = 
                     <div class="qr-container">
                         <img src="${route('participants.qr', p.id)}" alt="QR Code" />
                     </div>
-                    <div class="footer">SMA Negeri 1 Babat - Presensi QR Code</div>
+                    <div class="footer">E-Presensi SMABA</div>
                 </div>
                 <script>
                     window.onload = function() {
@@ -334,7 +334,7 @@ export default function Welcome({ auth, stats: initialStats, canResetPassword = 
 
     return (
         <>
-            <Head title="Presensi QR Code - SMAN 1 Babat" />
+            <Head title="E-Presensi SMABA" />
             {/* Toast is now handled globally via ToastProvider */}
 
             <div className="relative h-screen flex flex-col justify-between overflow-hidden bg-slate-50 text-slate-800">
@@ -348,12 +348,12 @@ export default function Welcome({ auth, stats: initialStats, canResetPassword = 
                     <div className="flex items-center gap-3">
                         <img
                             src="/images/logo.png"
-                            alt="Logo SMAN 1 Babat"
+                            alt="Logo E-Presensi SMABA"
                             className="h-10 w-10 object-contain"
                         />
                         <div>
-                            <span className="font-extrabold text-lg tracking-tight text-slate-900 block">SMABA EVENT</span>
-                            <span className="text-[10px] text-indigo-600 block -mt-1 font-semibold">SMA Negeri 1 Babat</span>
+                            <span className="font-extrabold text-lg tracking-tight text-slate-900 block">E-Presensi</span>
+                            <span className="text-[10px] text-indigo-600 block -mt-1 font-semibold">SMABA</span>
                         </div>
                     </div>
 
@@ -401,7 +401,7 @@ export default function Welcome({ auth, stats: initialStats, canResetPassword = 
                                 <div className="lg:col-span-7 space-y-4 text-center lg:text-left" data-aos="fade-right">
                                     <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-4 py-1 text-xs font-bold text-indigo-600 border border-indigo-100">
                                         <span className="flex h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
-                                        Presensi Cepat SMAN 1 Babat
+                                        E-Presensi SMABA
                                     </div>
                                     <h1 className="text-3xl font-extrabold tracking-tight text-slate-950 sm:text-5xl leading-tight">
                                         Cari &amp; Cetak <br />
@@ -717,8 +717,8 @@ export default function Welcome({ auth, stats: initialStats, canResetPassword = 
                 </main>
 
                 {/* Footer (compact, flex-none) */}
-                <footer className="relative z-10 border-t border-slate-200 bg-white py-3.5 text-center text-xs text-slate-500 font-semibold flex-none" data-aos="fade-up">
-                    <p>&copy; {new Date().getFullYear()} SMA Negeri 1 Babat. Hak Cipta Dilindungi.</p>
+                <footer className="relative z-10 border-t border-slate-200 bg-white py-3.5 text-center text-xs text-slate-500 font-medium">
+                    <p>&copy; {new Date().getFullYear()} E-Presensi SMABA. Hak Cipta Dilindungi.</p>
                 </footer>
             </div>
 

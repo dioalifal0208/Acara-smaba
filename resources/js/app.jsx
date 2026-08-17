@@ -21,7 +21,7 @@ router.on('navigate', () => {
     AOS.refresh();
 });
 
-const appName = import.meta.env.VITE_APP_NAME || 'Acara SMA Negeri 1 Babat';
+const appName = import.meta.env.VITE_APP_NAME || 'E-Presensi SMABA';
 
 createInertiaApp({
     title: (title) => `${title} - ${appName}`,

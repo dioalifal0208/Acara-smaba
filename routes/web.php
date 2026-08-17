@@ -83,6 +83,10 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     // Face Registration routes (Admin)
     Route::post('/api/participants/{participant}/face', [\App\Http\Controllers\FaceRecognitionController::class, 'register'])->name('participants.face.register');
     Route::delete('/api/participants/{participant}/face', [\App\Http\Controllers\FaceRecognitionController::class, 'deleteFace'])->name('participants.face.delete');
+    
+    // Face Approval routes (Admin)
+    Route::post('/admin/participants/{participant}/face/approve', [\App\Http\Controllers\FaceRecognitionController::class, 'approveFace'])->name('participants.face.approve');
+    Route::post('/admin/participants/{participant}/face/reject', [\App\Http\Controllers\FaceRecognitionController::class, 'rejectFace'])->name('participants.face.reject');
 
     // Master QR routes
     Route::get('/admin/master-qr', [SelfCheckInController::class, 'masterQr'])->name('admin.master-qr');
@@ -90,6 +94,7 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
 
     // Report routes
     Route::get('/report', [AttendanceController::class, 'report'])->name('report');
+    Route::get('/report/individual/{event}/{participant}', [AttendanceController::class, 'getIndividualRecap'])->name('report.individual');
     Route::get('/events/{event}/export', [AttendanceController::class, 'exportAttendance'])->name('events.export');
     Route::get('/events/{event}/qr-signature', [AttendanceController::class, 'qrSignature'])->name('events.qr-signature');
     // Scanner routes (Admin only)
@@ -108,14 +113,14 @@ Route::middleware(['auth', 'verified', 'role:participant'])->group(function () {
         ]);
     })->name('participant.dashboard');
 
-    // Participant Face Scanner (Self Check-in)
-    Route::get('/participant/face-scanner', function () {
-        $activeEvent = \App\Models\Event::getActive();
-        return Inertia::render('Participant/FaceScanner', [
-            'activeEvent' => $activeEvent,
+    // Participant Face Registration & Scanner
+    Route::get('/participant/face-registration', function () {
+        return Inertia::render('Participant/FaceRegistration', [
             'participant' => auth()->user()->participant,
         ]);
-    })->name('participant.face-scanner');
+    })->name('participant.face-registration');
+    
+    Route::post('/api/participants/{participant}/face/self', [\App\Http\Controllers\FaceRecognitionController::class, 'registerSelf'])->name('participants.face.self-register');
 
     // Leave request submission
     Route::post('/participant/leave', [\App\Http\Controllers\LeaveRequestController::class, 'store'])->name('leave.store');

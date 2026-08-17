@@ -5,6 +5,7 @@ import { useToast } from '@/Components/Toast';
 import { useConfirm } from '@/Components/ConfirmDialog';
 import ImportModal from '@/Components/ImportModal';
 import FaceRegistrationModal from '@/Components/FaceRegistrationModal';
+import ApproveFaceModal from '@/Components/ApproveFaceModal';
 
 export default function ParticipantsIndex({ participants }) {
     const { flash } = usePage().props;
@@ -14,19 +15,21 @@ export default function ParticipantsIndex({ participants }) {
     const [showImportModal, setShowImportModal] = useState(false);
     const [showQr, setShowQr] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [statusFilter, setStatusFilter] = useState('');
     const [editParticipant, setEditParticipant] = useState(null);
     const [faceRegistrationParticipant, setFaceRegistrationParticipant] = useState(null);
+    const [approveFaceParticipant, setApproveFaceParticipant] = useState(null);
 
     const { data, setData, post, processing, errors, reset } = useForm({
         nama: '',
         nis_nip: '',
-        keterangan: '',
+        status: '',
     });
 
     const editForm = useForm({
         nama: '',
         nis_nip: '',
-        keterangan: '',
+        status: '',
     });
 
     // Show flash toast
@@ -55,7 +58,7 @@ export default function ParticipantsIndex({ participants }) {
         editForm.setData({
             nama: participant.nama,
             nis_nip: participant.nis_nip,
-            keterangan: participant.keterangan || '',
+            status: participant.status || '',
         });
     };
 
@@ -112,7 +115,7 @@ export default function ParticipantsIndex({ participants }) {
                     <h2>${participant.nama}</h2>
                     <p>${participant.nis_nip}</p>
                     <img src="${route('participants.qr', participant.id)}" alt="QR Code" />
-                    <div class="school">SMA Negeri 1 Babat — Event Attendance</div>
+                    <div class="school">E-Presensi SMABA</div>
                 </div>
                 <script>
                     window.onload = function() {
@@ -127,9 +130,11 @@ export default function ParticipantsIndex({ participants }) {
     };
 
     const filteredParticipants = participants.filter(
-        (p) =>
-            p.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            p.nis_nip.toLowerCase().includes(searchQuery.toLowerCase())
+        (p) => {
+            const matchesSearch = p.nama.toLowerCase().includes(searchQuery.toLowerCase()) || p.nis_nip.toLowerCase().includes(searchQuery.toLowerCase());
+            const matchesStatus = statusFilter ? p.status === statusFilter : true;
+            return matchesSearch && matchesStatus;
+        }
     );
 
     return (
@@ -213,9 +218,9 @@ export default function ParticipantsIndex({ participants }) {
                         </div>
                     </div>
 
-                    {/* Search (flex-none) */}
-                    <div className="mb-2 flex-none" data-aos="fade-up" data-aos-delay="100">
-                        <div className="relative">
+                    {/* Search and Filter (flex-none) */}
+                    <div className="mb-2 flex-none flex gap-3" data-aos="fade-up" data-aos-delay="100">
+                        <div className="relative flex-1">
                             <svg xmlns="http://www.w3.org/2000/svg" className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                             </svg>
@@ -226,6 +231,18 @@ export default function ParticipantsIndex({ participants }) {
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-11 pr-4 text-sm text-slate-800 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 shadow-sm font-medium"
                             />
+                        </div>
+                        <div className="w-48 sm:w-56">
+                            <select
+                                value={statusFilter}
+                                onChange={(e) => setStatusFilter(e.target.value)}
+                                className="w-full rounded-xl border border-slate-200 bg-white py-2.5 px-4 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 shadow-sm font-medium cursor-pointer"
+                            >
+                                <option value="">Semua Status Pegawai</option>
+                                <option value="PNS">PNS</option>
+                                <option value="PPPK">PPPK</option>
+                                <option value="PPPK Paruh Waktu">PPPK Paruh Waktu</option>
+                            </select>
                         </div>
                     </div>
 
@@ -238,7 +255,7 @@ export default function ParticipantsIndex({ participants }) {
                                         <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">No</th>
                                         <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Nama</th>
                                         <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">NIP</th>
-                                        <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Keterangan</th>
+                                        <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Status Pegawai</th>
                                         <th className="px-6 py-3 text-center text-xs font-extrabold uppercase tracking-wider text-slate-500">Aksi</th>
                                     </tr>
                                 </thead>
@@ -257,46 +274,65 @@ export default function ParticipantsIndex({ participants }) {
                                             <tr key={participant.id} className="transition-colors hover:bg-slate-50/50">
                                                 <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-500 font-semibold">{index + 1}</td>
                                                 <td className="whitespace-nowrap px-6 py-3.5">
-                                                    <div 
-                                                        className="flex items-center gap-3 cursor-pointer group"
-                                                        onClick={() => setFaceRegistrationParticipant(participant)}
-                                                        title="Klik untuk Registrasi Wajah"
-                                                    >
+                                                    <div className="flex items-center gap-3">
                                                         {participant.photo_url ? (
                                                             <img 
                                                                 src={participant.photo_url} 
                                                                 alt={participant.nama} 
-                                                                className="h-8 w-8 rounded-full object-cover border border-slate-200 group-hover:ring-2 group-hover:ring-indigo-500 transition-all"
+                                                                className="h-8 w-8 rounded-full object-cover border border-slate-200"
                                                             />
                                                         ) : (
-                                                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-50 border border-indigo-100 text-xs font-bold text-indigo-600 group-hover:bg-indigo-100 transition-colors">
+                                                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-50 border border-indigo-100 text-xs font-bold text-indigo-600">
                                                                 {participant.nama.charAt(0).toUpperCase()}
                                                             </div>
                                                         )}
                                                         <div className="flex flex-col">
-                                                            <span className="text-sm font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">{participant.nama}</span>
-                                                            {participant.has_face ? (
+                                                            <span className="text-sm font-bold text-slate-800">{participant.nama}</span>
+                                                            {participant.face_status === 'approved' ? (
                                                                 <span className="text-[10px] font-semibold text-emerald-600 flex items-center gap-1 mt-0.5">
                                                                     <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                                                                    Wajah Terdaftar
+                                                                    Wajah Disetujui
+                                                                </span>
+                                                            ) : participant.face_status === 'pending' ? (
+                                                                <span className="text-[10px] font-semibold text-amber-600 flex items-center gap-1 mt-0.5">
+                                                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                                    Menunggu Persetujuan
+                                                                </span>
+                                                            ) : participant.face_status === 'rejected' ? (
+                                                                <span className="text-[10px] font-semibold text-red-500 flex items-center gap-1 mt-0.5">
+                                                                    <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" /></svg>
+                                                                    Wajah Ditolak
                                                                 </span>
                                                             ) : (
-                                                                <span className="text-[10px] font-medium text-slate-400 mt-0.5">Wajah belum terdaftar</span>
+                                                                <span className="text-[10px] font-medium text-slate-400 mt-0.5">Wajah Belum Terdaftar</span>
                                                             )}
                                                         </div>
                                                     </div>
                                                 </td>
                                                 <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-600 font-semibold">{participant.nis_nip}</td>
                                                 <td className="whitespace-nowrap px-6 py-3.5">
-                                                    {participant.keterangan ? (
+                                                    {participant.status ? (
                                                         <span className="inline-flex items-center rounded-md bg-indigo-50 px-2 py-0.5 text-xs font-bold text-indigo-600 border border-indigo-100 uppercase">
-                                                            {participant.keterangan}
+                                                            {participant.status}
                                                         </span>
                                                     ) : null}
                                                 </td>
 
                                                 <td className="whitespace-nowrap px-6 py-3.5 text-center">
                                                     <div className="flex items-center justify-center gap-2">
+                                                        {participant.face_status === 'pending' && (
+                                                            <button
+                                                                onClick={() => setApproveFaceParticipant(participant)}
+                                                                className="inline-flex items-center gap-1 rounded-lg bg-amber-500 px-2.5 py-1 text-xs font-bold text-white transition-colors hover:bg-amber-600 shadow-md shadow-amber-500/20"
+                                                                title="Review Wajah"
+                                                            >
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                                </svg>
+                                                                Review
+                                                            </button>
+                                                        )}
                                                         <button
                                                             onClick={() => setShowQr(participant)}
                                                             className="inline-flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700 transition-colors hover:bg-indigo-100"
@@ -387,25 +423,21 @@ export default function ParticipantsIndex({ participants }) {
                                 </div>
                             </div>
 <div>
-    <label htmlFor="keterangan" className="mb-1 block text-sm font-bold text-slate-600">
-        Keterangan
+    <label htmlFor="status" className="mb-1 block text-sm font-bold text-slate-600">
+        Status Pegawai
     </label>
     <select
-        id="keterangan"
-        value={data.keterangan}
-        onChange={(e) => setData('keterangan', e.target.value)}
+        id="status"
+        value={data.status}
+        onChange={(e) => setData('status', e.target.value)}
         className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 font-semibold"
     >
-        <option value="">-- Pilih Keterangan --</option>
-        <option value="Kepala sekolah">Kepala sekolah</option>
-        <option value="waka kesiswaan">waka kesiswaan</option>
-        <option value="waka humas">waka humas</option>
-        <option value="waka kurikulum">waka kurikulum</option>
-        <option value="waka sarpras">waka sarpras</option>
-        <option value="guru">guru</option>
-        <option value="tendik">tendik</option>
+        <option value="">-- Pilih Status --</option>
+        <option value="PNS">PNS</option>
+        <option value="PPPK">PPPK</option>
+        <option value="PPPK Paruh Waktu">PPPK Paruh Waktu</option>
     </select>
-    {errors.keterangan && <p className="mt-1 text-xs text-red-600 font-bold">{errors.keterangan}</p>}
+    {errors.status && <p className="mt-1 text-xs text-red-600 font-bold">{errors.status}</p>}
 </div>
 
                             <div className="mt-6 flex justify-end gap-3 border-t border-slate-100 pt-4">
@@ -476,29 +508,61 @@ export default function ParticipantsIndex({ participants }) {
                                     {editForm.errors.nis_nip && <p className="mt-1 text-xs text-red-600 font-bold">{editForm.errors.nis_nip}</p>}
                                 </div>
                                 <div>
-                                    <label htmlFor="edit_keterangan" className="mb-1 block text-sm font-bold text-slate-600">
-                                        Keterangan
+                                    <label htmlFor="edit_status" className="mb-1 block text-sm font-bold text-slate-600">
+                                        Status Pegawai
                                     </label>
                                     <select
-                                        id="edit_keterangan"
-                                        value={editForm.data.keterangan}
-                                        onChange={(e) => editForm.setData('keterangan', e.target.value)}
+                                        id="edit_status"
+                                        value={editForm.data.status}
+                                        onChange={(e) => editForm.setData('status', e.target.value)}
                                         className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 font-semibold"
                                     >
-                                        <option value="">-- Pilih Keterangan --</option>
-                                        <option value="Kepala sekolah">Kepala sekolah</option>
-                                        <option value="waka kesiswaan">waka kesiswaan</option>
-                                        <option value="waka humas">waka humas</option>
-                                        <option value="waka kurikulum">waka kurikulum</option>
-                                        <option value="waka sarpras">waka sarpras</option>
-                                        <option value="guru">guru</option>
-                                        <option value="tendik">tendik</option>
+                                        <option value="">-- Pilih Status --</option>
+                                        <option value="PNS">PNS</option>
+                                        <option value="PPPK">PPPK</option>
+                                        <option value="PPPK Paruh Waktu">PPPK Paruh Waktu</option>
                                     </select>
-                                    {editForm.errors.keterangan && <p className="mt-1 text-xs text-red-600 font-bold">{editForm.errors.keterangan}</p>}
+                                    {editForm.errors.status && <p className="mt-1 text-xs text-red-600 font-bold">{editForm.errors.status}</p>}
                                 </div>
                             </div>
 
-                            <div className="mt-6 flex justify-end gap-3 border-t border-slate-100 pt-4">
+                            <div className="mt-6 flex items-center gap-3 border-t border-slate-100 pt-4">
+                                {editParticipant.face_status === 'pending' ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const participant = editParticipant;
+                                            setEditParticipant(null);
+                                            editForm.reset();
+                                            setApproveFaceParticipant(participant);
+                                        }}
+                                        className="mr-auto inline-flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-amber-600 shadow-md shadow-amber-500/20 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                        </svg>
+                                        Review Wajah (Pending)
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const participant = editParticipant;
+                                            setEditParticipant(null);
+                                            editForm.reset();
+                                            setFaceRegistrationParticipant(participant);
+                                        }}
+                                        className="mr-auto inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-bold text-indigo-700 hover:bg-indigo-100 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        </svg>
+                                        {editParticipant.face_status === 'approved' ? 'Perbarui Wajah' : 'Registrasi Wajah'}
+                                    </button>
+                                )}
+                                
                                 <button
                                     type="button"
                                     onClick={() => { setEditParticipant(null); editForm.reset(); }}
@@ -526,6 +590,18 @@ export default function ParticipantsIndex({ participants }) {
                     onClose={() => setFaceRegistrationParticipant(null)}
                     onSuccess={() => {
                         setFaceRegistrationParticipant(null);
+                        router.reload({ only: ['participants'] });
+                    }}
+                />
+            )}
+
+            {/* Approve Face Modal */}
+            {approveFaceParticipant && (
+                <ApproveFaceModal
+                    participant={approveFaceParticipant}
+                    onClose={() => setApproveFaceParticipant(null)}
+                    onSuccess={() => {
+                        setApproveFaceParticipant(null);
                         router.reload({ only: ['participants'] });
                     }}
                 />

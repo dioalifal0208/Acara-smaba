@@ -172,7 +172,7 @@ export default function EventsIndex({ events }) {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4" data-aos="fade-down">
                     <div>
                         <h2 className="text-xl font-extrabold leading-tight text-slate-800">
-                            Kelola Event / Acara
+                            Kelola Event / Kegiatan
                         </h2>
                         <p className="text-xs text-slate-500 font-medium mt-0.5">
                             Admin wajib mengaktifkan event sebelum sesi presensi dimulai
@@ -270,7 +270,7 @@ export default function EventsIndex({ events }) {
                                                         </span>
                                                     ) : (
                                                         <span className="inline-flex items-center rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-600">
-                                                            Acara
+                                                            Kegiatan
                                                         </span>
                                                     )}
                                                 </div>
@@ -396,7 +396,7 @@ export default function EventsIndex({ events }) {
                                     {/* Nama Event */}
                                     <div>
                                         <label className="block text-[10px] font-extrabold text-slate-700 uppercase tracking-wider mb-1">
-                                            Nama Event / Acara <span className="text-red-500">*</span>
+                                            Nama Event / Kegiatan <span className="text-red-500">*</span>
                                         </label>
                                         <input
                                             type="text"
@@ -439,7 +439,7 @@ export default function EventsIndex({ events }) {
                                                 }`}
                                             >
                                                 <span>📅</span>
-                                                <span>Absen Acara (1x)</span>
+                                                <span>Absen Kegiatan (1x)</span>
                                             </button>
                                             <button
                                                 type="button"

@@ -26,20 +26,20 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
                 <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${i + 1}</td>
                 <td style="padding: 7px 8px; border: 1px solid #cbd5e1; font-weight: bold; font-size: 11px;">${a.nama}</td>
                 <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-family: monospace; font-size: 11px;">${a.nis_nip}</td>
+                <td style="padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.status_pegawai || '-'}</td>
                 ${selectedEvent.kategori === 'harian' 
                     ? `
-                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.status === 'alpha' ? '1' : '-'}</td>
-                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.status === 'izin' ? '1' : '-'}</td>
-                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.status === 'sakit' ? '1' : '-'}</td>
-                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.status === 'lupa_absen' ? '1' : '-'}</td>
-                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">-</td>
+                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.total_hadir || '0'}</td>
+                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.total_alpha || '0'}</td>
+                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.total_izin || '0'}</td>
+                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.total_sakit || '0'}</td>
+                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.total_lupa_absen || '0'}</td>
                     ` 
                     : `
-                        <td style="padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.keterangan || '-'}</td>
                         <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.waktu_hadir}</td>
+                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-weight: bold; font-size: 11px;">${a.status ? a.status.replace('_', ' ').toUpperCase() : '-'}</td>
                     `
                 }
-                <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-weight: bold; font-size: 11px;">${a.status.replace('_', ' ').toUpperCase()}</td>
             </tr>
         `).join('');
 
@@ -48,18 +48,18 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
                 <th style="width: 35px;">No</th>
                 <th>Nama Lengkap</th>
                 <th style="width: 150px;">NIP</th>
+                <th style="width: 130px;">Status Pegawai</th>
+                <th style="width: 50px;">Hadir</th>
                 <th style="width: 50px;">Alpha</th>
                 <th style="width: 50px;">Izin</th>
                 <th style="width: 50px;">Sakit</th>
                 <th style="width: 60px;">Lupa Absen</th>
-                <th style="width: 100px;">Total Telat Akumulasi</th>
-                <th style="width: 70px;">Status</th>
             `
             : `
                 <th style="width: 35px;">No</th>
                 <th>Nama Lengkap</th>
                 <th style="width: 150px;">NIP</th>
-                <th>Keterangan</th>
+                <th>Status Pegawai</th>
                 <th style="width: 130px;">Waktu Presensi</th>
                 <th style="width: 70px;">Status</th>
             `;
@@ -233,7 +233,7 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
                 <div class="meta-info">
                     <table>
                         <tr>
-                            <td style="width: 140px; font-weight: bold;">Nama Acara / Event</td>
+                            <td style="width: 140px; font-weight: bold;">Nama Event / Kegiatan</td>
                             <td style="width: 10px;">:</td>
                             <td style="font-weight: bold;">${selectedEvent.nama_event}</td>
                         </tr>
@@ -257,20 +257,13 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
                         </tr>
                     </thead>
                     <tbody>
-                        ${rowsHtml || '<tr><td colspan="6" style="text-align: center; padding: 20px; border: 1px solid #cbd5e1;">Belum ada data kehadiran</td></tr>'}
+                        ${rowsHtml || '<tr><td colspan="10" style="text-align:center; padding: 10px;">Belum ada data kehadiran</td></tr>'}
                     </tbody>
                 </table>
 
                 <div class="ttd-section">
                     <div class="ttd-box">
                         <p>Babat, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
-                        <p style="font-weight: bold; margin-top: 2px;">Mengetahui,</p>
-                        <p style="font-weight: bold;">Kepala SMA Negeri 1 Babat</p>
-                        
-                        <div class="ttd-qr-wrap">
-                            <img src="${route('events.qr-signature', selectedEvent.id)}" alt="QR Tanda Tangan Digital" />
-                            <span style="font-size: 8px; color: #475569; font-family: Arial, sans-serif; margin-top: 2px; font-weight: bold; letter-spacing: 0.3px;">✓ TTD Digital Terverifikasi</span>
-                        </div>
 
                         <p style="font-weight: bold; text-decoration: underline; font-size: 13px;">Muhtarom, S.Pd., M.Si.</p>
                         <p style="font-size: 11px; color: #475569; font-family: Arial, sans-serif;">SMA Negeri 1 Babat</p>
@@ -286,6 +279,166 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
             </html>
         `);
         printWindow.document.close();
+    };
+
+    const handlePrintIndividualRecap = async (participantId, participantName) => {
+        if (!selectedEvent) return;
+        try {
+            const response = await fetch(`/report/individual/${selectedEvent.id}/${participantId}`);
+            const data = await response.json();
+            
+            const printWindow = window.open('', '_blank', 'width=800,height=900');
+            
+            const rowsHtml = data.attendances.map((a, i) => {
+                let tanggal = '-';
+                let jamDatang = '-';
+                let jamPulang = '-';
+
+                if (a.waktu_hadir && a.waktu_hadir !== '-') {
+                    const parts = a.waktu_hadir.split(' ');
+                    if (parts.length >= 4) {
+                        tanggal = parts.slice(0, 3).join(' ');
+                        jamDatang = parts[3];
+                    } else {
+                        tanggal = a.waktu_hadir;
+                    }
+                }
+
+                if (a.waktu_pulang && a.waktu_pulang !== '-') {
+                    const parts = a.waktu_pulang.split(' ');
+                    if (parts.length >= 4) {
+                        jamPulang = parts[3];
+                        if (tanggal === '-') {
+                            tanggal = parts.slice(0, 3).join(' ');
+                        }
+                    } else {
+                        jamPulang = a.waktu_pulang;
+                    }
+                }
+
+                return `
+                    <tr>
+                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${i + 1}</td>
+                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${tanggal}</td>
+                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${jamDatang}</td>
+                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${jamPulang}</td>
+                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-weight: bold; font-size: 11px;">${a.status.replace('_', ' ').toUpperCase()}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Rekap Kehadiran - ${participantName}</title>
+                    <style>
+                        @page { size: A4 portrait; margin: 2.5cm; }
+                        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Times New Roman', Times, serif; }
+                        body { color: #0f172a; background: #fff; padding: 2.5cm; width: 100%; }
+                        @media print { body { padding: 0 !important; } }
+                        .header-kop { display: flex; align-items: center; justify-content: space-between; border-bottom: 3px double #000; padding-bottom: 12px; margin-bottom: 20px; text-align: center; }
+                        .kop-logo-left, .kop-logo-right { width: 70px; display: flex; align-items: center; }
+                        .kop-logo-left { justify-content: flex-start; }
+                        .kop-logo-right { justify-content: flex-end; }
+                        .kop-logo-left img, .kop-logo-right img { width: 65px; height: 75px; object-fit: contain; }
+                        .kop-text { flex: 1; padding: 0 10px; text-align: center; }
+                        .kop-text .instansi { font-size: 13px; font-weight: bold; text-transform: uppercase; line-height: 1.35; letter-spacing: 0.5px; }
+                        .kop-text .sekolah { font-size: 17px; font-weight: bold; text-transform: uppercase; margin-top: 3px; letter-spacing: 0.5px; }
+                        .kop-text .alamat { font-size: 10.5px; font-style: italic; color: #1e293b; margin-top: 4px; font-family: Arial, sans-serif; }
+                        .title-doc { text-align: center; margin-bottom: 18px; }
+                        .title-doc h2 { font-size: 15px; font-weight: bold; text-transform: uppercase; text-decoration: underline; }
+                        .meta-info { margin-bottom: 16px; font-size: 12px; font-family: Arial, sans-serif; line-height: 1.6; }
+                        .meta-info table { width: 100%; }
+                        .meta-info td { padding: 2px 0; }
+                        table.data-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; font-size: 11px; font-family: Arial, sans-serif; }
+                        table.data-table th { background: #f1f5f9; border: 1px solid #94a3b8; padding: 7px 8px; text-transform: uppercase; font-size: 10px; font-weight: bold; }
+                        .ttd-section { display: flex; justify-content: flex-end; margin-top: 30px; font-size: 12px; font-family: Arial, sans-serif; page-break-inside: avoid; }
+                        .ttd-box { text-align: center; width: 230px; }
+                    </style>
+                </head>
+                <body>
+                    <div class="header-kop">
+                        <div class="kop-logo-left">
+                            <img src="/images/jatim.png" alt="Logo Jawa Timur">
+                        </div>
+                        <div class="kop-text">
+                            <div class="instansi">PEMERINTAH PROVINSI JAWA TIMUR<br>DINAS PENDIDIKAN</div>
+                            <div class="sekolah">SMA NEGERI 1 BABAT</div>
+                            <div class="alamat">Jl. Sumowiharjo No.1, Kec. Babat, Kab. Lamongan Jawa Timur 62271</div>
+                        </div>
+                        <div class="kop-logo-right">
+                            <img src="/images/logo.png" alt="Logo SMAN 1 Babat">
+                        </div>
+                    </div>
+
+                    <div class="title-doc">
+                        <h2>REKAP PRESENSI INDIVIDU</h2>
+                    </div>
+
+                    <div class="meta-info">
+                        <table>
+                            <tr>
+                                <td style="width: 140px; font-weight: bold;">Nama Lengkap</td>
+                                <td style="width: 10px;">:</td>
+                                <td style="font-weight: bold;">${data.participant.nama}</td>
+                            </tr>
+                            <tr>
+                                <td style="font-weight: bold;">NIP / NIS</td>
+                                <td>:</td>
+                                <td>${data.participant.nis_nip || '-'}</td>
+                            </tr>
+                            <tr>
+                                <td style="font-weight: bold;">Status Pegawai</td>
+                                <td>:</td>
+                                <td>${data.participant.status || '-'}</td>
+                            </tr>
+                            <tr>
+                                <td style="font-weight: bold;">Workcode</td>
+                                <td>:</td>
+                                <td>${data.event.nama_event}</td>
+                            </tr>
+                        </table>
+                    </div>
+
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 35px;">No</th>
+                                <th>Tanggal</th>
+                                <th>Waktu Hadir</th>
+                                <th>Waktu Pulang</th>
+                                <th style="width: 100px;">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rowsHtml || '<tr><td colspan="5" style="text-align:center; padding: 10px;">Belum ada data kehadiran</td></tr>'}
+                        </tbody>
+                    </table>
+
+                    <div class="ttd-section">
+                        <div class="ttd-box">
+                            <p>Babat, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                            <p style="margin-bottom: 5px;">Kepala Sekolah,</p>
+                            <br><br><br>
+                            <p style="font-weight: bold; text-decoration: underline;">Dr. SONY YUDI SAPUTRA, S.Pd., M.Pd.</p>
+                            <p>NIP. 19700305 199412 1 002</p>
+                        </div>
+                    </div>
+                    <script>
+                        window.onload = function() {
+                            window.print();
+                            setTimeout(() => window.close(), 500);
+                        }
+                    </script>
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+        } catch (error) {
+            console.error("Gagal mengambil data rekap:", error);
+            alert("Terjadi kesalahan saat memuat rekap individu.");
+        }
     };
 
     return (
@@ -456,21 +609,22 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
                                         <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">No</th>
                                         <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Nama Lengkap</th>
                                         <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">NIP</th>
+                                        <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Status Pegawai</th>
                                         {selectedEvent?.kategori === 'harian' ? (
                                             <>
-                                                <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Alpha</th>
-                                                <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Izin</th>
-                                                <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Sakit</th>
-                                                <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Lupa Absen</th>
-                                                <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Total Telat Akumulasi</th>
+                                                <th className="px-6 py-3 text-center text-xs font-extrabold uppercase tracking-wider text-slate-500">Hadir</th>
+                                                <th className="px-6 py-3 text-center text-xs font-extrabold uppercase tracking-wider text-slate-500">Alpha</th>
+                                                <th className="px-6 py-3 text-center text-xs font-extrabold uppercase tracking-wider text-slate-500">Izin</th>
+                                                <th className="px-6 py-3 text-center text-xs font-extrabold uppercase tracking-wider text-slate-500">Sakit</th>
+                                                <th className="px-6 py-3 text-center text-xs font-extrabold uppercase tracking-wider text-slate-500">Lupa Absen</th>
+                                                <th className="px-6 py-3 text-center text-xs font-extrabold uppercase tracking-wider text-slate-500">Aksi</th>
                                             </>
                                         ) : (
                                             <>
-                                                <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Keterangan</th>
                                                 <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Waktu Hadir</th>
+                                                <th className="px-6 py-3 text-center text-xs font-extrabold uppercase tracking-wider text-slate-500">Status</th>
                                             </>
                                         )}
-                                        <th className="px-6 py-3 text-center text-xs font-extrabold uppercase tracking-wider text-slate-500">Status</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100 bg-white">
@@ -496,27 +650,35 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
                                                     </div>
                                                 </td>
                                                 <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-700 font-semibold font-mono">{attendance.nis_nip}</td>
+                                                <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-600">{attendance.status_pegawai || '-'}</td>
                                                 {selectedEvent?.kategori === 'harian' ? (
                                                     <>
-                                                        <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-600 font-bold text-center">{attendance.status === 'alpha' ? '1' : '-'}</td>
-                                                        <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-600 font-bold text-center">{attendance.status === 'izin' ? '1' : '-'}</td>
-                                                        <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-600 font-bold text-center">{attendance.status === 'sakit' ? '1' : '-'}</td>
-                                                        <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-600 font-bold text-center">{attendance.status === 'lupa_absen' ? '1' : '-'}</td>
-                                                        <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-700 font-mono font-semibold">-</td>
+                                                        <td className="whitespace-nowrap px-6 py-3.5 text-xs text-emerald-600 font-bold text-center">{attendance.total_hadir || '0'}</td>
+                                                        <td className="whitespace-nowrap px-6 py-3.5 text-xs text-red-600 font-bold text-center">{attendance.total_alpha || '0'}</td>
+                                                        <td className="whitespace-nowrap px-6 py-3.5 text-xs text-amber-600 font-bold text-center">{attendance.total_izin || '0'}</td>
+                                                        <td className="whitespace-nowrap px-6 py-3.5 text-xs text-blue-600 font-bold text-center">{attendance.total_sakit || '0'}</td>
+                                                        <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-600 font-bold text-center">{attendance.total_lupa_absen || '0'}</td>
+                                                        <td className="whitespace-nowrap px-6 py-3.5 text-center">
+                                                            <button 
+                                                                onClick={() => handlePrintIndividualRecap(attendance.participant_id, attendance.nama)}
+                                                                className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-2 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition-colors"
+                                                            >
+                                                                🖨️ Cetak Rekap
+                                                            </button>
+                                                        </td>
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-600">{attendance.keterangan || '-'}</td>
                                                         <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-700 font-mono font-semibold">{attendance.waktu_hadir}</td>
+                                                        <td className="whitespace-nowrap px-6 py-3.5 text-center">
+                                                            {attendance.status === 'hadir' && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-700">✓ Hadir</span>}
+                                                            {attendance.status === 'alpha' && <span className="inline-flex items-center gap-1 rounded-full bg-red-50 border border-red-100 px-2.5 py-0.5 text-xs font-bold text-red-700">✗ Alpha</span>}
+                                                            {attendance.status === 'izin' && <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-700">! Izin</span>}
+                                                            {attendance.status === 'sakit' && <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-100 px-2.5 py-0.5 text-xs font-bold text-blue-700">+ Sakit</span>}
+                                                            {attendance.status === 'lupa_absen' && <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2.5 py-0.5 text-xs font-bold text-slate-700">? Lupa Absen</span>}
+                                                        </td>
                                                     </>
                                                 )}
-                                                <td className="whitespace-nowrap px-6 py-3.5 text-center">
-                                                    {attendance.status === 'hadir' && <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-700">✓ Hadir</span>}
-                                                    {attendance.status === 'alpha' && <span className="inline-flex items-center gap-1 rounded-full bg-red-50 border border-red-100 px-2.5 py-0.5 text-xs font-bold text-red-700">✗ Alpha</span>}
-                                                    {attendance.status === 'izin' && <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 border border-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-700">! Izin</span>}
-                                                    {attendance.status === 'sakit' && <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-100 px-2.5 py-0.5 text-xs font-bold text-blue-700">+ Sakit</span>}
-                                                    {attendance.status === 'lupa_absen' && <span className="inline-flex items-center gap-1 rounded-full bg-orange-50 border border-orange-100 px-2.5 py-0.5 text-xs font-bold text-orange-700">⚠ Lupa Absen</span>}
-                                                </td>
                                             </tr>
                                         ))
                                     )}

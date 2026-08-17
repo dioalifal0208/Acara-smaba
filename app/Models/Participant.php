@@ -13,9 +13,11 @@ class Participant extends Model
     protected $fillable = [
         'nama',
         'nis_nip',
-        'keterangan',
+        'status',
         'qr_token',
         'face_descriptor',
+        'face_status',
+        'photo_path',
     ];
 
     protected $casts = [

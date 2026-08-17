@@ -58,7 +58,8 @@ class FaceRecognitionController extends Controller
         ]);
 
         $updateData = [
-            'face_descriptor' => $request->input('descriptor')
+            'face_descriptor' => $request->input('descriptor'),
+            'face_status' => 'approved' // Admin langsung approved
         ];
 
         if ($request->has('photo')) {
@@ -91,6 +92,83 @@ class FaceRecognitionController extends Controller
     }
 
     /**
+     * Register Face Descriptor oleh Peserta Sendiri (Status: Pending)
+     */
+    public function registerSelf(Request $request, Participant $participant)
+    {
+        // Pastikan peserta hanya bisa mendaftarkan wajahnya sendiri
+        if (auth()->user()->participant_id != $participant->id) {
+            abort(403, 'Anda tidak diizinkan mengubah data peserta lain.');
+        }
+
+        $request->validate([
+            'descriptor' => 'required|array',
+            'descriptor.*' => 'numeric',
+            'photo' => 'nullable|string'
+        ]);
+
+        $updateData = [
+            'face_descriptor' => $request->input('descriptor'),
+            'face_status' => 'pending'
+        ];
+
+        if ($request->has('photo')) {
+            $photoData = $request->input('photo');
+            if (preg_match('/^data:image\/(\w+);base64,/', $photoData, $type)) {
+                $photoData = substr($photoData, strpos($photoData, ',') + 1);
+                $type = strtolower($type[1]);
+                if (in_array($type, ['jpg', 'jpeg', 'png'])) {
+                    $photoData = base64_decode($photoData);
+                    $filename = 'faces/' . $participant->id . '_self_' . time() . '.' . $type;
+                    \Illuminate\Support\Facades\Storage::disk('public')->put($filename, $photoData);
+                    
+                    // delete old photo if exists
+                    if ($participant->photo_path) {
+                        \Illuminate\Support\Facades\Storage::disk('public')->delete($participant->photo_path);
+                    }
+                    
+                    $updateData['photo_path'] = $filename;
+                }
+            }
+        }
+
+        $participant->update($updateData);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Data wajah berhasil disimpan. Menunggu persetujuan Admin.',
+        ]);
+    }
+
+    /**
+     * Approve Face Descriptor (Admin Only)
+     */
+    public function approveFace(Participant $participant)
+    {
+        $participant->update(['face_status' => 'approved']);
+        return redirect()->back()->with('success', 'Wajah peserta ' . $participant->nama . ' berhasil disetujui.');
+    }
+
+    /**
+     * Reject Face Descriptor (Admin Only)
+     */
+    public function rejectFace(Participant $participant)
+    {
+        // Hapus foto jika ditolak
+        if ($participant->photo_path) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($participant->photo_path);
+        }
+
+        $participant->update([
+            'face_status' => 'rejected',
+            'face_descriptor' => null,
+            'photo_path' => null
+        ]);
+        
+        return redirect()->back()->with('success', 'Wajah peserta ' . $participant->nama . ' ditolak dan data dihapus.');
+    }
+
+    /**
      * Hapus Face Descriptor
      */
     public function deleteFace(Participant $participant)
@@ -101,7 +179,8 @@ class FaceRecognitionController extends Controller
 
         $participant->update([
             'face_descriptor' => null,
-            'photo_path' => null
+            'photo_path' => null,
+            'face_status' => 'none'
         ]);
 
         return response()->json([
@@ -151,14 +230,8 @@ class FaceRecognitionController extends Controller
                         'message' => 'Peringatan Keamanan: Terdeteksi manipulasi lokasi (Mock Location).',
                     ], 403);
                 }
-
-                // Batas toleransi akurasi maksimal (120 meter)
-                if ($accuracy > 120) {
-                    return response()->json([
-                        'status' => 'error',
-                        'message' => 'Akurasi sinyal GPS terlalu rendah (±' . round($accuracy) . 'm).',
-                    ], 400);
-                }
+                
+                // We no longer reject based on high accuracy numbers, as the radius check below will handle distance failures more gracefully.
             }
 
             // Cek anomali waktu sensor GPS
@@ -203,7 +276,10 @@ class FaceRecognitionController extends Controller
 
         // === Pencocokan Wajah ===
         // Karena data max ~150, brute force Euclidean distance sangat aman dan cepat
-        $participants = Participant::whereNotNull('face_descriptor')->get();
+        // HANYA COCOKKAN WAJAH YANG STATUSNYA APPROVED
+        $participants = Participant::whereNotNull('face_descriptor')
+            ->where('face_status', 'approved')
+            ->get();
         
         $bestMatch = null;
         $bestDistance = 0.45; // Threshold yang direkomendasikan face-api.js adalah ~0.6, kita perketat ke 0.45 agar lebih akurat dan strict.

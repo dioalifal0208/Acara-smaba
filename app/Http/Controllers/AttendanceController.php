@@ -374,16 +374,37 @@ class AttendanceController extends Controller
             $totalLupaAbsen = $attendancesRaw->where('status', 'lupa_absen')->count();
             $totalAttended = $attendancesRaw->count();
 
-            $attendances = $attendancesRaw->map(function ($attendance) {
+            if ($selectedEvent && $selectedEvent->kategori === 'harian') {
+                $allParticipants = Participant::all();
+                $grouped = $attendancesRaw->groupBy('participant_id');
+                
+                $attendances = $allParticipants->map(function ($participant) use ($grouped) {
+                    $participantAttendances = $grouped->get($participant->id) ?? collect();
+                    return [
+                        'participant_id' => $participant->id,
+                        'nama' => $participant->nama,
+                        'nis_nip' => $participant->nis_nip ?? '-',
+                        'status_pegawai' => $participant->status ?? '-',
+                        'total_hadir' => $participantAttendances->where('status', 'hadir')->count(),
+                        'total_alpha' => $participantAttendances->where('status', 'alpha')->count(),
+                        'total_izin' => $participantAttendances->where('status', 'izin')->count(),
+                        'total_sakit' => $participantAttendances->where('status', 'sakit')->count(),
+                        'total_lupa_absen' => $participantAttendances->where('status', 'lupa_absen')->count(),
+                    ];
+                });
+            } else {
+                $attendances = $attendancesRaw->map(function ($attendance) {
                     return [
                         'id' => $attendance->id,
+                        'participant_id' => $attendance->participant_id,
                         'nama' => $attendance->participant->nama ?? 'Tidak Dikenal',
                         'nis_nip' => $attendance->participant->nis_nip ?? '-',
-                        'keterangan' => $attendance->participant->keterangan ?? '-',
+                        'status_pegawai' => $attendance->participant->status ?? '-',
                         'status' => $attendance->status,
                         'waktu_hadir' => $attendance->waktu_hadir ? $attendance->waktu_hadir->format('d M Y H:i:s') : '-',
                     ];
                 });
+            }
         } else {
             $totalHadir = 0;
             $totalAlpha = 0;
@@ -410,6 +431,33 @@ class AttendanceController extends Controller
                 'belum' => $totalNotAttended,
             ],
             'attendances' => $attendances,
+        ]);
+    }
+
+    /**
+     * Dapatkan detail presensi harian untuk 1 partisipan (untuk Cetak Rekap Individu).
+     */
+    public function getIndividualRecap($eventId, $participantId)
+    {
+        $event = Event::findOrFail($eventId);
+        $participant = Participant::findOrFail($participantId);
+
+        $attendances = Attendance::where('event_id', $eventId)
+            ->where('participant_id', $participantId)
+            ->orderBy('waktu_hadir', 'asc')
+            ->get()
+            ->map(function ($att) {
+                return [
+                    'waktu_hadir' => $att->waktu_hadir ? $att->waktu_hadir->format('d M Y H:i:s') : '-',
+                    'waktu_pulang' => $att->waktu_pulang ? $att->waktu_pulang->format('d M Y H:i:s') : '-',
+                    'status' => $att->status,
+                ];
+            });
+
+        return response()->json([
+            'event' => $event,
+            'participant' => $participant,
+            'attendances' => $attendances
         ]);
     }
 
@@ -467,7 +515,7 @@ class AttendanceController extends Controller
                     $headers = ['No', 'Nama Lengkap', 'NIP', 'Alpha', 'Izin', 'Sakit', 'Lupa Absen', 'Total Telat', 'Status'];
                     $columns = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
                 } else {
-                    $headers = ['No', 'Nama Lengkap', 'NIP', 'Keterangan', 'Waktu Presensi', 'Status'];
+                    $headers = ['No', 'Nama Lengkap', 'NIP', 'Status Pegawai', 'Waktu Presensi', 'Status'];
                     $columns = ['A', 'B', 'C', 'D', 'E', 'F'];
                 }
 
@@ -516,7 +564,7 @@ class AttendanceController extends Controller
                         $sheet->getStyle('H' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
                         $sheet->getStyle('I' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
                     } else {
-                        $sheet->setCellValue('D' . $row, $att->participant->keterangan ?? '-');
+                        $sheet->setCellValue('D' . $row, $att->participant->status ?? '-');
                         $sheet->setCellValue('E' . $row, $att->waktu_hadir ? $att->waktu_hadir->format('d/m/Y H:i:s') : '-');
                         $sheet->setCellValue('F' . $row, ucwords(str_replace('_', ' ', $att->status)));
 
@@ -607,13 +655,13 @@ class AttendanceController extends Controller
                     ]);
                 }
             } else {
-                fputcsv($handle, ['No', 'Nama Lengkap', 'NIP', 'Keterangan', 'Waktu Presensi', 'Status']);
+                fputcsv($handle, ['No', 'Nama Lengkap', 'NIP', 'Status Pegawai', 'Waktu Presensi', 'Status']);
                 foreach ($attendances as $idx => $att) {
                     fputcsv($handle, [
                         $idx + 1,
                         $att->participant->nama ?? 'Tidak Dikenal',
                         $att->participant->nis_nip ?? '-',
-                        $att->participant->keterangan ?? '-',
+                        $att->participant->status ?? '-',
                         $att->waktu_hadir ? $att->waktu_hadir->format('d/m/Y H:i:s') : '-',
                         ucwords(str_replace('_', ' ', $att->status)),
                     ]);

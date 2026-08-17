@@ -54,7 +54,7 @@ function LockedScreen({ lock, activeEvent }) {
             <div className="relative z-10 w-full max-w-sm rounded-3xl bg-white border border-emerald-200 shadow-2xl p-7">
                 {/* Logo */}
                 <div className="flex justify-center mb-4">
-                    <img src="/images/logo.png" alt="Logo SMAN 1 Babat" className="h-12 w-12 object-contain" />
+                    <img src="/images/logo.png" alt="Logo E-Presensi SMABA" className="h-12 w-12 object-contain" />
                 </div>
 
                 {/* Centang Besar */}
@@ -86,7 +86,7 @@ function LockedScreen({ lock, activeEvent }) {
             </div>
 
             <p className="relative z-10 mt-5 text-[10px] text-slate-400 font-medium">
-                © {new Date().getFullYear()} SMA Negeri 1 Babat · Presensi Mandiri
+                © {new Date().getFullYear()} E-Presensi SMABA · Presensi Mandiri
             </p>
         </div>
     );
@@ -291,7 +291,7 @@ export default function SelfCheckInForm({ token, activeEvent }) {
     if (deviceLock) {
         return (
             <>
-                <Head title="Presensi Berhasil - SMAN 1 Babat" />
+                <Head title="Presensi Berhasil - E-Presensi SMABA" />
                 <LockedScreen lock={deviceLock} activeEvent={activeEvent} />
             </>
         );
@@ -299,7 +299,7 @@ export default function SelfCheckInForm({ token, activeEvent }) {
 
     return (
         <>
-            <Head title="Self Check-In - SMAN 1 Babat" />
+            <Head title="Self Check-In - E-Presensi SMABA" />
 
             <div className="relative h-screen overflow-hidden bg-slate-50 text-slate-800 flex flex-col justify-between p-6">
                 {/* Glow Spots */}
@@ -309,10 +309,12 @@ export default function SelfCheckInForm({ token, activeEvent }) {
                 {/* Header Logo */}
                 <header className="relative z-10 mx-auto text-center mt-3 flex-none" data-aos="fade-down">
                     <div className="flex justify-center mb-1">
-                        <img src="/images/logo.png" alt="Logo SMAN 1 Babat" className="h-10 w-10 object-contain" />
+                        <img src="/images/logo.png" alt="Logo E-Presensi SMABA" className="h-10 w-10 object-contain" />
                     </div>
-                    <span className="font-extrabold text-sm tracking-tight text-slate-900 block">SMABA EVENT</span>
-                    <span className="text-[9px] text-green-700 block -mt-0.5 font-semibold">SMA Negeri 1 Babat</span>
+                    <div>
+                        <span className="font-extrabold text-sm tracking-tight text-slate-800 block leading-tight">E-Presensi</span>
+                        <span className="text-[9px] text-green-700 block -mt-0.5 font-semibold">SMABA</span>
+                    </div>
                 </header>
 
                 {/* Main Form Card */}
@@ -327,7 +329,7 @@ export default function SelfCheckInForm({ token, activeEvent }) {
                                 </div>
                                 <h2 className="text-base font-extrabold text-slate-800">Presensi Saat Ini Ditutup</h2>
                                 <p className="text-xs text-slate-500 mt-2 font-medium leading-relaxed">
-                                    Belum ada Event yang diaktifkan oleh Panitia/Admin. Silakan hubungi panitia acara untuk membuka sesi presensi.
+                                    Belum ada Event yang diaktifkan oleh Panitia/Admin. Silakan hubungi panitia event untuk membuka sesi presensi.
                                 </p>
                             </div>
                         )}
@@ -407,7 +409,7 @@ export default function SelfCheckInForm({ token, activeEvent }) {
 
                 {/* Footer */}
                 <footer className="relative z-10 text-center text-[10px] text-slate-500 mt-2 flex-none" data-aos="fade-up">
-                    <p>&copy; {new Date().getFullYear()} SMAN 1 Babat. Presensi Mandiri.</p>
+                    <p>&copy; {new Date().getFullYear()} E-Presensi SMABA.</p>
                 </footer>
             </div>
 

@@ -40,7 +40,7 @@ export default function AuthenticatedLayout({ header, children }) {
 
             {/* Footer */}
             <footer className="relative z-10 border-t border-slate-200 bg-white py-3.5 text-center text-xs text-slate-500 font-medium flex-none">
-                <p>&copy; {new Date().getFullYear()} SMA Negeri 1 Babat. Hak Cipta Dilindungi.</p>
+                <p>&copy; {new Date().getFullYear()} E-Presensi SMABA. Hak Cipta Dilindungi.</p>
             </footer>
         </div>
     );

@@ -104,7 +104,7 @@ export default function MasterQr({ checkInUrl, qrCodeSvg, token, activeEvent: pr
                             <span className="text-[10px] font-extrabold text-indigo-600 uppercase tracking-widest block mb-1">
                                 {activeEvent ? activeEvent.nama_event : 'Perhatian'}
                             </span>
-                            <h3 className="text-base font-extrabold text-slate-800 mb-1">Master QR Code Acara</h3>
+                            <h3 className="text-base font-extrabold text-slate-800 mb-1">Master QR Code E-Presensi</h3>
                             <p className="text-xs text-slate-500 max-w-sm mx-auto font-semibold">
                                 {activeEvent
                                     ? `Minta peserta memindai QR Code ini untuk melakukan presensi mandiri pada event "${activeEvent.nama_event}".`

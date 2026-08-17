@@ -1,0 +1,309 @@
+import { Head } from '@inertiajs/react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import * as faceapi from 'face-api.js';
+import axios from 'axios';
+
+// Simple Device ID Generator
+function getOrCreateDeviceId() {
+    const KEY = 'smaba_device_uid';
+    let uid = localStorage.getItem(KEY);
+    if (!uid) {
+        uid = 'dev-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+        localStorage.setItem(KEY, uid);
+    }
+    return uid;
+}
+
+export default function FaceRegistration({ participant }) {
+    const videoRef = useRef();
+    const canvasRef = useRef();
+    
+    const [isModelsLoaded, setIsModelsLoaded] = useState(false);
+    const [isStreamActive, setIsStreamActive] = useState(false);
+    const [status, setStatus] = useState('Meminta akses kamera...');
+    const [errorMsg, setErrorMsg] = useState(null);
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [detectedFace, setDetectedFace] = useState(null);
+    const [result, setResult] = useState(null);
+
+    // 2. Load Models
+    useEffect(() => {
+        const loadModels = async () => {
+            try {
+                const MODEL_URL = '/models';
+                await Promise.all([
+                    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL),
+                ]);
+                setIsModelsLoaded(true);
+            } catch (err) {
+                console.error(err);
+                setErrorMsg("Gagal memuat model AI Wajah. Pastikan koneksi internet stabil.");
+            }
+        };
+        loadModels();
+    }, []);
+
+    // 3. Start Video Stream
+    useEffect(() => {
+        if (!isModelsLoaded || errorMsg || result) return;
+
+        let stream = null;
+        const startVideo = async () => {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+                if (videoRef.current) {
+                    videoRef.current.srcObject = stream;
+                    setIsStreamActive(true);
+                    setStatus('Mencari wajah...');
+                }
+            } catch (err) {
+                console.error(err);
+                setErrorMsg("Kamera tidak dapat diakses.");
+            }
+        };
+
+        startVideo();
+
+        return () => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+        };
+    }, [isModelsLoaded, errorMsg, result]);
+
+    // 5. Video Detection Loop
+    const handleVideoPlay = () => {
+        const interval = setInterval(async () => {
+            if (!videoRef.current || !canvasRef.current || !isStreamActive || isProcessing || result) return;
+
+            const video = videoRef.current;
+            const canvas = canvasRef.current;
+            
+            if (video.paused || video.ended) return;
+
+            const displaySize = { width: video.videoWidth, height: video.videoHeight };
+            if (displaySize.width === 0) return;
+
+            faceapi.matchDimensions(canvas, displaySize);
+
+            try {
+                const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+                    .withFaceLandmarks()
+                    .withFaceDescriptor();
+
+                if (detection) {
+                    const resizedDetection = faceapi.resizeResults(detection, displaySize);
+                    
+                    const ctx = canvas.getContext('2d');
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    
+                    faceapi.draw.drawDetections(canvas, resizedDetection);
+                    faceapi.draw.drawFaceLandmarks(canvas, resizedDetection);
+
+                    setStatus("Wajah terdeteksi. Klik tombol untuk mendaftar.");
+                    setDetectedFace(detection);
+                } else {
+                    const ctx = canvas.getContext('2d');
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    setStatus("Posisikan wajah Anda di dalam lingkaran...");
+                    setDetectedFace(null);
+                }
+            } catch (e) {
+                // ignore
+            }
+        }, 200);
+
+        return () => clearInterval(interval);
+    };
+
+
+    const processRegistration = async () => {
+        if (!detectedFace) return;
+        setIsProcessing(true);
+        setStatus("Mengunggah data wajah...");
+
+        try {
+            const video = videoRef.current;
+            const captureCanvas = document.createElement('canvas');
+            captureCanvas.width = video.videoWidth;
+            captureCanvas.height = video.videoHeight;
+            const ctx = captureCanvas.getContext('2d');
+            
+            ctx.translate(captureCanvas.width, 0);
+            ctx.scale(-1, 1);
+            ctx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+            
+            const photoDataUrl = captureCanvas.toDataURL('image/jpeg', 0.8);
+
+            const payload = {
+                descriptor: Array.from(detectedFace.descriptor),
+                photo: photoDataUrl
+            };
+
+            // Stop video
+            if (videoRef.current && videoRef.current.srcObject) {
+                videoRef.current.srcObject.getTracks().forEach(t => t.stop());
+            }
+
+            const res = await axios.post(`/api/participants/${participant.id}/face/self`, payload);
+            setResult(res.data);
+            playAudio('success');
+        } catch (error) {
+            playAudio('error');
+            if (error.response?.data?.message) {
+                setErrorMsg(error.response.data.message);
+            } else {
+                setErrorMsg("Gagal mengunggah data.");
+            }
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const playAudio = useCallback((type) => {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            gain.gain.setValueAtTime(0.20, ctx.currentTime);
+            if (type === 'success') {
+                osc.frequency.setValueAtTime(523, ctx.currentTime);
+                osc.frequency.setValueAtTime(659, ctx.currentTime + 0.08);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.25);
+            } else {
+                osc.frequency.setValueAtTime(220, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.3);
+            }
+        } catch (e) {}
+    }, []);
+
+    // ── Render ──
+
+    if (result) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center">
+                <Head title="Pendaftaran Berhasil" />
+                <div className="w-full max-w-sm rounded-3xl bg-white border border-emerald-200 shadow-xl p-7">
+                    <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/30">
+                        <svg className="h-9 w-9 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                    </div>
+                    <h2 className="text-lg font-extrabold text-emerald-800 mb-1">Berhasil Disimpan!</h2>
+                    
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mb-4 mt-4 text-sm text-emerald-800 font-medium">
+                        Data wajah Anda telah terkirim dan sedang menunggu persetujuan Admin.
+                    </div>
+                    <button onClick={() => window.location.href = route('participant.dashboard')} className="w-full rounded-xl bg-slate-100 py-3 text-sm font-bold text-slate-600 transition-all hover:bg-slate-200">
+                        Kembali ke Dashboard
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
+            <Head title="Pendaftaran Wajah" />
+            
+            <div className="w-full max-w-sm w-full rounded-3xl bg-white overflow-hidden shadow-2xl relative">
+                {/* Header */}
+                <div className="bg-white px-5 py-4 border-b border-slate-100 text-center relative z-10">
+                    <img src="/images/logo.png" alt="Logo" className="h-10 w-10 mx-auto object-contain mb-2" />
+                    <h2 className="text-sm font-extrabold text-slate-800">Pendaftaran Wajah</h2>
+                    <p className="text-[10px] text-slate-500 font-semibold">Self-Registration</p>
+                </div>
+
+                {/* Main Camera Area */}
+                <div className="relative bg-black w-full aspect-[3/4] flex flex-col items-center justify-center">
+                    {errorMsg ? (
+                        <div className="px-6 text-center z-10">
+                            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-red-500/20">
+                                <svg className="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                            </div>
+                            <p className="text-sm font-bold text-white mb-4">{errorMsg}</p>
+                            <button onClick={() => window.location.reload()} className="rounded-xl bg-white/20 px-6 py-2.5 text-sm font-bold text-white hover:bg-white/30 backdrop-blur-sm mb-2 w-full">
+                                Coba Lagi
+                            </button>
+                            <a href={route('participant.dashboard')} className="block rounded-xl bg-slate-800 px-6 py-2.5 text-sm font-bold text-white hover:bg-slate-700">
+                                Kembali ke Dashboard
+                            </a>
+                        </div>
+                    ) : (
+                        <>
+                            {!isModelsLoaded ? (
+                                <div className="text-white flex flex-col items-center z-10">
+                                    <svg className="animate-spin h-8 w-8 mb-3 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    <span className="text-xs font-semibold">Memuat Model AI...</span>
+                                </div>
+                            ) : (
+                                <>
+                                    <video 
+                                        ref={videoRef} 
+                                        autoPlay 
+                                        muted 
+                                        playsInline
+                                        onPlay={handleVideoPlay}
+                                        className="absolute inset-0 w-full h-full object-cover transform scale-x-[-1]"
+                                    />
+                                    <canvas 
+                                        ref={canvasRef} 
+                                        className="absolute inset-0 w-full h-full object-cover transform scale-x-[-1]"
+                                    />
+                                    
+                                    {/* Overlay Frame */}
+                                    <div className="absolute inset-0 pointer-events-none flex items-center justify-center p-6">
+                                        <div className={`w-full h-72 border-[3px] border-dashed rounded-full transition-colors duration-300 ${detectedFace ? 'border-emerald-400 bg-emerald-400/20' : 'border-white/50'}`}></div>
+                                    </div>
+
+                                    {/* Action Button */}
+                                    {detectedFace && !isProcessing && (
+                                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 w-[90%]">
+                                            <button onClick={processRegistration} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all">
+                                                Ambil Foto & Daftar
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* Processing Overlay */}
+                                    {isProcessing && (
+                                        <div className="absolute inset-0 z-30 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center text-white">
+                                            <div className="h-12 w-12 rounded-full border-4 border-emerald-500 border-t-transparent animate-spin mb-4"></div>
+                                            <p className="text-sm font-bold animate-pulse">Memvalidasi Wajah & Lokasi...</p>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </>
+                    )}
+                </div>
+
+                {/* Footer Status */}
+                <div className="bg-slate-900 text-white px-4 py-3 text-center border-t border-slate-800">
+                    <p className="text-[11px] font-medium text-slate-400 flex items-center justify-center gap-1.5">
+                        <span className={`w-2 h-2 rounded-full ${isStreamActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-500'}`}></span>
+                        {status}
+                    </p>
+                </div>
+            </div>
+            
+            <a href={route('participant.dashboard')} className="mt-6 text-xs text-white/50 hover:text-white font-semibold transition-colors underline underline-offset-4">
+                Kembali ke Dashboard
+            </a>
+        </div>
+    );
+}

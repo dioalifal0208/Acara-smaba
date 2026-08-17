@@ -3,7 +3,7 @@ export default function ApplicationLogo(props) {
         <img
             {...props}
             src="/images/logo.png"
-            alt="Logo SMA Negeri 1 Babat"
+            alt="Logo E-Presensi SMABA"
         />
     );
 }

@@ -65,12 +65,12 @@ export default function LoginModal({ isOpen, onClose, canResetPassword = true })
                 <div className="flex items-center gap-3 mb-6">
                     <img
                         src="/images/logo.png"
-                        alt="Logo SMABA"
+                        alt="Logo E-Presensi SMABA"
                         className="h-11 w-11 object-contain"
                     />
                     <div>
                         <h2 className="text-xl font-black text-slate-900 leading-tight">Login</h2>
-                        <p className="text-xs text-indigo-600 font-semibold">SMABA EVENT - SMAN 1 Babat</p>
+                        <p className="text-xs text-indigo-600 font-semibold">E-Presensi SMABA</p>
                     </div>
                 </div>
 

@@ -47,13 +47,12 @@ export default function UpdatePasswordForm({ className = '' }) {
     return (
         <section className={className}>
             <header>
-                <h2 className="text-lg font-medium text-gray-900">
+                <h2 className="text-xl font-extrabold text-slate-800 tracking-tight">
                     Update Password
                 </h2>
 
-                <p className="mt-1 text-sm text-gray-600">
-                    Ensure your account is using a long, random password to stay
-                    secure.
+                <p className="mt-1 text-sm text-slate-500 font-medium">
+                    Pastikan akun Anda menggunakan password yang panjang dan acak untuk tetap aman.
                 </p>
             </header>
 
@@ -121,8 +120,13 @@ export default function UpdatePasswordForm({ className = '' }) {
                     />
                 </div>
 
-                <div className="flex items-center gap-4">
-                    <PrimaryButton disabled={processing}>Save</PrimaryButton>
+                <div className="flex items-center gap-4 pt-4 border-t border-slate-100">
+                    <button
+                        disabled={processing}
+                        className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-indigo-500/20 transition-all hover:bg-indigo-700 hover:shadow-lg focus:outline-none disabled:opacity-50"
+                    >
+                        {processing ? 'Menyimpan...' : 'Simpan Password'}
+                    </button>
 
                     <Transition
                         show={recentlySuccessful}
@@ -131,8 +135,8 @@ export default function UpdatePasswordForm({ className = '' }) {
                         leave="transition ease-in-out"
                         leaveTo="opacity-0"
                     >
-                        <p className="text-sm text-gray-600">
-                            Saved.
+                        <p className="text-sm font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-100">
+                            Berhasil Disimpan.
                         </p>
                     </Transition>
                 </div>
