@@ -2,6 +2,8 @@ import { Link, Head } from '@inertiajs/react';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useToast } from '@/Components/Toast';
 import LoginModal from '@/Components/LoginModal';
+import AOS from 'aos';
+import 'aos/dist/aos.css';
 
 export default function Welcome({ auth, stats: initialStats, canResetPassword = true }) {
     const { user } = auth;
@@ -10,6 +12,14 @@ export default function Welcome({ auth, stats: initialStats, canResetPassword = 
     const [stats, setStats] = useState(initialStats || { total: 0, hadir: 0, belum: 0 });
     const attendancePercentage = stats.total > 0 ? Math.round((stats.hadir / stats.total) * 100) : 0;
     const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+
+    useEffect(() => {
+        AOS.init({
+            duration: 800,
+            once: true,
+            easing: 'ease-out-cubic',
+        });
+    }, []);
 
     // Scanner states (Admin-only)
     const { addToast } = useToast();
@@ -339,7 +349,7 @@ export default function Welcome({ auth, stats: initialStats, canResetPassword = 
                 </div>
 
                 {/* --- MODERN GLASS NAVBAR --- */}
-                <nav className="relative z-50 w-full px-6 py-5">
+                <nav className="relative z-50 w-full px-6 py-5" data-aos="fade-down">
                     <div className="mx-auto max-w-7xl">
                         <div className="flex items-center justify-between rounded-3xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] px-6 py-3">
                             <div className="flex items-center gap-4">
@@ -405,7 +415,7 @@ export default function Welcome({ auth, stats: initialStats, canResetPassword = 
                             <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-20 items-center">
                                 
                                 {/* ── Left Column: Premium Typography & Copywriting ── */}
-                                <div className="lg:col-span-7 space-y-8 text-center lg:text-left">
+                                <div className="lg:col-span-7 space-y-8 text-center lg:text-left" data-aos="fade-right">
                                     <div className="inline-flex items-center gap-3 rounded-full bg-white px-4 py-2 text-xs font-bold text-smaba-700 border border-slate-100 shadow-sm shadow-smaba-500/5">
                                         <span className="flex h-2.5 w-2.5 relative">
                                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-smaba-400 opacity-75"></span>
@@ -459,7 +469,7 @@ export default function Welcome({ auth, stats: initialStats, canResetPassword = 
                                 </div>
 
                                 {/* ── Right Column: Interactive Search Card ── */}
-                                <div className="lg:col-span-5 relative">
+                                <div className="lg:col-span-5 relative" data-aos="fade-left" data-aos-delay="200">
                                     {/* Decorative elements behind card */}
                                     <div className="absolute -inset-4 bg-gradient-to-r from-smaba-400 to-emerald-400 rounded-[40px] blur-2xl opacity-20"></div>
                                     
@@ -583,7 +593,7 @@ export default function Welcome({ auth, stats: initialStats, canResetPassword = 
                                 
                                 {/* ── Left: Scanner Dashboard ── */}
                                 <div className="lg:col-span-8 flex flex-col space-y-6">
-                                    <div className="flex items-end justify-between bg-white rounded-[24px] p-6 shadow-sm border border-slate-100 relative overflow-hidden">
+                                    <div className="flex items-end justify-between bg-white rounded-[24px] p-6 shadow-sm border border-slate-100 relative overflow-hidden" data-aos="fade-down">
                                         <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-smaba-50 to-transparent rounded-bl-full"></div>
                                         <div className="relative z-10">
                                             <div className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-3 py-1 text-[10px] font-bold text-white uppercase tracking-wider mb-2">
@@ -596,7 +606,7 @@ export default function Welcome({ auth, stats: initialStats, canResetPassword = 
                                     </div>
 
                                     {/* Stats Cards */}
-                                    <div className="grid grid-cols-3 gap-4">
+                                    <div className="grid grid-cols-3 gap-4" data-aos="fade-up" data-aos-delay="100">
                                         <div className="bg-white rounded-[24px] p-5 shadow-sm border border-slate-100 flex flex-col justify-center">
                                             <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Data</p>
                                             <p className="text-3xl font-black text-slate-800 mt-1">{stats.total}</p>
@@ -620,7 +630,7 @@ export default function Welcome({ auth, stats: initialStats, canResetPassword = 
                                     </div>
 
                                     {/* Scanner Camera Box */}
-                                    <div className="bg-white rounded-[32px] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex-1 flex flex-col relative overflow-hidden">
+                                    <div className="bg-white rounded-[32px] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex-1 flex flex-col relative overflow-hidden" data-aos="zoom-in" data-aos-delay="200">
                                         
                                         <div className="flex items-center justify-between mb-4">
                                             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
