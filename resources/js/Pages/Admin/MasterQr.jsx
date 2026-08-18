@@ -4,18 +4,18 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useConfirm } from '@/Components/ConfirmDialog';
 
-export default function MasterQr({ checkInUrl, qrCodeSvg, token, activeEvent: propActiveEvent }) {
+export default function MasterQr({ checkInUrl, qrCodeSvg, token, activeWorkcode: propActiveWorkcode }) {
     const { post, processing } = useForm();
     const confirm = useConfirm();
-    const { activeEvent: globalActiveEvent } = usePage().props;
-    const activeEvent = propActiveEvent || globalActiveEvent;
+    const { activeWorkcode: globalActiveWorkcode } = usePage().props;
+    const activeWorkcode = propActiveWorkcode || globalActiveWorkcode;
     const [isFullscreenQrOpen, setIsFullscreenQrOpen] = useState(false);
 
     const handleRegenerate = async (e) => {
         e.preventDefault();
         const confirmed = await confirm({
             title: 'Regenerasi Token URL',
-            message: 'Apakah Anda yakin ingin memutar (regenerasi) token event? URL absen lama akan segera dinonaktifkan.',
+            message: 'Apakah Anda yakin ingin memutar (regenerasi) token workcode? URL absen lama akan segera dinonaktifkan.',
             type: 'warning',
             confirmText: 'Ya, Regenerasi',
             cancelText: 'Batal',
@@ -30,8 +30,8 @@ export default function MasterQr({ checkInUrl, qrCodeSvg, token, activeEvent: pr
             return;
         }
 
-        const handleKeyDown = (event) => {
-            if (event.key === 'Escape') {
+        const handleKeyDown = (workcode) => {
+            if (workcode.key === 'Escape') {
                 setIsFullscreenQrOpen(false);
             }
         };
@@ -55,10 +55,10 @@ export default function MasterQr({ checkInUrl, qrCodeSvg, token, activeEvent: pr
                                 Mode Mandiri / Self Check-In
                             </span>
                             <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold ${
-                                activeEvent ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                activeWorkcode ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
                             }`}>
-                                <span className={`h-2 w-2 rounded-full ${activeEvent ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
-                                {activeEvent ? `Event: ${activeEvent.nama_event}` : 'Belum Ada Event Aktif'}
+                                <span className={`h-2 w-2 rounded-full ${activeWorkcode ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
+                                {activeWorkcode ? `Workcode: ${activeWorkcode.nama_workcode}` : 'Belum Ada Workcode Aktif'}
                             </span>
                         </div>
                         <h2 className="text-xl font-extrabold leading-tight text-slate-800 mt-2">
@@ -92,9 +92,9 @@ export default function MasterQr({ checkInUrl, qrCodeSvg, token, activeEvent: pr
                         onClick={() => setIsFullscreenQrOpen(true)}
                         role="button"
                         tabIndex={0}
-                        onKeyDown={(event) => {
-                            if (event.key === 'Enter' || event.key === ' ') {
-                                event.preventDefault();
+                        onKeyDown={(workcode) => {
+                            if (workcode.key === 'Enter' || workcode.key === ' ') {
+                                e.preventDefault();
                                 setIsFullscreenQrOpen(true);
                             }
                         }}
@@ -102,13 +102,13 @@ export default function MasterQr({ checkInUrl, qrCodeSvg, token, activeEvent: pr
                     >
                         <div className="text-center">
                             <span className="text-[10px] font-extrabold text-indigo-600 uppercase tracking-widest block mb-1">
-                                {activeEvent ? activeEvent.nama_event : 'Perhatian'}
+                                {activeWorkcode ? activeWorkcode.nama_workcode : 'Perhatian'}
                             </span>
                             <h3 className="text-base font-extrabold text-slate-800 mb-1">Master QR Code E-Presensi</h3>
                             <p className="text-xs text-slate-500 max-w-sm mx-auto font-semibold">
-                                {activeEvent
-                                    ? `Minta peserta memindai QR Code ini untuk melakukan presensi mandiri pada event "${activeEvent.nama_event}".`
-                                    : 'Belum ada event aktif. Aktifkan event terlebih dahulu agar hasil scan tercatat.'}
+                                {activeWorkcode
+                                    ? `Minta peserta memindai QR Code ini untuk melakukan presensi mandiri pada workcode "${activeWorkcode.nama_workcode}".`
+                                    : 'Belum ada workcode aktif. Aktifkan workcode terlebih dahulu agar hasil scan tercatat.'}
                             </p>
                         </div>
 
@@ -126,7 +126,7 @@ export default function MasterQr({ checkInUrl, qrCodeSvg, token, activeEvent: pr
                                 href={checkInUrl}
                                 target="_blank"
                                 rel="noreferrer"
-                                onClick={(event) => event.stopPropagation()}
+                                onClick={(workcode) => workcode.stopPropagation()}
                                 className="text-xs font-mono text-indigo-700 hover:text-indigo-800 break-all select-all font-bold"
                             >
                                 {checkInUrl}
@@ -134,7 +134,7 @@ export default function MasterQr({ checkInUrl, qrCodeSvg, token, activeEvent: pr
                         </div>
 
                         {/* Token display */}
-                        <p className="mt-2 text-center text-[9px] font-mono text-slate-400 font-semibold">Active Event Token: {token}</p>
+                        <p className="mt-2 text-center text-[9px] font-mono text-slate-400 font-semibold">Active Workcode Token: {token}</p>
                     </div>
 
                     {/* Right Column: Guidelines */}
@@ -145,9 +145,9 @@ export default function MasterQr({ checkInUrl, qrCodeSvg, token, activeEvent: pr
                         onClick={() => setIsFullscreenQrOpen(true)}
                         role="button"
                         tabIndex={0}
-                        onKeyDown={(event) => {
-                            if (event.key === 'Enter' || event.key === ' ') {
-                                event.preventDefault();
+                        onKeyDown={(workcode) => {
+                            if (workcode.key === 'Enter' || workcode.key === ' ') {
+                                e.preventDefault();
                                 setIsFullscreenQrOpen(true);
                             }
                         }}
@@ -186,7 +186,7 @@ export default function MasterQr({ checkInUrl, qrCodeSvg, token, activeEvent: pr
                                 Master QR Code Presensi
                             </p>
                             <h3 className="truncate text-lg font-black text-slate-950 sm:text-2xl">
-                                {activeEvent ? activeEvent.nama_event : 'Belum Ada Event Aktif'}
+                                {activeWorkcode ? activeWorkcode.nama_workcode : 'Belum Ada Workcode Aktif'}
                             </h3>
                         </div>
                         <button
@@ -211,9 +211,9 @@ export default function MasterQr({ checkInUrl, qrCodeSvg, token, activeEvent: pr
 
                         <div className="w-full max-w-4xl shrink-0 space-y-3">
                             <p className="text-base font-extrabold text-slate-900 sm:text-xl">
-                                {activeEvent
-                                    ? `Scan QR ini untuk presensi mandiri pada event "${activeEvent.nama_event}".`
-                                    : 'Aktifkan event terlebih dahulu agar hasil scan tercatat.'}
+                                {activeWorkcode
+                                    ? `Scan QR ini untuk presensi mandiri pada workcode "${activeWorkcode.nama_workcode}".`
+                                    : 'Aktifkan workcode terlebih dahulu agar hasil scan tercatat.'}
                             </p>
                             <p className="mx-auto max-w-3xl break-all rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 font-mono text-sm font-bold text-indigo-800 sm:text-base">
                                 {checkInUrl}

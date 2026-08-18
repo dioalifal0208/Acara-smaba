@@ -1,7 +1,7 @@
 <?php
 
 use App\Http\Controllers\AttendanceController;
-use App\Http\Controllers\EventController;
+use App\Http\Controllers\WorkcodeController;
 use App\Http\Controllers\ParticipantController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SelfCheckInController;
@@ -41,16 +41,16 @@ Route::get('/participants/{participant}/download-png', [ParticipantController::c
 Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     // Dashboard route
     Route::get('/dashboard', function () {
-        $activeEvent = \App\Models\Event::getActive();
+        $activeWorkcode = \App\Models\Workcode::getActive();
         $totalParticipants = \App\Models\Participant::count();
-        $totalAttended = $activeEvent
-            ? \App\Models\Attendance::where('event_id', $activeEvent->id)->distinct('participant_id')->count('participant_id')
+        $totalAttended = $activeWorkcode
+            ? \App\Models\Attendance::where('workcode_id', $activeWorkcode->id)->distinct('participant_id')->count('participant_id')
             : 0;
             
         $pendingLeaveCount = \App\Models\LeaveRequest::where('status_approval', 'pending')->count();
 
         return Inertia::render('Dashboard', [
-            'activeEvent' => $activeEvent,
+            'activeWorkcode' => $activeWorkcode,
             'pendingLeaveCount' => $pendingLeaveCount,
             'stats' => [
                 'total' => $totalParticipants,
@@ -66,11 +66,11 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::post('/admin/leaves/{leaveRequest}/reject', [\App\Http\Controllers\AdminLeaveController::class, 'reject'])->name('admin.leave.reject');
 
     // Event management routes
-    Route::get('/events', [EventController::class, 'index'])->name('events.index');
-    Route::post('/events', [EventController::class, 'store'])->name('events.store');
-    Route::post('/events/{event}/activate', [EventController::class, 'activate'])->name('events.activate');
-    Route::post('/events/{event}/deactivate', [EventController::class, 'deactivate'])->name('events.deactivate');
-    Route::delete('/events/{event}', [EventController::class, 'destroy'])->name('events.destroy');
+    Route::get('/workcodes', [WorkcodeController::class, 'index'])->name('workcodes.index');
+    Route::post('/workcodes', [WorkcodeController::class, 'store'])->name('workcodes.store');
+    Route::post('/workcodes/{workcode}/activate', [WorkcodeController::class, 'activate'])->name('workcodes.activate');
+    Route::post('/workcodes/{workcode}/deactivate', [WorkcodeController::class, 'deactivate'])->name('workcodes.deactivate');
+    Route::delete('/workcodes/{workcode}', [WorkcodeController::class, 'destroy'])->name('workcodes.destroy');
 
     // Participant management routes
     Route::get('/participants', [ParticipantController::class, 'index'])->name('participants.index');
@@ -94,9 +94,9 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
 
     // Report routes
     Route::get('/report', [AttendanceController::class, 'report'])->name('report');
-    Route::get('/report/individual/{event}/{participant}', [AttendanceController::class, 'getIndividualRecap'])->name('report.individual');
-    Route::get('/events/{event}/export', [AttendanceController::class, 'exportAttendance'])->name('events.export');
-    Route::get('/events/{event}/qr-signature', [AttendanceController::class, 'qrSignature'])->name('events.qr-signature');
+    Route::get('/report/individual/{workcode}/{participant}', [AttendanceController::class, 'getIndividualRecap'])->name('report.individual');
+    Route::get('/workcodes/{workcode}/export', [AttendanceController::class, 'exportAttendance'])->name('workcodes.export');
+    Route::get('/workcodes/{workcode}/qr-signature', [AttendanceController::class, 'qrSignature'])->name('workcodes.qr-signature');
     // Scanner routes (Admin only)
     Route::get('/scanner', [AttendanceController::class, 'scanner'])->name('scanner');
     Route::post('/scan', [AttendanceController::class, 'scan'])->name('scan');
@@ -106,9 +106,9 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
 Route::middleware(['auth', 'verified', 'role:participant'])->group(function () {
     // Participant Dashboard
     Route::get('/participant/dashboard', function () {
-        $activeEvent = \App\Models\Event::getActive();
+        $activeWorkcode = \App\Models\Workcode::getActive();
         return Inertia::render('Participant/Dashboard', [
-            'activeEvent' => $activeEvent,
+            'activeWorkcode' => $activeWorkcode,
             'participant' => auth()->user()->participant,
         ]);
     })->name('participant.dashboard');

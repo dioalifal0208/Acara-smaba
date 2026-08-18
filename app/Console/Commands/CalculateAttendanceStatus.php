@@ -3,7 +3,7 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-use App\Models\Event;
+use App\Models\Workcode;
 use App\Models\Participant;
 use App\Models\Attendance;
 use Carbon\Carbon;
@@ -18,12 +18,12 @@ class CalculateAttendanceStatus extends Command
         $today = Carbon::today();
         
         // Find active events
-        $events = Event::where('is_active', true)->get();
+        $workcodes = Workcode::where('is_active', true)->where('kategori', 'harian')->get();
 
-        foreach ($events as $event) {
+        foreach ($workcodes as $workcode) {
             // Cek apakah hari ini event harian aktif
-            if ($event->kategori === 'harian') {
-                $hariAktif = $event->hari_aktif ?? [];
+            if ($workcode->kategori === 'harian') {
+                $hariAktif = $workcode->hari_aktif ?? [];
                 if (!empty($hariAktif) && !in_array($today->dayOfWeekIso, $hariAktif)) {
                     continue; // Tidak aktif hari ini
                 }
@@ -33,7 +33,7 @@ class CalculateAttendanceStatus extends Command
 
             foreach ($participants as $participant) {
                 // Cek data attendance untuk hari ini
-                $attendance = Attendance::where('event_id', $event->id)
+                $attendance = Attendance::where('workcode_id', $workcode->id)
                     ->where('participant_id', $participant->id)
                     ->whereDate('created_at', $today)
                     ->first();
@@ -41,7 +41,7 @@ class CalculateAttendanceStatus extends Command
                 if (!$attendance) {
                     // Tidak ada record absen, izin, atau sakit = Alpha
                     Attendance::create([
-                        'event_id' => $event->id,
+                        'workcode_id' => $workcode->id,
                         'participant_id' => $participant->id,
                         'status' => 'alpha',
                         'created_at' => clone $today->setTime(8, 0, 0),

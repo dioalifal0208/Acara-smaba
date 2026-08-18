@@ -10,7 +10,7 @@ class Attendance extends Model
     use HasFactory;
 
     protected $fillable = [
-        'event_id',
+        'workcode_id',
         'participant_id',
         'waktu_hadir',
         'waktu_pulang',
@@ -26,11 +26,11 @@ class Attendance extends Model
     ];
 
     /**
-     * Relasi ke Event.
+     * Relasi ke Workcode.
      */
-    public function event()
+    public function workcode()
     {
-        return $this->belongsTo(Event::class);
+        return $this->belongsTo(Workcode::class);
     }
 
     /**

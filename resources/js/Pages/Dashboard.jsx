@@ -3,9 +3,9 @@ import { Head, Link, usePage } from '@inertiajs/react';
 import Dropdown from '@/Components/Dropdown';
 import { useEffect, useState } from 'react';
 
-export default function Dashboard({ stats, activeEvent: propActiveEvent, pendingLeaveCount }) {
-    const { auth, activeEvent: globalActiveEvent } = usePage().props;
-    const activeEvent = propActiveEvent || globalActiveEvent;
+export default function Dashboard({ stats, activeWorkcode: propActiveWorkcode, pendingLeaveCount }) {
+    const { auth, activeWorkcode: globalActiveWorkcode } = usePage().props;
+    const activeWorkcode = propActiveWorkcode || globalActiveWorkcode;
     const user = auth.user;
     const attendancePercentage = stats.total > 0 ? Math.round((stats.hadir / stats.total) * 100) : 0;
     
@@ -71,8 +71,8 @@ export default function Dashboard({ stats, activeEvent: propActiveEvent, pending
                 
                 {/* Alerts Area */}
                 <div className="space-y-2 mb-4 flex-none">
-                    {/* No Event Banner */}
-                    {!activeEvent && (
+                    {/* No Workcode Banner */}
+                    {!activeWorkcode && (
                         <div className={`overflow-hidden rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/60 p-1 shadow-sm transition-all duration-500 ease-out transform ${mounted ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-8'}`}>
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 gap-4 bg-white/40 backdrop-blur-sm rounded-xl">
                                 <div className="flex items-center gap-4">
@@ -85,17 +85,17 @@ export default function Dashboard({ stats, activeEvent: propActiveEvent, pending
                                         </div>
                                     </div>
                                     <div>
-                                        <h3 className="text-base font-extrabold text-amber-900 tracking-tight">Belum Ada Event Aktif</h3>
+                                        <h3 className="text-base font-extrabold text-amber-900 tracking-tight">Belum Ada Workcode Aktif</h3>
                                         <p className="text-sm text-amber-700 font-medium mt-0.5">
-                                            Pilih atau buat event terlebih dahulu agar sistem presensi dapat berjalan.
+                                            Pilih atau buat workcode terlebih dahulu agar sistem presensi dapat berjalan.
                                         </p>
                                     </div>
                                 </div>
                                 <Link
-                                    href={route('events.index')}
+                                    href={route('workcodes.index')}
                                     className="w-full sm:w-auto shrink-0 inline-flex justify-center items-center rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-amber-600/20 transition-all hover:bg-amber-700 hover:shadow-lg hover:-translate-y-0.5"
                                 >
-                                    Kelola Event
+                                    Kelola Workcode
                                 </Link>
                             </div>
                         </div>
@@ -156,11 +156,11 @@ export default function Dashboard({ stats, activeEvent: propActiveEvent, pending
                             <div className="relative z-10 flex flex-col h-full justify-center">
                                 <div className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 mb-5 border shadow-sm backdrop-blur-md bg-white/10 border-white/20 self-start">
                                     <span className={`relative flex h-2.5 w-2.5`}>
-                                        {activeEvent && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
-                                        <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${activeEvent ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-amber-400'}`}></span>
+                                        {activeWorkcode && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
+                                        <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${activeWorkcode ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-amber-400'}`}></span>
                                     </span>
-                                    <span className={`text-[11px] font-bold tracking-widest uppercase ${activeEvent ? 'text-emerald-50' : 'text-amber-50'}`}>
-                                        {activeEvent ? activeEvent.nama_event : 'Standby Mode'}
+                                    <span className={`text-[11px] font-bold tracking-widest uppercase ${activeWorkcode ? 'text-emerald-50' : 'text-amber-50'}`}>
+                                        {activeWorkcode ? activeWorkcode.nama_workcode : 'Standby Mode'}
                                     </span>
                                 </div>
                                 
@@ -256,7 +256,7 @@ export default function Dashboard({ stats, activeEvent: propActiveEvent, pending
 
                                 {/* Item 4 */}
                                 <Link
-                                    href={route('events.index')}
+                                    href={route('workcodes.index')}
                                     className={`group relative overflow-hidden rounded-2xl bg-white p-3 sm:p-4 border border-slate-100 shadow-sm transition-all duration-500 hover:shadow-xl hover:shadow-purple-500/10 hover:border-purple-200 hover:-translate-y-1.5 flex flex-col items-center justify-center text-center transform ${mounted ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
                                     style={{ transitionDelay: '500ms' }}
                                 >
@@ -294,7 +294,7 @@ export default function Dashboard({ stats, activeEvent: propActiveEvent, pending
                                     Statistik Presensi
                                 </h3>
                                 <p className="text-xs font-medium text-slate-500 mt-2 pl-9">
-                                    {activeEvent ? `Data dari event: ${activeEvent.nama_event}` : 'Ringkasan presensi (Tidak ada event aktif)'}
+                                    {activeWorkcode ? `Data dari workcode: ${activeWorkcode.nama_workcode}` : 'Ringkasan presensi (Tidak ada workcode aktif)'}
                                 </p>
                             </div>
                             

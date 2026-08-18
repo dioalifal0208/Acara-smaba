@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Participant;
 use App\Models\Attendance;
-use App\Models\Event;
+use App\Models\Workcode;
 use App\Services\QrCodeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -14,11 +14,11 @@ use Inertia\Inertia;
 class SelfCheckInController extends Controller
 {
     /**
-     * Dapatkan atau generate token event hari ini.
+     * Dapatkan atau generate token workcode hari ini.
      */
-    private function getEventToken()
+    private function getWorkcodeToken()
     {
-        return Cache::remember('active_event_token', now()->endOfDay(), function () {
+        return Cache::remember('active_workcode_token', now()->endOfDay(), function () {
             return Str::random(16);
         });
     }
@@ -28,8 +28,8 @@ class SelfCheckInController extends Controller
      */
     public function masterQr(QrCodeService $qrCodeService)
     {
-        $activeEvent = Event::getActive();
-        $token = $this->getEventToken();
+        $activeWorkcode = Workcode::getActive();
+        $token = $this->getWorkcodeToken();
         
         // Buat URL check-in menggunakan host saat ini
         $checkInUrl = url("/self-checkin/{$token}");
@@ -38,7 +38,7 @@ class SelfCheckInController extends Controller
         $qrCodeSvg = $qrCodeService->generateWithLogo($checkInUrl, 400);
 
         return Inertia::render('Admin/MasterQr', [
-            'activeEvent' => $activeEvent,
+            'activeWorkcode' => $activeWorkcode,
             'checkInUrl' => $checkInUrl,
             'qrCodeSvg' => $qrCodeSvg,
             'token' => $token,
@@ -46,13 +46,13 @@ class SelfCheckInController extends Controller
     }
 
     /**
-     * Regenerasi token event.
+     * Regenerasi token workcode.
      */
     public function regenerateToken()
     {
-        Cache::forget('active_event_token');
+        Cache::forget('active_workcode_token');
         return redirect()->route('admin.master-qr')
-            ->with('success', 'Token event berhasil diregenerasi! URL absen telah diperbarui.');
+            ->with('success', 'Token workcode berhasil diregenerasi! URL absen telah diperbarui.');
     }
 
     /**
@@ -60,15 +60,15 @@ class SelfCheckInController extends Controller
      */
     public function showForm($token)
     {
-        $activeToken = $this->getEventToken();
-        $activeEvent = Event::getActive();
+        $activeToken = $this->getWorkcodeToken();
+        $activeWorkcode = Workcode::getActive();
 
         if ($token !== $activeToken) {
             abort(403, 'Tautan presensi tidak valid atau telah kadaluarsa.');
         }
 
         return Inertia::render('SelfCheckIn/Form', [
-            'activeEvent' => $activeEvent,
+            'activeWorkcode' => $activeWorkcode,
             'token' => $token,
         ]);
     }
@@ -78,15 +78,15 @@ class SelfCheckInController extends Controller
      */
     public function showFaceForm($token)
     {
-        $activeToken = $this->getEventToken();
-        $activeEvent = Event::getActive();
+        $activeToken = $this->getWorkcodeToken();
+        $activeWorkcode = Workcode::getActive();
 
         if ($token !== $activeToken) {
             abort(403, 'Tautan presensi tidak valid atau telah kadaluarsa.');
         }
 
         return Inertia::render('SelfCheckIn/FaceForm', [
-            'activeEvent' => $activeEvent,
+            'activeWorkcode' => $activeWorkcode,
             'token' => $token,
         ]);
     }
@@ -113,11 +113,11 @@ class SelfCheckInController extends Controller
     }
 
     /**
-     * Proses input NIS/NIP untuk absen mandiri per Event.
+     * Proses input NIS/NIP untuk absen mandiri per Workcode.
      */
     public function submitForm(Request $request, $token)
     {
-        $activeToken = $this->getEventToken();
+        $activeToken = $this->getWorkcodeToken();
 
         if ($token !== $activeToken) {
             return response()->json([
@@ -126,16 +126,16 @@ class SelfCheckInController extends Controller
             ], 403);
         }
 
-        $activeEvent = Event::getActive();
+        $activeWorkcode = Workcode::getActive();
 
-        if (!$activeEvent) {
+        if (!$activeWorkcode) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Belum ada Event yang aktif. Presensi mandiri saat ini ditutup.',
+                'message' => 'Belum ada Workcode yang aktif. Presensi mandiri saat ini ditutup.',
             ], 400);
         }
 
-        if ($activeEvent->kategori === 'harian') {
+        if ($activeWorkcode->kategori === 'harian') {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Presensi harian hanya dapat dilakukan melalui scan QR Code Pribadi oleh petugas/admin.',
@@ -159,8 +159,8 @@ class SelfCheckInController extends Controller
         $ipAddress = $request->ip();
         $deviceHash = hash('sha256', $rawDeviceId . '|' . $userAgent);
 
-        // Cek apakah device ini sudah pernah presensi di event aktif ini
-        $deviceAttendance = Attendance::where('event_id', $activeEvent->id)
+        // Cek apakah device ini sudah pernah presensi di workcode aktif ini
+        $deviceAttendance = Attendance::where('workcode_id', $activeWorkcode->id)
             ->where('device_hash', $deviceHash)
             ->with('participant')
             ->first();
@@ -169,7 +169,7 @@ class SelfCheckInController extends Controller
             $lockedParticipant = $deviceAttendance->participant;
             return response()->json([
                 'status' => 'device_locked',
-                'message' => 'Perangkat ini sudah digunakan untuk presensi atas nama ' . $lockedParticipant->nama . ' (' . $lockedParticipant->nis_nip . '). 1 perangkat hanya diizinkan untuk 1 kali presensi per event.',
+                'message' => 'Perangkat ini sudah digunakan untuk presensi atas nama ' . $lockedParticipant->nama . ' (' . $lockedParticipant->nis_nip . '). 1 perangkat hanya diizinkan untuk 1 kali presensi per workcode.',
                 'locked_participant' => [
                     'nama' => $lockedParticipant->nama,
                     'nis_nip' => $lockedParticipant->nis_nip,
@@ -213,8 +213,8 @@ class SelfCheckInController extends Controller
             }
         }
 
-        // Cek batasan radius (jika event memiliki setingan koordinat)
-        if ($activeEvent->latitude && $activeEvent->longitude) {
+        // Cek batasan radius (jika workcode memiliki setingan koordinat)
+        if ($activeWorkcode->latitude && $activeWorkcode->longitude) {
             if (!$request->filled('latitude') || !$request->filled('longitude')) {
                 return response()->json([
                     'status' => 'error',
@@ -223,17 +223,17 @@ class SelfCheckInController extends Controller
             }
 
             $distance = $this->calculateDistance(
-                $activeEvent->latitude, $activeEvent->longitude,
+                $activeWorkcode->latitude, $activeWorkcode->longitude,
                 $request->latitude, $request->longitude
             );
 
-            $radiusLimit = $activeEvent->radius_meters ?? 100;
+            $radiusLimit = $activeWorkcode->radius_meters ?? 100;
             
             if ($distance > $radiusLimit) {
                 $distanceFmt = number_format($distance, 0);
                 return response()->json([
                     'status' => 'error',
-                    'message' => "Anda berada di luar radius presensi ({$distanceFmt} meter). Anda harus berada dalam radius {$radiusLimit} meter dari lokasi acara.",
+                    'message' => "Anda berada di luar radius presensi ({$distanceFmt} meter). Anda harus berada dalam radius {$radiusLimit} meter dari lokasi workcode.",
                 ], 403);
             }
         }
@@ -250,22 +250,22 @@ class SelfCheckInController extends Controller
             ], 404);
         }
 
-        // Cek apakah sudah absen pada event aktif ini
-        $alreadyAttended = Attendance::where('event_id', $activeEvent->id)
+        // Cek apakah sudah absen pada workcode aktif ini
+        $alreadyAttended = Attendance::where('workcode_id', $activeWorkcode->id)
             ->where('participant_id', $participant->id)
             ->exists();
 
         if ($alreadyAttended) {
             return response()->json([
                 'status' => 'already',
-                'message' => 'Anda sudah melakukan presensi untuk event "' . $activeEvent->nama_event . '".',
+                'message' => 'Anda sudah melakukan presensi untuk workcode "' . $activeWorkcode->nama_workcode . '".',
                 'participant' => $participant,
             ]);
         }
 
-        // Catat kehadiran untuk event aktif (beserta device_hash & IP untuk lock)
+        // Catat kehadiran untuk workcode aktif (beserta device_hash & IP untuk lock)
         $attendance = Attendance::create([
-            'event_id' => $activeEvent->id,
+            'workcode_id' => $activeWorkcode->id,
             'participant_id' => $participant->id,
             'waktu_hadir' => now(),
             'device_hash' => $deviceHash,
@@ -274,7 +274,7 @@ class SelfCheckInController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Presensi berhasil dicatat untuk event "' . $activeEvent->nama_event . '"!',
+            'message' => 'Presensi berhasil dicatat untuk workcode "' . $activeWorkcode->nama_workcode . '"!',
             'participant' => $participant,
             'timestamp' => $attendance->waktu_hadir->format('H:i:s'),
         ]);

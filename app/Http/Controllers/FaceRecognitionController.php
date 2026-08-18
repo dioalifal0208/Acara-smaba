@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Attendance;
-use App\Models\Event;
+use App\Models\Workcode;
 use App\Models\Participant;
 use Illuminate\Http\Request;
 
@@ -194,12 +194,12 @@ class FaceRecognitionController extends Controller
      */
     public function match(Request $request)
     {
-        $activeEvent = Event::getActive();
+        $activeWorkcode = Workcode::getActive();
 
-        if (!$activeEvent) {
+        if (!$activeWorkcode) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Belum ada Event yang aktif. Presensi saat ini ditutup.',
+                'message' => 'Belum ada Workcode yang aktif. Presensi saat ini ditutup.',
             ], 400);
         }
 
@@ -250,7 +250,7 @@ class FaceRecognitionController extends Controller
         }
 
         // Cek batasan radius
-        if ($activeEvent->latitude && $activeEvent->longitude) {
+        if ($activeWorkcode->latitude && $activeWorkcode->longitude) {
             if (!$request->filled('latitude') || (!$request->filled('longitude'))) {
                 return response()->json([
                     'status' => 'error',
@@ -259,11 +259,11 @@ class FaceRecognitionController extends Controller
             }
 
             $distance = $this->calculateDistance(
-                $activeEvent->latitude, $activeEvent->longitude,
+                $activeWorkcode->latitude, $activeWorkcode->longitude,
                 $request->latitude, $request->longitude
             );
 
-            $radiusLimit = $activeEvent->radius_meters ?? 100;
+            $radiusLimit = $activeWorkcode->radius_meters ?? 100;
             
             if ($distance > $radiusLimit) {
                 $distanceFmt = number_format($distance, 0);
@@ -307,14 +307,14 @@ class FaceRecognitionController extends Controller
         }
 
         // === Cek apakah sudah absen ===
-        $alreadyAttended = Attendance::where('event_id', $activeEvent->id)
+        $alreadyAttended = Attendance::where('workcode_id', $activeWorkcode->id)
             ->where('participant_id', $bestMatch->id)
             ->exists();
 
         if ($alreadyAttended) {
             return response()->json([
                 'status' => 'already',
-                'message' => 'Anda sudah melakukan presensi untuk event "' . $activeEvent->nama_event . '".',
+                'message' => 'Anda sudah melakukan presensi untuk workcode "' . $activeWorkcode->nama_workcode . '".',
                 'participant' => $bestMatch,
             ]);
         }
@@ -332,7 +332,7 @@ class FaceRecognitionController extends Controller
         $isAdmin = auth()->check() && (auth()->user()->role === 'admin' || auth()->user()->role === 'superadmin');
 
         if (!$isAdmin) {
-            $deviceAttendance = Attendance::where('event_id', $activeEvent->id)
+            $deviceAttendance = Attendance::where('workcode_id', $activeWorkcode->id)
                 ->where('device_hash', $deviceHash)
                 ->with('participant')
                 ->first();
@@ -346,7 +346,7 @@ class FaceRecognitionController extends Controller
             }
         }
 
-        // Cek keterlambatan menggunakan fungsi helper dari model Event atau dikalkulasi di sini
+        // Cek keterlambatan menggunakan fungsi helper dari model Workcode atau dikalkulasi di sini
         // Tapi AttendanceController@scan punya logika hitung telat. Kita copy sedikit logika ke sini agar lengkap.
         $waktuHadir = now();
         $lateFormatted = null;
@@ -373,7 +373,7 @@ class FaceRecognitionController extends Controller
 
         // === Catat Presensi ===
         $attendance = Attendance::create([
-            'event_id' => $activeEvent->id,
+            'workcode_id' => $activeWorkcode->id,
             'participant_id' => $bestMatch->id,
             'waktu_hadir' => $waktuHadir,
             'device_hash' => $deviceHash,

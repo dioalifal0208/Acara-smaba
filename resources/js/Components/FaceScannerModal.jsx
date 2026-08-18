@@ -13,7 +13,7 @@ function getOrCreateDeviceId() {
     return uid;
 }
 
-export default function FaceScannerModal({ activeEvent, participant, onClose, onSuccess }) {
+export default function FaceScannerModal({ activeWorkcode, participant, onClose, onSuccess }) {
     const videoRef = useRef();
     const canvasRef = useRef();
     
@@ -277,7 +277,7 @@ export default function FaceScannerModal({ activeEvent, participant, onClose, on
                     <div className="w-8"></div>
                     <div>
                         <h2 className="text-sm font-extrabold text-slate-800">Presensi Wajah</h2>
-                        <p className="text-[10px] text-slate-500 font-semibold">{activeEvent?.nama_event || 'Event Aktif'}</p>
+                        <p className="text-[10px] text-slate-500 font-semibold">{activeWorkcode?.nama_workcode || 'Workcode Aktif'}</p>
                     </div>
                     <button onClick={handleClose} className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors w-8 h-8 flex items-center justify-center">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">

@@ -216,8 +216,8 @@ export default function Welcome({ auth, stats: initialStats, canResetPassword = 
 
     // Klik di luar rekomendasi untuk menutup dropdown autocomplete
     useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (suggestionsRef.current && !suggestionsRef.current.contains(event.target)) {
+        const handleClickOutside = (workcode) => {
+            if (suggestionsRef.current && !suggestionsRef.current.contains(workcode.target)) {
                 setShowSuggestions(false);
             }
         };

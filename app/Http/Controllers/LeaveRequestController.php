@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Event;
+use App\Models\Workcode;
 use App\Models\LeaveRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -15,7 +15,7 @@ class LeaveRequestController extends Controller
             'tipe' => 'required|in:izin,sakit',
             'alasan' => 'required|string|max:500',
             'bukti' => 'required|file|mimes:jpg,jpeg,png,pdf|max:2048',
-            'event_id' => 'required|exists:events,id',
+            'workcode_id' => 'required|exists:workcodes,id',
             'tanggal' => 'required|date',
         ]);
 
@@ -25,21 +25,21 @@ class LeaveRequestController extends Controller
             return back()->with('error', 'Akses ditolak. Anda bukan peserta.');
         }
 
-        // Cek apakah sudah pernah mengajukan untuk event dan tanggal tersebut
+        // Cek apakah sudah pernah mengajukan untuk workcode dan tanggal tersebut
         $existing = LeaveRequest::where('participant_id', $participant->id)
-            ->where('event_id', $request->event_id)
+            ->where('workcode_id', $request->workcode_id)
             ->whereDate('tanggal', $request->tanggal)
             ->first();
 
         if ($existing) {
-            return back()->with('error', 'Anda sudah mengajukan izin/sakit untuk acara ini pada tanggal tersebut.');
+            return back()->with('error', 'Anda sudah mengajukan izin/sakit untuk workcode ini pada tanggal tersebut.');
         }
 
         $path = $request->file('bukti')->store('bukti_izin', 'public');
 
         LeaveRequest::create([
             'participant_id' => $participant->id,
-            'event_id' => $request->event_id,
+            'workcode_id' => $request->workcode_id,
             'tanggal' => $request->tanggal,
             'tipe' => $request->tipe,
             'alasan' => $request->alasan,

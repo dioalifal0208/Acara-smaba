@@ -11,7 +11,7 @@ class LeaveRequest extends Model
 
     protected $fillable = [
         'participant_id',
-        'event_id',
+        'workcode_id',
         'tanggal',
         'tipe',
         'alasan',
@@ -28,9 +28,9 @@ class LeaveRequest extends Model
         return $this->belongsTo(Participant::class);
     }
 
-    public function event()
+    public function workcode()
     {
-        return $this->belongsTo(Event::class);
+        return $this->belongsTo(Workcode::class);
     }
 
     public function attendance()

@@ -44,7 +44,7 @@ export default function LeaveApprovalsIndex({ leaveRequests }) {
                             <table className="min-w-full divide-y divide-slate-200">
                                 <thead className="bg-slate-50">
                                     <tr>
-                                        <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Tgl / Acara</th>
+                                        <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Tgl / Workcode</th>
                                         <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Peserta</th>
                                         <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Tipe / Alasan</th>
                                         <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider">Bukti Dukung</th>
@@ -69,7 +69,7 @@ export default function LeaveApprovalsIndex({ leaveRequests }) {
                                             <tr key={req.id} className="hover:bg-slate-50 transition-colors">
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <div className="text-sm font-semibold text-slate-900">{req.tanggal}</div>
-                                                    <div className="text-xs text-slate-500">{req.event_name}</div>
+                                                    <div className="text-xs text-slate-500">{req.workcode_name}</div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <div className="text-sm font-bold text-slate-900">{req.participant_name}</div>

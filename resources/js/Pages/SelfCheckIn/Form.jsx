@@ -25,25 +25,25 @@ function getOrCreateDeviceId() {
 }
 
 // ── Helper: Kunci lokal ke LocalStorage setelah presensi sukses ──
-function getLockKey(eventId) {
-    return `smaba_locked_event_${eventId}`;
+function getLockKey(workcodeId) {
+    return `smaba_locked_workcode_${workcodeId}`;
 }
 
-function getLocalLock(eventId) {
+function getLocalLock(workcodeId) {
     try {
-        const raw = localStorage.getItem(getLockKey(eventId));
+        const raw = localStorage.getItem(getLockKey(workcodeId));
         return raw ? JSON.parse(raw) : null;
     } catch (_) { return null; }
 }
 
-function setLocalLock(eventId, participant, timestamp) {
+function setLocalLock(workcodeId, participant, timestamp) {
     try {
-        localStorage.setItem(getLockKey(eventId), JSON.stringify({ participant, timestamp, locked_at: new Date().toISOString() }));
+        localStorage.setItem(getLockKey(workcodeId), JSON.stringify({ participant, timestamp, locked_at: new Date().toISOString() }));
     } catch (_) {}
 }
 
 // ── Komponen: Halaman Terkunci Permanen (sudah absen) ──
-function LockedScreen({ lock, activeEvent }) {
+function LockedScreen({ lock, activeWorkcode }) {
     return (
         <div className="relative h-screen overflow-hidden bg-gradient-to-br from-emerald-50 via-white to-green-50 flex flex-col items-center justify-center p-6 text-center">
             {/* Glow */}
@@ -66,7 +66,7 @@ function LockedScreen({ lock, activeEvent }) {
 
                 <h2 className="text-lg font-extrabold text-emerald-800 mb-1">Presensi Berhasil!</h2>
                 <p className="text-xs text-slate-500 font-semibold mb-4">
-                    {activeEvent?.nama_event || 'Event Aktif'}
+                    {activeWorkcode?.nama_workcode || 'Workcode Aktif'}
                 </p>
 
                 <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mb-4">
@@ -80,7 +80,7 @@ function LockedScreen({ lock, activeEvent }) {
                 <div className="flex items-start gap-2 rounded-xl bg-amber-50 border border-amber-200 p-3 text-left">
                     <span className="text-amber-600 text-sm mt-0.5 flex-shrink-0">🔒</span>
                     <p className="text-[11px] text-amber-800 font-semibold leading-relaxed">
-                        Perangkat ini telah dikunci untuk event ini. 1 perangkat hanya diizinkan untuk 1 kali presensi.
+                        Perangkat ini telah dikunci untuk workcode ini. 1 perangkat hanya diizinkan untuk 1 kali presensi.
                     </p>
                 </div>
             </div>
@@ -93,7 +93,7 @@ function LockedScreen({ lock, activeEvent }) {
 }
 
 // ── Komponen Utama ──
-export default function SelfCheckInForm({ token, activeEvent }) {
+export default function SelfCheckInForm({ token, activeWorkcode }) {
     const [result, setResult] = useState(null);
     const [errorMsg, setErrorMsg] = useState(null);
     const [isLocating, setIsLocating] = useState(false);
@@ -110,13 +110,13 @@ export default function SelfCheckInForm({ token, activeEvent }) {
 
     // Cek LocalStorage lock saat halaman pertama dibuka
     useEffect(() => {
-        if (activeEvent?.id) {
-            const lock = getLocalLock(activeEvent.id);
+        if (activeWorkcode?.id) {
+            const lock = getLocalLock(activeWorkcode.id);
             if (lock) {
                 setDeviceLock(lock);
             }
         }
-    }, [activeEvent?.id]);
+    }, [activeWorkcode?.id]);
 
     // Umpan balik audio sederhana untuk HP peserta
     const playAudio = useCallback((type) => {
@@ -166,8 +166,8 @@ export default function SelfCheckInForm({ token, activeEvent }) {
     };
 
     useEffect(() => {
-        const handleClickOutside = (event) => {
-            if (suggestionsRef.current && !suggestionsRef.current.contains(event.target)) {
+        const handleClickOutside = (workcode) => {
+            if (suggestionsRef.current && !suggestionsRef.current.contains(workcode.target)) {
                 setShowSuggestions(false);
             }
         };
@@ -237,8 +237,8 @@ export default function SelfCheckInForm({ token, activeEvent }) {
 
                     if (response.ok) {
                         if (resData.status === 'success') {
-                            // Kunci browser secara lokal - permanen untuk event ini
-                            setLocalLock(activeEvent.id, resData.participant, resData.timestamp);
+                            // Kunci browser secara lokal - permanen untuk workcode ini
+                            setLocalLock(activeWorkcode.id, resData.participant, resData.timestamp);
                             // Tampilkan layar terkunci permanen
                             setDeviceLock({ participant: resData.participant, timestamp: resData.timestamp });
                             playAudio('success');
@@ -247,7 +247,7 @@ export default function SelfCheckInForm({ token, activeEvent }) {
                             setResult({
                                 type: 'already',
                                 title: 'Sudah Presensi',
-                                message: `${resData.participant.nama} (${resData.participant.nis_nip}) sudah mengisi presensi untuk event ini.`,
+                                message: `${resData.participant.nama} (${resData.participant.nis_nip}) sudah mengisi presensi untuk workcode ini.`,
                                 nama: resData.participant.nama,
                                 nis_nip: resData.participant.nis_nip,
                             });
@@ -259,7 +259,7 @@ export default function SelfCheckInForm({ token, activeEvent }) {
                         if (resData.status === 'device_locked') {
                             // Kunci juga secara lokal menggunakan data dari server
                             const lp = resData.locked_participant;
-                            setLocalLock(activeEvent.id, { nama: lp.nama, nis_nip: lp.nis_nip }, lp.waktu_hadir);
+                            setLocalLock(activeWorkcode.id, { nama: lp.nama, nis_nip: lp.nis_nip }, lp.waktu_hadir);
                             setDeviceLock({ participant: { nama: lp.nama, nis_nip: lp.nis_nip }, timestamp: lp.waktu_hadir });
                             playAudio('error');
                         } else {
@@ -292,7 +292,7 @@ export default function SelfCheckInForm({ token, activeEvent }) {
         return (
             <>
                 <Head title="Presensi Berhasil - E-Presensi SMABA" />
-                <LockedScreen lock={deviceLock} activeEvent={activeEvent} />
+                <LockedScreen lock={deviceLock} activeWorkcode={activeWorkcode} />
             </>
         );
     }
@@ -321,21 +321,21 @@ export default function SelfCheckInForm({ token, activeEvent }) {
                 <main className="relative z-10 flex-1 flex items-center justify-center my-4 overflow-hidden">
                     <div className="w-full max-w-sm">
 
-                        {/* Event Inactive */}
-                        {!activeEvent && (
+                        {/* Workcode Inactive */}
+                        {!activeWorkcode && (
                             <div className="bg-white border border-amber-200 rounded-3xl p-6 shadow-2xl text-center" data-aos="zoom-in">
                                 <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-xl font-bold">
                                     ⚠️
                                 </div>
                                 <h2 className="text-base font-extrabold text-slate-800">Presensi Saat Ini Ditutup</h2>
                                 <p className="text-xs text-slate-500 mt-2 font-medium leading-relaxed">
-                                    Belum ada Event yang diaktifkan oleh Panitia/Admin. Silakan hubungi panitia event untuk membuka sesi presensi.
+                                    Belum ada Workcode yang diaktifkan oleh Panitia/Admin. Silakan hubungi panitia workcode untuk membuka sesi presensi.
                                 </p>
                             </div>
                         )}
 
                         {/* Status Result Card (sudah/already) */}
-                        {activeEvent && result && (
+                        {activeWorkcode && result && (
                             <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-center shadow-xl animate-[slideUp_0.3s_ease-out] text-amber-800" data-aos="zoom-in">
                                 <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-lg font-bold">
                                     ⚠
@@ -346,11 +346,11 @@ export default function SelfCheckInForm({ token, activeEvent }) {
                         )}
 
                         {/* Form Utama */}
-                        {activeEvent && !result && (
+                        {activeWorkcode && !result && (
                             <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl" data-aos="zoom-in">
                                 <div className="text-center mb-5">
                                     <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-extrabold text-emerald-700 border border-emerald-200 mb-2">
-                                        🟢 {activeEvent.nama_event}
+                                        🟢 {activeWorkcode.nama_workcode}
                                     </span>
                                     <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Presensi Mandiri</h2>
                                     <p className="text-xs text-slate-500 mt-1 font-semibold">Ketik nama atau NIP untuk memilih</p>

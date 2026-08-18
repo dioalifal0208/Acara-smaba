@@ -34,7 +34,7 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user(),
             ],
-            'activeEvent' => \App\Models\Event::getActive(),
+            'activeWorkcode' => \App\Models\Workcode::getActive(),
         ];
     }
 }

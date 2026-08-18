@@ -6,10 +6,10 @@ import * as faceapi from 'face-api.js';
 import axios from 'axios';
 
 // ─── Main Scanner Component ───
-export default function ScannerIndex({ initialStats, activeEvent: propActiveEvent }) {
+export default function ScannerIndex({ initialStats, activeWorkcode: propActiveWorkcode }) {
     const { toast, addToast } = useToast();
-    const { activeEvent: globalActiveEvent } = usePage().props;
-    const activeEvent = propActiveEvent || globalActiveEvent;
+    const { activeWorkcode: globalActiveWorkcode } = usePage().props;
+    const activeWorkcode = propActiveWorkcode || globalActiveWorkcode;
     const [stats, setStats] = useState(initialStats);
     const [isScanning, setIsScanning] = useState(false);
     const [isFaceModelsLoaded, setIsFaceModelsLoaded] = useState(false);
@@ -51,7 +51,7 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
 
     useEffect(() => {
         let watchId;
-        if (activeEvent?.latitude && activeEvent?.longitude) {
+        if (activeWorkcode?.latitude && activeWorkcode?.longitude) {
             watchId = navigator.geolocation.watchPosition(
                 (pos) => {
                     gpsDataRef.current = {
@@ -70,7 +70,7 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
         return () => {
             if (watchId) navigator.geolocation.clearWatch(watchId);
         };
-    }, [activeEvent]);
+    }, [activeWorkcode]);
 
     const getLockStyleFromResult = useCallback((decodedResult) => {
         const bounds = decodedResult?.result?.bounds;
@@ -157,8 +157,8 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
     // ─── Scan Handler ───
     const handleScan = useCallback(async (decodedText, decodedResult = null) => {
         if (isProcessingRef.current) return;
-        if (!activeEvent) {
-            toast.error('Belum ada Event yang aktif! Pilih event terlebih dahulu.');
+        if (!activeWorkcode) {
+            toast.error('Belum ada Workcode yang aktif! Pilih workcode terlebih dahulu.');
             return;
         }
 
@@ -178,7 +178,7 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
             const scanUrl = typeof route === 'function' ? route('scan', undefined, false) : '/scan';
             
             let requestBody = { qr_token: decodedText };
-            if (activeEvent?.latitude && activeEvent?.longitude) {
+            if (activeWorkcode?.latitude && activeWorkcode?.longitude) {
                 if (!gpsDataRef.current) {
                     throw new Error("Menunggu sinyal GPS atau izin lokasi ditolak.");
                 }
@@ -249,7 +249,7 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
                 setCooldownActive(false);
             }, 1500);
         }
-    }, [playSound, addToast, activeEvent, toast, showScanLock]);
+    }, [playSound, addToast, activeWorkcode, toast, showScanLock]);
 
     const handleFaceScanResult = useCallback((data) => {
         if (data.status === 'success' || data.status === 'warning' || data.status === 'already') {
@@ -292,8 +292,8 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
 
     // ─── Auto-start Scanner ───
     const startScanner = async () => {
-        if (!activeEvent) {
-            toast.error('Gagal memulai scanner: Belum ada event yang aktif!');
+        if (!activeWorkcode) {
+            toast.error('Gagal memulai scanner: Belum ada workcode yang aktif!');
             return;
         }
         setError(null);
@@ -347,7 +347,7 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
                             descriptor: Array.from(detection.descriptor),
                         };
 
-                        if (activeEvent?.latitude && activeEvent?.longitude && gpsDataRef.current) {
+                        if (activeWorkcode?.latitude && activeWorkcode?.longitude && gpsDataRef.current) {
                             payload = { ...payload, ...gpsDataRef.current };
                         }
 
@@ -487,7 +487,7 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
                             Scanner Presensi
                         </h2>
                         <p className="text-xs text-indigo-600 font-bold mt-0.5">
-                            {activeEvent ? `Event: ${activeEvent.nama_event}` : '⚠️ Event Tidak Aktif'}
+                            {activeWorkcode ? `Workcode: ${activeWorkcode.nama_workcode}` : '⚠️ Workcode Tidak Aktif'}
                         </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -541,20 +541,20 @@ export default function ScannerIndex({ initialStats, activeEvent: propActiveEven
             {/* Main container: Allow scroll if screen is too small, but aim for full screen */}
             <div className="p-4 sm:p-6 w-full max-w-7xl mx-auto flex flex-col gap-4 lg:gap-6 min-h-[calc(100vh-100px)]">
                 
-                {!activeEvent && (
+                {!activeWorkcode && (
                     <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-amber-900 flex items-center justify-between gap-4 shadow-sm shrink-0">
                         <div className="flex items-center gap-3">
                             <span className="text-2xl">⚠️</span>
                             <div>
-                                <p className="text-sm font-bold">Presensi terkunci karena belum ada Event Aktif.</p>
-                                <p className="text-xs text-amber-700 mt-0.5">Admin harus memilih atau mengaktifkan event terlebih dahulu.</p>
+                                <p className="text-sm font-bold">Presensi terkunci karena belum ada Workcode Aktif.</p>
+                                <p className="text-xs text-amber-700 mt-0.5">Admin harus memilih atau mengaktifkan workcode terlebih dahulu.</p>
                             </div>
                         </div>
                         <a
-                            href={route('events.index')}
+                            href={route('workcodes.index')}
                             className="rounded-lg bg-amber-600 px-4 py-2 text-xs font-bold text-white shadow hover:bg-amber-700 shrink-0 transition-colors"
                         >
-                            Kelola Event
+                            Kelola Workcode
                         </a>
                     </div>
                 )}

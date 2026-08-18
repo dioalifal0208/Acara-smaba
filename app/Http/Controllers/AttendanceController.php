@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Attendance;
-use App\Models\Event;
+use App\Models\Workcode;
 use App\Models\Participant;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -35,11 +35,11 @@ class AttendanceController extends Controller
      */
     public function scanner()
     {
-        $activeEvent = Event::getActive();
+        $activeWorkcode = Workcode::getActive();
         $totalParticipants = Participant::count();
 
-        if ($activeEvent) {
-            $totalAttended = Attendance::where('event_id', $activeEvent->id)
+        if ($activeWorkcode) {
+            $totalAttended = Attendance::where('workcode_id', $activeWorkcode->id)
                 ->distinct('participant_id')
                 ->count('participant_id');
         } else {
@@ -47,7 +47,7 @@ class AttendanceController extends Controller
         }
 
         return Inertia::render('Scanner/Index', [
-            'activeEvent' => $activeEvent,
+            'activeWorkcode' => $activeWorkcode,
             'initialStats' => [
                 'total' => $totalParticipants,
                 'hadir' => $totalAttended,
@@ -57,16 +57,16 @@ class AttendanceController extends Controller
     }
 
     /**
-     * Proses scan QR code — validasi & catat kehadiran per Event.
+     * Proses scan QR code — validasi & catat kehadiran per Workcode.
      */
     public function scan(Request $request)
     {
-        $activeEvent = Event::getActive();
+        $activeWorkcode = Workcode::getActive();
 
-        if (!$activeEvent) {
+        if (!$activeWorkcode) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Belum ada Event yang aktif! Admin wajib memilih/mengaktifkan Event terlebih dahulu di menu Kelola Event.',
+                'message' => 'Belum ada Workcode yang aktif! Admin wajib memilih/mengaktifkan Workcode terlebih dahulu di menu Kelola Workcode.',
                 'participant' => null,
                 'timestamp' => now()->format('H:i:s'),
             ], 400);
@@ -79,7 +79,7 @@ class AttendanceController extends Controller
             'accuracy' => 'nullable|numeric',
         ]);
 
-        if ($activeEvent->latitude && $activeEvent->longitude) {
+        if ($activeWorkcode->latitude && $activeWorkcode->longitude) {
             if (!$request->filled('latitude') || !$request->filled('longitude')) {
                 return response()->json([
                     'status' => 'error',
@@ -88,17 +88,17 @@ class AttendanceController extends Controller
             }
 
             $distance = $this->calculateDistance(
-                $activeEvent->latitude, $activeEvent->longitude,
+                $activeWorkcode->latitude, $activeWorkcode->longitude,
                 $request->latitude, $request->longitude
             );
 
-            $radiusLimit = $activeEvent->radius_meters ?? 100;
+            $radiusLimit = $activeWorkcode->radius_meters ?? 100;
             
             if ($distance > $radiusLimit) {
                 $distanceFmt = number_format($distance, 0);
                 return response()->json([
                     'status' => 'error',
-                    'message' => "Scanner Admin berada di luar radius presensi ({$distanceFmt} meter). Admin harus berada dalam radius {$radiusLimit} meter dari lokasi acara.",
+                    'message' => "Scanner Admin berada di luar radius presensi ({$distanceFmt} meter). Admin harus berada dalam radius {$radiusLimit} meter dari lokasi workcode.",
                 ], 403);
             }
         }
@@ -117,9 +117,9 @@ class AttendanceController extends Controller
             ], 404);
         }
 
-        if ($activeEvent->kategori === 'harian') {
+        if ($activeWorkcode->kategori === 'harian') {
             // Cek hari aktif
-            $hariAktif = $activeEvent->hari_aktif ?? [];
+            $hariAktif = $activeWorkcode->hari_aktif ?? [];
             $currentDay = now()->dayOfWeekIso; // 1 (Mon) - 7 (Sun)
             if (!empty($hariAktif) && !in_array($currentDay, $hariAktif)) {
                 return response()->json([
@@ -130,10 +130,10 @@ class AttendanceController extends Controller
             }
 
             $currentTime = now()->format('H:i:s');
-            $jamDatangMulai = $activeEvent->jam_datang_mulai ?? '06:00:00';
-            $jamDatangSelesai = $activeEvent->jam_datang_selesai ?? '07:00:00';
-            $jamPulangMulai = $activeEvent->jam_pulang_mulai ?? '15:30:00';
-            $jamPulangSelesai = $activeEvent->jam_pulang_selesai ?? '22:00:00';
+            $jamDatangMulai = $activeWorkcode->jam_datang_mulai ?? '06:00:00';
+            $jamDatangSelesai = $activeWorkcode->jam_datang_selesai ?? '07:00:00';
+            $jamPulangMulai = $activeWorkcode->jam_pulang_mulai ?? '15:30:00';
+            $jamPulangSelesai = $activeWorkcode->jam_pulang_selesai ?? '22:00:00';
 
             // Cek apakah sekarang sebelum jam datang mulai
             if ($currentTime < $jamDatangMulai) {
@@ -154,7 +154,7 @@ class AttendanceController extends Controller
             }
 
             // Cek data presensi hari ini
-            $attendance = Attendance::where('event_id', $activeEvent->id)
+            $attendance = Attendance::where('workcode_id', $activeWorkcode->id)
                 ->where('participant_id', $participant->id)
                 ->whereDate('created_at', now()->toDateString())
                 ->first();
@@ -179,14 +179,14 @@ class AttendanceController extends Controller
                     $attendance->update(['waktu_pulang' => now()]);
                 } else {
                     $attendance = Attendance::create([
-                        'event_id' => $activeEvent->id,
+                        'workcode_id' => $activeWorkcode->id,
                         'participant_id' => $participant->id,
                         'waktu_pulang' => now(),
                     ]);
                 }
 
                 $totalParticipants = Participant::count();
-                $totalAttended = Attendance::where('event_id', $activeEvent->id)
+                $totalAttended = Attendance::where('workcode_id', $activeWorkcode->id)
                     ->distinct('participant_id')
                     ->count('participant_id');
 
@@ -248,14 +248,14 @@ class AttendanceController extends Controller
                     $attendance->update(['waktu_hadir' => now()]);
                 } else {
                     $attendance = Attendance::create([
-                        'event_id' => $activeEvent->id,
+                        'workcode_id' => $activeWorkcode->id,
                         'participant_id' => $participant->id,
                         'waktu_hadir' => now(),
                     ]);
                 }
 
                 $totalParticipants = Participant::count();
-                $totalAttended = Attendance::where('event_id', $activeEvent->id)
+                $totalAttended = Attendance::where('workcode_id', $activeWorkcode->id)
                     ->distinct('participant_id')
                     ->count('participant_id');
 
@@ -285,15 +285,15 @@ class AttendanceController extends Controller
                 ], 200);
             }
         } else {
-            // Logika event acara biasa (sekali scan)
-            $existingAttendance = Attendance::where('event_id', $activeEvent->id)
+            // Logika workcode workcode biasa (sekali scan)
+            $existingAttendance = Attendance::where('workcode_id', $activeWorkcode->id)
                 ->where('participant_id', $participant->id)
                 ->first();
 
             if ($existingAttendance) {
                 return response()->json([
                     'status' => 'already',
-                    'message' => $participant->nama . ' sudah absen pada event "' . $activeEvent->nama_event . '".',
+                    'message' => $participant->nama . ' sudah absen pada workcode "' . $activeWorkcode->nama_workcode . '".',
                     'participant' => [
                         'id' => $participant->id,
                         'nama' => $participant->nama,
@@ -306,20 +306,20 @@ class AttendanceController extends Controller
 
             // Catat kehadiran
             $attendance = Attendance::create([
-                'event_id' => $activeEvent->id,
+                'workcode_id' => $activeWorkcode->id,
                 'participant_id' => $participant->id,
                 'waktu_hadir' => now(),
             ]);
 
-            // Hitung stats terbaru untuk event ini
+            // Hitung stats terbaru untuk workcode ini
             $totalParticipants = Participant::count();
-            $totalAttended = Attendance::where('event_id', $activeEvent->id)
+            $totalAttended = Attendance::where('workcode_id', $activeWorkcode->id)
                 ->distinct('participant_id')
                 ->count('participant_id');
 
             return response()->json([
                 'status' => 'success',
-                'message' => 'Presensi ' . $participant->nama . ' berhasil dicatat untuk event "' . $activeEvent->nama_event . '"!',
+                'message' => 'Presensi ' . $participant->nama . ' berhasil dicatat untuk workcode "' . $activeWorkcode->nama_workcode . '"!',
                 'participant' => [
                     'id' => $participant->id,
                     'nama' => $participant->nama,
@@ -345,25 +345,25 @@ class AttendanceController extends Controller
     }
 
     /**
-     * Tampilkan laporan kehadiran terkelompokkan per event.
+     * Tampilkan laporan kehadiran terkelompokkan per workcode.
      */
     public function report(Request $request)
     {
-        $events = Event::withCount('attendances')
+        $workcodes = Workcode::withCount('attendances')
             ->orderBy('is_active', 'desc')
             ->orderBy('created_at', 'desc')
             ->get();
 
-        $activeEvent = Event::getActive();
-        $selectedEventId = $request->input('event_id') ?? ($activeEvent ? $activeEvent->id : ($events->first()->id ?? null));
+        $activeWorkcode = Workcode::getActive();
+        $selectedWorkcodeId = $request->input('workcode_id') ?? ($activeWorkcode ? $activeWorkcode->id : ($workcodes->first()->id ?? null));
 
-        $selectedEvent = $events->firstWhere('id', (int) $selectedEventId);
+        $selectedWorkcode = $workcodes->firstWhere('id', (int) $selectedWorkcodeId);
 
         $totalParticipants = Participant::count();
 
-        if ($selectedEventId) {
+        if ($selectedWorkcodeId) {
             $attendancesRaw = Attendance::with('participant')
-                ->where('event_id', $selectedEventId)
+                ->where('workcode_id', $selectedWorkcodeId)
                 ->orderBy('waktu_hadir', 'desc')
                 ->get();
                 
@@ -374,7 +374,7 @@ class AttendanceController extends Controller
             $totalLupaAbsen = $attendancesRaw->where('status', 'lupa_absen')->count();
             $totalAttended = $attendancesRaw->count();
 
-            if ($selectedEvent && $selectedEvent->kategori === 'harian') {
+            if ($selectedWorkcode && $selectedWorkcode->kategori === 'harian') {
                 $allParticipants = Participant::all();
                 $grouped = $attendancesRaw->groupBy('participant_id');
                 
@@ -418,9 +418,9 @@ class AttendanceController extends Controller
         $totalNotAttended = $totalParticipants - $totalAttended;
 
         return Inertia::render('Report/Index', [
-            'events' => $events,
-            'selectedEventId' => $selectedEventId ? (int) $selectedEventId : null,
-            'selectedEvent' => $selectedEvent,
+            'workcodes' => $workcodes,
+            'selectedWorkcodeId' => $selectedWorkcodeId ? (int) $selectedWorkcodeId : null,
+            'selectedWorkcode' => $selectedWorkcode,
             'stats' => [
                 'total' => $totalParticipants,
                 'hadir' => $totalHadir,
@@ -437,12 +437,12 @@ class AttendanceController extends Controller
     /**
      * Dapatkan detail presensi harian untuk 1 partisipan (untuk Cetak Rekap Individu).
      */
-    public function getIndividualRecap($eventId, $participantId)
+    public function getIndividualRecap($workcodeId, $participantId)
     {
-        $event = Event::findOrFail($eventId);
+        $workcode = Workcode::findOrFail($workcodeId);
         $participant = Participant::findOrFail($participantId);
 
-        $attendances = Attendance::where('event_id', $eventId)
+        $attendances = Attendance::where('workcode_id', $workcodeId)
             ->where('participant_id', $participantId)
             ->orderBy('waktu_hadir', 'asc')
             ->get()
@@ -455,19 +455,19 @@ class AttendanceController extends Controller
             });
 
         return response()->json([
-            'event' => $event,
+            'workcode' => $workcode,
             'participant' => $participant,
             'attendances' => $attendances
         ]);
     }
 
     /**
-     * Export bukti daftar hadir event ke Excel (.xlsx / fallback .csv).
+     * Export bukti daftar hadir workcode ke Excel (.xlsx / fallback .csv).
      */
-    public function exportAttendance(Event $event)
+    public function exportAttendance(Workcode $workcode)
     {
         $attendances = Attendance::with('participant')
-            ->where('event_id', $event->id)
+            ->where('workcode_id', $workcode->id)
             ->orderBy('waktu_hadir', 'asc')
             ->get();
 
@@ -480,11 +480,11 @@ class AttendanceController extends Controller
                 $sheet = $spreadsheet->getActiveSheet();
                 $sheet->setTitle('Bukti Kehadiran');
 
-                $lastColumn = $event->kategori === 'harian' ? 'I' : 'F';
+                $lastColumn = $workcode->kategori === 'harian' ? 'I' : 'F';
 
                 // Header Kop Surat
                 $sheet->mergeCells('A1:' . $lastColumn . '1');
-                $sheet->setCellValue('A1', 'REKAP PRESENSI ' . mb_strtoupper($event->nama_event));
+                $sheet->setCellValue('A1', 'REKAP PRESENSI ' . mb_strtoupper($workcode->nama_workcode));
                 $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14)->getColor()->setRGB('166534');
                 $sheet->getStyle('A1')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
 
@@ -493,13 +493,13 @@ class AttendanceController extends Controller
                 $sheet->getStyle('A2')->getFont()->setBold(true)->setSize(12);
                 $sheet->getStyle('A2')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
 
-                // Event Metadata Info
-                $sheet->setCellValue('A4', 'Nama Acara / Event');
-                $sheet->setCellValue('B4', ': ' . $event->nama_event);
+                // Workcode Metadata Info
+                $sheet->setCellValue('A4', 'Nama Workcode / Workcode');
+                $sheet->setCellValue('B4', ': ' . $workcode->nama_workcode);
                 $sheet->getStyle('A4')->getFont()->setBold(true);
 
-                $sheet->setCellValue('A5', 'Tanggal Acara');
-                $sheet->setCellValue('B5', ': ' . $event->created_at->format('d F Y'));
+                $sheet->setCellValue('A5', 'Tanggal Workcode');
+                $sheet->setCellValue('B5', ': ' . $workcode->created_at->format('d F Y'));
                 $sheet->getStyle('A5')->getFont()->setBold(true);
 
                 $sheet->setCellValue('A6', 'Total Kehadiran');
@@ -511,7 +511,7 @@ class AttendanceController extends Controller
                 $sheet->getStyle('A7')->getFont()->setBold(true);
 
                 // Table Headers (Row 9)
-                if ($event->kategori === 'harian') {
+                if ($workcode->kategori === 'harian') {
                     $headers = ['No', 'Nama Lengkap', 'NIP', 'Alpha', 'Izin', 'Sakit', 'Lupa Absen', 'Total Telat', 'Status'];
                     $columns = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
                 } else {
@@ -547,7 +547,7 @@ class AttendanceController extends Controller
                     $sheet->setCellValue('A' . $row, $idx + 1);
                     $sheet->setCellValue('B' . $row, $att->participant->nama ?? 'Tidak Dikenal');
                     $sheet->setCellValueExplicit('C' . $row, $att->participant->nis_nip ?? '-', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-                    if ($event->kategori === 'harian') {
+                    if ($workcode->kategori === 'harian') {
                         $sheet->setCellValue('D' . $row, $att->status === 'alpha' ? '1' : '-');
                         $sheet->setCellValue('E' . $row, $att->status === 'izin' ? '1' : '-');
                         $sheet->setCellValue('F' . $row, $att->status === 'sakit' ? '1' : '-');
@@ -579,7 +579,7 @@ class AttendanceController extends Controller
 
                 if ($attendances->isEmpty()) {
                     $sheet->mergeCells('A10:' . $lastColumn . '10');
-                    $sheet->setCellValue('A10', 'Belum ada data presensi untuk event ini.');
+                    $sheet->setCellValue('A10', 'Belum ada data presensi untuk workcode ini.');
                     $sheet->getStyle('A10')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
                     $row = 11;
                 }
@@ -599,7 +599,7 @@ class AttendanceController extends Controller
                 $sheet->getColumnDimension('A')->setWidth(8);
                 $sheet->getColumnDimension('B')->setWidth(32);
                 $sheet->getColumnDimension('C')->setWidth(26);
-                if ($event->kategori === 'harian') {
+                if ($workcode->kategori === 'harian') {
                     $sheet->getColumnDimension('D')->setWidth(10);
                     $sheet->getColumnDimension('E')->setWidth(10);
                     $sheet->getColumnDimension('F')->setWidth(10);
@@ -613,7 +613,7 @@ class AttendanceController extends Controller
                 }
 
                 $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
-                $slug = \Illuminate\Support\Str::slug($event->nama_event);
+                $slug = \Illuminate\Support\Str::slug($workcode->nama_workcode);
                 $filename = 'Bukti_Hadir_' . $slug . '_' . date('Ymd_His') . '.xlsx';
 
                 return response()->streamDownload(function () use ($writer) {
@@ -628,18 +628,18 @@ class AttendanceController extends Controller
         }
 
         // CSV Fallback
-        $slug = \Illuminate\Support\Str::slug($event->nama_event);
+        $slug = \Illuminate\Support\Str::slug($workcode->nama_workcode);
         $csvFilename = 'Bukti_Hadir_' . $slug . '_' . date('Ymd_His') . '.csv';
-        return response()->streamDownload(function () use ($event, $attendances, $totalAttended, $totalParticipants) {
+        return response()->streamDownload(function () use ($workcode, $attendances, $totalAttended, $totalParticipants) {
             $handle = fopen('php://output', 'w');
             fputs($handle, "\xEF\xBB\xBF"); // UTF-8 BOM
-            fputcsv($handle, ['REKAP PRESENSI ' . mb_strtoupper($event->nama_event) . ' - SMA NEGERI 1 BABAT']);
-            fputcsv($handle, ['Nama Acara', $event->nama_event]);
-            fputcsv($handle, ['Tanggal', $event->created_at->format('d/m/Y')]);
+            fputcsv($handle, ['REKAP PRESENSI ' . mb_strtoupper($workcode->nama_workcode) . ' - SMA NEGERI 1 BABAT']);
+            fputcsv($handle, ['Nama Workcode', $workcode->nama_workcode]);
+            fputcsv($handle, ['Tanggal', $workcode->created_at->format('d/m/Y')]);
             fputcsv($handle, ['Total Kehadiran', $totalAttended . ' dari ' . $totalParticipants . ' peserta']);
             fputcsv($handle, []);
             
-            if ($event->kategori === 'harian') {
+            if ($workcode->kategori === 'harian') {
                 fputcsv($handle, ['No', 'Nama Lengkap', 'NIP', 'Alpha', 'Izin', 'Sakit', 'Lupa Absen', 'Total Telat', 'Status']);
                 foreach ($attendances as $idx => $att) {
                     fputcsv($handle, [
@@ -675,14 +675,14 @@ class AttendanceController extends Controller
     }
 
     /**
-     * Generate TTD Digital QR Code untuk Kepala Sekolah pada Bukti Hadir Event.
+     * Generate TTD Digital QR Code untuk Kepala Sekolah pada Bukti Hadir Workcode.
      */
-    public function qrSignature(Event $event)
+    public function qrSignature(Workcode $workcode)
     {
         $verificationData = "DOKUMEN RESMI REKAP PRESENSI\n"
             . "SMA NEGERI 1 BABAT\n"
-            . "Acara: " . $event->nama_event . "\n"
-            . "Tanggal: " . $event->created_at->format('d/m/Y') . "\n"
+            . "Workcode: " . $workcode->nama_workcode . "\n"
+            . "Tanggal: " . $workcode->created_at->format('d/m/Y') . "\n"
             . "Diverifikasi & Ditandatangani secara Digital oleh:\n"
             . "Kepala Sekolah: Muhtarom, S.Pd., M.Si.";
 

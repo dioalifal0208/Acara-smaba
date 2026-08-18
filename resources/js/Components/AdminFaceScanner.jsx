@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import * as faceapi from 'face-api.js';
 import axios from 'axios';
 
-export default function AdminFaceScanner({ activeEvent, gpsData, onScanResult }) {
+export default function AdminFaceScanner({ activeWorkcode, gpsData, onScanResult }) {
     const videoRef = useRef();
     const canvasRef = useRef();
     
@@ -100,13 +100,13 @@ export default function AdminFaceScanner({ activeEvent, gpsData, onScanResult })
             } catch (e) {
                 // ignore
             }
-        }, 500); // Check every 500ms to reduce load and prevent spam
+        }, 500); // Check every 500ms to reduce load and prworkcode spam
 
         return () => clearInterval(interval);
     };
 
     const processFace = async (descriptor) => {
-        if (!activeEvent) return;
+        if (!activeWorkcode) return;
         setIsProcessing(true);
         setStatus("Mencocokkan Wajah...");
 
@@ -115,7 +115,7 @@ export default function AdminFaceScanner({ activeEvent, gpsData, onScanResult })
                 descriptor: Array.from(descriptor),
             };
 
-            if (activeEvent.latitude && activeEvent.longitude && gpsData) {
+            if (activeWorkcode.latitude && activeWorkcode.longitude && gpsData) {
                 payload = { ...payload, ...gpsData };
             }
 

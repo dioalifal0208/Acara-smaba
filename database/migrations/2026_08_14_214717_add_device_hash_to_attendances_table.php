@@ -15,8 +15,8 @@ return new class extends Migration
             $table->string('device_hash', 64)->nullable()->after('waktu_hadir');
             $table->string('ip_address', 45)->nullable()->after('device_hash');
 
-            // Index untuk pencarian cepat per event + device
-            $table->index(['event_id', 'device_hash'], 'idx_attendances_event_device');
+            // Index untuk pencarian cepat per workcode + device
+            $table->index(['workcode_id', 'device_hash'], 'idx_attendances_workcode_device');
         });
     }
 
@@ -26,7 +26,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('attendances', function (Blueprint $table) {
-            $table->dropIndex('idx_attendances_event_device');
+            $table->dropIndex('idx_attendances_workcode_device');
             $table->dropColumn(['device_hash', 'ip_address']);
         });
     }

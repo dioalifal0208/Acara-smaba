@@ -14,7 +14,7 @@ function getOrCreateDeviceId() {
     return uid;
 }
 
-export default function FaceForm({ token, activeEvent }) {
+export default function FaceForm({ token, activeWorkcode }) {
     const videoRef = useRef();
     const canvasRef = useRef();
     
@@ -261,7 +261,7 @@ export default function FaceForm({ token, activeEvent }) {
                         </svg>
                     </div>
                     <h2 className="text-lg font-extrabold text-emerald-800 mb-1">{result.status === 'already' ? 'Sudah Absen' : 'Presensi Berhasil!'}</h2>
-                    <p className="text-xs text-slate-500 font-semibold mb-4">{activeEvent?.nama_event || 'Event Aktif'}</p>
+                    <p className="text-xs text-slate-500 font-semibold mb-4">{activeWorkcode?.nama_workcode || 'Workcode Aktif'}</p>
                     
                     <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mb-4">
                         <p className="text-base font-extrabold text-slate-900 leading-tight">{result.participant?.nama}</p>
@@ -292,7 +292,7 @@ export default function FaceForm({ token, activeEvent }) {
                 <div className="bg-white px-5 py-4 border-b border-slate-100 text-center relative z-10">
                     <img src="/images/logo.png" alt="Logo" className="h-10 w-10 mx-auto object-contain mb-2" />
                     <h2 className="text-sm font-extrabold text-slate-800">Presensi Wajah</h2>
-                    <p className="text-[10px] text-slate-500 font-semibold">{activeEvent?.nama_event}</p>
+                    <p className="text-[10px] text-slate-500 font-semibold">{activeWorkcode?.nama_workcode}</p>
                 </div>
 
                 {/* Main Camera Area */}

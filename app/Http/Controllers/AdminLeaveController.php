@@ -11,7 +11,7 @@ class AdminLeaveController extends Controller
 {
     public function index()
     {
-        $leaveRequests = LeaveRequest::with(['participant', 'event'])
+        $leaveRequests = LeaveRequest::with(['participant', 'workcode'])
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($req) {
@@ -19,7 +19,7 @@ class AdminLeaveController extends Controller
                     'id' => $req->id,
                     'participant_name' => $req->participant->nama ?? 'Unknown',
                     'participant_nip' => $req->participant->nis_nip ?? '-',
-                    'event_name' => $req->event->nama_event ?? 'Unknown',
+                    'workcode_name' => $req->workcode->nama_workcode ?? 'Unknown',
                     'tanggal' => $req->tanggal->format('d M Y'),
                     'tipe' => $req->tipe,
                     'alasan' => $req->alasan,
@@ -42,7 +42,7 @@ class AdminLeaveController extends Controller
 
         $leaveRequest->update(['status_approval' => 'approved']);
 
-        $attendance = Attendance::where('event_id', $leaveRequest->event_id)
+        $attendance = Attendance::where('workcode_id', $leaveRequest->workcode_id)
             ->where('participant_id', $leaveRequest->participant_id)
             ->whereDate('created_at', $leaveRequest->tanggal)
             ->first();
@@ -54,7 +54,7 @@ class AdminLeaveController extends Controller
             ]);
         } else {
             Attendance::create([
-                'event_id' => $leaveRequest->event_id,
+                'workcode_id' => $leaveRequest->workcode_id,
                 'participant_id' => $leaveRequest->participant_id,
                 'waktu_hadir' => null, // Tidak hadir secara fisik
                 'status' => $leaveRequest->tipe,

@@ -8,13 +8,13 @@ import PrimaryButton from '@/Components/PrimaryButton';
 import SecondaryButton from '@/Components/SecondaryButton';
 import { useToast } from '@/Components/Toast';
 
-export default function LeaveRequestModal({ show, onClose, eventId, tanggal }) {
+export default function LeaveRequestModal({ show, onClose, workcodeId, tanggal }) {
     const { toast } = useToast();
     const { data, setData, post, processing, errors, reset } = useForm({
         tipe: 'izin',
         alasan: '',
         bukti: null,
-        event_id: eventId,
+        workcode_id: workcodeId,
         tanggal: tanggal,
     });
 

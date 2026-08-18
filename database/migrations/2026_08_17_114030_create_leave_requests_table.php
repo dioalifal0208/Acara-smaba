@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('leave_requests', function (Blueprint $table) {
             $table->id();
             $table->foreignId('participant_id')->constrained()->onDelete('cascade');
-            $table->foreignId('event_id')->constrained()->onDelete('cascade');
+            $table->foreignId('workcode_id')->constrained('workcodes')->onDelete('cascade');
             $table->date('tanggal');
             $table->enum('tipe', ['izin', 'sakit']);
             $table->text('alasan');

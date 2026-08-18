@@ -2,11 +2,11 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
 
-export default function ReportIndex({ events = [], selectedEventId, selectedEvent, stats, attendances = [] }) {
+export default function ReportIndex({ workcodes = [], selectedWorkcodeId, selectedWorkcode, stats, attendances = [] }) {
     const [searchQuery, setSearchQuery] = useState('');
 
-    const handleEventChange = (eventId) => {
-        router.get(route('report'), { event_id: eventId }, { preserveState: true, preserveScroll: true });
+    const handleWorkcodeChange = (workcodeId) => {
+        router.get(route('report'), { workcode_id: workcodeId }, { preserveState: true, preserveScroll: true });
     };
 
     const filteredAttendances = attendances.filter(
@@ -18,7 +18,7 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
     const attendancePercentage = stats.total > 0 ? Math.round((stats.hadir / stats.total) * 100) : 0;
 
     const handlePrintReport = () => {
-        if (!selectedEvent) return;
+        if (!selectedWorkcode) return;
 
         const printWindow = window.open('', '_blank', 'width=800,height=900');
         const rowsHtml = filteredAttendances.map((a, i) => `
@@ -27,7 +27,7 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
                 <td style="padding: 7px 8px; border: 1px solid #cbd5e1; font-weight: bold; font-size: 11px;">${a.nama}</td>
                 <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-family: monospace; font-size: 11px;">${a.nis_nip}</td>
                 <td style="padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.status_pegawai || '-'}</td>
-                ${selectedEvent.kategori === 'harian' 
+                ${selectedWorkcode.kategori === 'harian' 
                     ? `
                         <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.total_hadir || '0'}</td>
                         <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.total_alpha || '0'}</td>
@@ -43,7 +43,7 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
             </tr>
         `).join('');
 
-        const tableHeadersHtml = selectedEvent.kategori === 'harian'
+        const tableHeadersHtml = selectedWorkcode.kategori === 'harian'
             ? `
                 <th style="width: 35px;">No</th>
                 <th>Nama Lengkap</th>
@@ -68,7 +68,7 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
             <!DOCTYPE html>
             <html>
             <head>
-                <title>Rekap Presensi - ${selectedEvent.nama_event}</title>
+                <title>Rekap Presensi - ${selectedWorkcode.nama_workcode}</title>
                 <style>
                     @page {
                         size: A4 portrait;
@@ -227,15 +227,15 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
                 </div>
 
                 <div class="title-doc">
-                    <h2>REKAP PRESENSI ${selectedEvent.nama_event.toUpperCase()}</h2>
+                    <h2>REKAP PRESENSI ${selectedWorkcode.nama_workcode.toUpperCase()}</h2>
                 </div>
 
                 <div class="meta-info">
                     <table>
                         <tr>
-                            <td style="width: 140px; font-weight: bold;">Nama Event / Kegiatan</td>
+                            <td style="width: 140px; font-weight: bold;">Nama Workcode / Kegiatan</td>
                             <td style="width: 10px;">:</td>
-                            <td style="font-weight: bold;">${selectedEvent.nama_event}</td>
+                            <td style="font-weight: bold;">${selectedWorkcode.nama_workcode}</td>
                         </tr>
                         <tr>
                             <td style="font-weight: bold;">Total Kehadiran</td>
@@ -265,8 +265,12 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
                     <div class="ttd-box">
                         <p>Babat, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
 
+                        <p style="margin-bottom: 5px;">Kepala Sekolah,</p>
+                        <div class="ttd-qr-wrap" style="display: flex; justify-content: center; margin: 10px 0;">
+                            <img src="/workcodes/${selectedWorkcode.id}/qr-signature" style="width: 80px; height: 80px;" alt="QR TTD" />
+                        </div>
                         <p style="font-weight: bold; text-decoration: underline; font-size: 13px;">Muhtarom, S.Pd., M.Si.</p>
-                        <p style="font-size: 11px; color: #475569; font-family: Arial, sans-serif;">SMA Negeri 1 Babat</p>
+                        <p style="font-size: 11px; color: #475569; font-family: Arial, sans-serif;">NIP. 197205172006041015</p>
                     </div>
                 </div>
 
@@ -282,9 +286,9 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
     };
 
     const handlePrintIndividualRecap = async (participantId, participantName) => {
-        if (!selectedEvent) return;
+        if (!selectedWorkcode) return;
         try {
-            const response = await fetch(`/report/individual/${selectedEvent.id}/${participantId}`);
+            const response = await fetch(`/report/individual/${selectedWorkcode.id}/${participantId}`);
             const data = await response.json();
             
             const printWindow = window.open('', '_blank', 'width=800,height=900');
@@ -299,6 +303,11 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
                     if (parts.length >= 4) {
                         tanggal = parts.slice(0, 3).join(' ');
                         jamDatang = parts[3];
+                        const dateObj = new Date(tanggal);
+                        if (!isNaN(dateObj)) {
+                            const hari = dateObj.toLocaleDateString('id-ID', { weekday: 'long' });
+                            tanggal = `${hari}, ${tanggal}`;
+                        }
                     } else {
                         tanggal = a.waktu_hadir;
                     }
@@ -310,6 +319,11 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
                         jamPulang = parts[3];
                         if (tanggal === '-') {
                             tanggal = parts.slice(0, 3).join(' ');
+                            const dateObj = new Date(tanggal);
+                            if (!isNaN(dateObj)) {
+                                const hari = dateObj.toLocaleDateString('id-ID', { weekday: 'long' });
+                                tanggal = `${hari}, ${tanggal}`;
+                            }
                         }
                     } else {
                         jamPulang = a.waktu_pulang;
@@ -322,10 +336,16 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
                         <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${tanggal}</td>
                         <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${jamDatang}</td>
                         <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${jamPulang}</td>
-                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-weight: bold; font-size: 11px;">${a.status.replace('_', ' ').toUpperCase()}</td>
+                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-weight: bold; font-size: 11px;">${data.participant.status || '-'}</td>
                     </tr>
                 `;
             }).join('');
+
+            const totalAlpha = data.attendances.filter(a => a.status === 'alpha').length;
+            const totalIzin = data.attendances.filter(a => a.status === 'izin').length;
+            const totalSakit = data.attendances.filter(a => a.status === 'sakit').length;
+            const totalLupaAbsen = data.attendances.filter(a => a.status === 'lupa_absen').length;
+            const totalHadir = data.attendances.filter(a => a.status === 'hadir').length;
 
             printWindow.document.write(`
                 <!DOCTYPE html>
@@ -384,7 +404,7 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
                                 <td style="font-weight: bold;">${data.participant.nama}</td>
                             </tr>
                             <tr>
-                                <td style="font-weight: bold;">NIP / NIS</td>
+                                <td style="font-weight: bold;">NIP</td>
                                 <td>:</td>
                                 <td>${data.participant.nis_nip || '-'}</td>
                             </tr>
@@ -396,10 +416,29 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
                             <tr>
                                 <td style="font-weight: bold;">Workcode</td>
                                 <td>:</td>
-                                <td>${data.event.nama_event}</td>
+                                <td>${data.workcode.nama_workcode}</td>
                             </tr>
                         </table>
                     </div>
+                    
+                    <table class="data-table" style="margin-bottom: 15px;">
+                        <thead>
+                            <tr>
+                                <th style="text-align: center; width: 25%;">Alpha</th>
+                                <th style="text-align: center; width: 25%;">Izin</th>
+                                <th style="text-align: center; width: 25%;">Sakit</th>
+                                <th style="text-align: center; width: 25%;">Lupa Absen</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px; font-weight: bold; color: #dc2626;">${totalAlpha}</td>
+                                <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px; font-weight: bold; color: #d97706;">${totalIzin}</td>
+                                <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px; font-weight: bold; color: #2563eb;">${totalSakit}</td>
+                                <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px; font-weight: bold; color: #475569;">${totalLupaAbsen}</td>
+                            </tr>
+                        </tbody>
+                    </table>
 
                     <table class="data-table">
                         <thead>
@@ -408,7 +447,7 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
                                 <th>Tanggal</th>
                                 <th>Waktu Hadir</th>
                                 <th>Waktu Pulang</th>
-                                <th style="width: 100px;">Status</th>
+                                <th style="width: 100px;">Status Pegawai</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -420,9 +459,11 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
                         <div class="ttd-box">
                             <p>Babat, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                             <p style="margin-bottom: 5px;">Kepala Sekolah,</p>
-                            <br><br><br>
-                            <p style="font-weight: bold; text-decoration: underline;">Dr. SONY YUDI SAPUTRA, S.Pd., M.Pd.</p>
-                            <p>NIP. 19700305 199412 1 002</p>
+                            <div class="ttd-qr-wrap" style="display: flex; justify-content: center; margin: 10px 0;">
+                                <img src="/workcodes/${selectedWorkcode.id}/qr-signature" style="width: 80px; height: 80px;" alt="QR TTD" />
+                            </div>
+                            <p style="font-weight: bold; text-decoration: underline; font-size: 13px;">Muhtarom, S.Pd., M.Si.</p>
+                            <p style="font-size: 11px; color: #475569; font-family: Arial, sans-serif;">NIP. 197205172006041015</p>
                         </div>
                     </div>
                     <script>
@@ -450,37 +491,37 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
                             Laporan Kehadiran
                         </h2>
                         <p className="text-xs text-slate-500 font-medium mt-0.5">
-                            {selectedEvent ? `Menampilkan laporan untuk: ${selectedEvent.nama_event}` : 'Pilih event untuk melihat data'}
+                            {selectedWorkcode ? `Menampilkan laporan untuk: ${selectedWorkcode.nama_workcode}` : 'Pilih workcode untuk melihat data'}
                         </p>
                     </div>
 
                     {/* Action & Filter Header */}
                     <div className="flex flex-wrap items-center gap-2.5">
-                        {/* Filter Event Dropdown */}
+                        {/* Filter Workcode Dropdown */}
                         <div className="flex items-center gap-2">
-                            <label htmlFor="event-filter" className="text-xs font-bold text-slate-600 shrink-0">
-                                Event:
+                            <label htmlFor="workcode-filter" className="text-xs font-bold text-slate-600 shrink-0">
+                                Workcode:
                             </label>
                             <select
-                                id="event-filter"
-                                value={selectedEventId || ''}
-                                onChange={(e) => handleEventChange(e.target.value)}
+                                id="workcode-filter"
+                                value={selectedWorkcodeId || ''}
+                                onChange={(e) => handleWorkcodeChange(e.target.value)}
                                 className="rounded-xl border border-slate-200 bg-white py-2 px-3 text-xs font-bold text-indigo-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 cursor-pointer min-w-[170px]"
                             >
-                                {events.length === 0 && <option value="">Belum Ada Event</option>}
-                                {events.map((evt) => (
+                                {workcodes.length === 0 && <option value="">Belum Ada Workcode</option>}
+                                {workcodes.map((evt) => (
                                     <option key={evt.id} value={evt.id}>
-                                        {evt.is_active ? '🟢 ' : ''}{evt.nama_event} ({evt.attendances_count} hadir)
+                                        {evt.is_active ? '🟢 ' : ''}{evt.nama_workcode} ({evt.attendances_count} hadir)
                                     </option>
                                 ))}
                             </select>
                         </div>
 
                         {/* Export & Print Buttons */}
-                        {selectedEventId && (
+                        {selectedWorkcodeId && (
                             <div className="flex items-center gap-2">
                                 <a
-                                    href={route('events.export', selectedEventId)}
+                                    href={route('workcodes.export', selectedWorkcodeId)}
                                     className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200 shadow-sm transition-all active:scale-95"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -610,7 +651,7 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
                                         <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Nama Lengkap</th>
                                         <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">NIP</th>
                                         <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Status Pegawai</th>
-                                        {selectedEvent?.kategori === 'harian' ? (
+                                        {selectedWorkcode?.kategori === 'harian' ? (
                                             <>
                                                 <th className="px-6 py-3 text-center text-xs font-extrabold uppercase tracking-wider text-slate-500">Hadir</th>
                                                 <th className="px-6 py-3 text-center text-xs font-extrabold uppercase tracking-wider text-slate-500">Alpha</th>
@@ -651,7 +692,7 @@ export default function ReportIndex({ events = [], selectedEventId, selectedEven
                                                 </td>
                                                 <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-700 font-semibold font-mono">{attendance.nis_nip}</td>
                                                 <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-600">{attendance.status_pegawai || '-'}</td>
-                                                {selectedEvent?.kategori === 'harian' ? (
+                                                {selectedWorkcode?.kategori === 'harian' ? (
                                                     <>
                                                         <td className="whitespace-nowrap px-6 py-3.5 text-xs text-emerald-600 font-bold text-center">{attendance.total_hadir || '0'}</td>
                                                         <td className="whitespace-nowrap px-6 py-3.5 text-xs text-red-600 font-bold text-center">{attendance.total_alpha || '0'}</td>

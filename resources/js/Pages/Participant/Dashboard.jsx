@@ -6,7 +6,7 @@ import SelfFaceRegistrationModal from '@/Components/SelfFaceRegistrationModal';
 import FaceScannerModal from '@/Components/FaceScannerModal';
 import { useState } from 'react';
 
-export default function ParticipantDashboard({ activeEvent, participant }) {
+export default function ParticipantDashboard({ activeWorkcode, participant }) {
     const { auth } = usePage().props;
     const user = auth.user;
     const [showLeaveModal, setShowLeaveModal] = useState(false);
@@ -66,7 +66,7 @@ export default function ParticipantDashboard({ activeEvent, participant }) {
                         </div>
                     </div>
 
-                    {activeEvent ? (
+                    {activeWorkcode ? (
                         <div className="bg-gradient-to-r from-indigo-500 to-purple-600 overflow-hidden shadow-xl sm:rounded-2xl border border-indigo-200">
                             <div className="p-8 text-white flex flex-col sm:flex-row items-center justify-between gap-6">
                                 <div>
@@ -75,13 +75,13 @@ export default function ParticipantDashboard({ activeEvent, participant }) {
                                         Sedang Berlangsung
                                     </div>
                                     <h3 className="text-2xl sm:text-3xl font-black mb-2 leading-tight">
-                                        {activeEvent.nama_event}
+                                        {activeWorkcode.nama_workcode}
                                     </h3>
                                     <p className="text-indigo-100 mb-2">
-                                        Lokasi: {activeEvent.lokasi}
+                                        Lokasi: {activeWorkcode.lokasi}
                                     </p>
                                     <p className="text-indigo-100 mb-6 max-w-xl">
-                                        {activeEvent.deskripsi || 'Silakan lakukan presensi sekarang menggunakan fitur Face Recognition.'}
+                                        {activeWorkcode.deskripsi || 'Silakan lakukan presensi sekarang menggunakan fitur Face Recognition.'}
                                     </p>
                                     
                                     {participant ? (
@@ -165,9 +165,9 @@ export default function ParticipantDashboard({ activeEvent, participant }) {
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
                                 </div>
-                                <h3 className="text-xl font-bold text-gray-800 mb-2">Belum Ada Event Aktif</h3>
+                                <h3 className="text-xl font-bold text-gray-800 mb-2">Belum Ada Workcode Aktif</h3>
                                 <p className="text-gray-500 max-w-md mx-auto">
-                                    Saat ini belum ada event yang dibuka oleh Panitia. Silakan kembali lagi nanti untuk melakukan presensi.
+                                    Saat ini belum ada workcode yang dibuka oleh Panitia. Silakan kembali lagi nanti untuk melakukan presensi.
                                 </p>
                             </div>
                         </div>
@@ -175,11 +175,11 @@ export default function ParticipantDashboard({ activeEvent, participant }) {
                 </div>
             </div>
 
-            {activeEvent && (
+            {activeWorkcode && (
                 <LeaveRequestModal 
                     show={showLeaveModal} 
                     onClose={() => setShowLeaveModal(false)}
-                    eventId={activeEvent.id}
+                    workcodeId={activeWorkcode.id}
                     tanggal={today}
                 />
             )}
@@ -193,7 +193,7 @@ export default function ParticipantDashboard({ activeEvent, participant }) {
 
             {showScannerModal && (
                 <FaceScannerModal
-                    activeEvent={activeEvent}
+                    activeWorkcode={activeWorkcode}
                     participant={participant}
                     onClose={() => setShowScannerModal(false)}
                     onSuccess={() => {
