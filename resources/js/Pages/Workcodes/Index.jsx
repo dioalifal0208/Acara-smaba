@@ -27,7 +27,7 @@ function LocationMarker({ position, setPosition, radius }) {
         },
         locationfound(e) {
             setPosition(e.latlng);
-            map.flyTo(e.latlng, map.getZoom());
+            map.flyTo(e.latlng, 17); // Zoom otomatis ke level 17 agar radius terlihat jelas
         },
     });
     
@@ -48,6 +48,7 @@ function LocationMarker({ position, setPosition, radius }) {
             
             div.onclick = function(e) {
                 e.preventDefault();
+                e.stopPropagation();
                 map.locate();
             }
             return div;
@@ -607,9 +608,9 @@ export default function WorkcodesIndex({ workcodes }) {
                                         )}
                                     </div>
 
-                                    <div className="w-full h-[200px] sm:h-[215px] rounded-xl overflow-hidden border border-slate-200 relative shadow-inner bg-slate-100">
+                                    <div className="w-full h-[260px] sm:h-[300px] rounded-xl overflow-hidden border border-slate-200 relative shadow-inner bg-slate-100">
                                         <MapErrorBoundary>
-                                            <MapContainer center={[-6.2088, 106.8456]} zoom={14} scrollWheelZoom={true} style={{ height: '100%', width: '100%' }}>
+                                            <MapContainer center={[-6.2088, 106.8456]} zoom={14} scrollWheelZoom={true} attributionControl={false} style={{ height: '100%', width: '100%' }}>
                                                 <TileLayer
                                                     attribution='&copy; OpenStreetMap contributors'
                                                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"

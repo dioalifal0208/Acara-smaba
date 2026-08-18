@@ -37,7 +37,6 @@ export default function Welcome({ auth, stats: initialStats, canResetPassword = 
     const lastScannedRef = useRef('');
     const cooldownTimerRef = useRef(null);
 
-
     // Audio Feedback
     const playSound = useCallback((type) => {
         try {
@@ -70,7 +69,6 @@ export default function Welcome({ auth, stats: initialStats, canResetPassword = 
             }
         } catch (e) { /* silent */ }
     }, []);
-
 
     // Scan Handler
     const handleScan = useCallback(async (decodedText) => {
@@ -190,7 +188,6 @@ export default function Welcome({ auth, stats: initialStats, canResetPassword = 
         }
     }, []);
 
-    // Auto-start scanner untuk Admin saat landing page terbuka
     useEffect(() => {
         if (isAdmin) {
             const timer = setTimeout(() => {
@@ -205,7 +202,6 @@ export default function Welcome({ auth, stats: initialStats, canResetPassword = 
         }
     }, [isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Cleanup cooldown
     useEffect(() => {
         return () => {
             if (cooldownTimerRef.current) {
@@ -214,10 +210,9 @@ export default function Welcome({ auth, stats: initialStats, canResetPassword = 
         };
     }, []);
 
-    // Klik di luar rekomendasi untuk menutup dropdown autocomplete
     useEffect(() => {
-        const handleClickOutside = (workcode) => {
-            if (suggestionsRef.current && !suggestionsRef.current.contains(workcode.target)) {
+        const handleClickOutside = (e) => {
+            if (suggestionsRef.current && !suggestionsRef.current.contains(e.target)) {
                 setShowSuggestions(false);
             }
         };
@@ -225,7 +220,6 @@ export default function Welcome({ auth, stats: initialStats, canResetPassword = 
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    // Handler ketika input ketikan pencarian QR berubah
     const handleInputChange = (val) => {
         setSearchQuery(val);
         setLookupError(null);
@@ -248,7 +242,6 @@ export default function Welcome({ auth, stats: initialStats, canResetPassword = 
         }
     };
 
-    // Handler ketika rekomendasi dipilih
     const handleSelectSuggestion = (participant) => {
         setSearchQuery(participant.nama);
         setLookupResult(participant);
@@ -256,7 +249,6 @@ export default function Welcome({ auth, stats: initialStats, canResetPassword = 
         setShowSuggestions(false);
     };
 
-    // Public QR Code Lookup (Guru/Peserta)
     const handleLookup = async (e) => {
         e.preventDefault();
         if (!searchQuery.trim()) return;
@@ -273,23 +265,22 @@ export default function Welcome({ auth, stats: initialStats, canResetPassword = 
             if (data.participant) {
                 setLookupResult(data.participant);
             } else {
-                setLookupError('Peserta/Guru tidak ditemukan. Cek NIP atau Nama Anda.');
+                setLookupError('Data tidak ditemukan. Pastikan Anda memasukkan nama atau NIP yang sesuai.');
             }
         } catch (err) {
-            setLookupError('Gagal memproses pencarian. Periksa jaringan Anda.');
+            setLookupError('Terjadi kesalahan sistem. Silakan coba lagi.');
         } finally {
             setIsSearching(false);
         }
     };
 
-    // Cetak QR Code
     const handlePrint = (p) => {
         const printWindow = window.open('', '_blank', 'width=500,height=600');
         printWindow.document.write(`
             <!DOCTYPE html>
             <html>
             <head>
-                <title>QR Code - ${p.nama}</title>
+                <title>QR Code Presensi - ${p.nama}</title>
                 <style>
                     * { margin: 0; padding: 0; box-sizing: border-box; }
                     body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #fff; }
@@ -308,7 +299,7 @@ export default function Welcome({ auth, stats: initialStats, canResetPassword = 
                     <div class="qr-container">
                         <img src="${route('participants.qr', p.id)}" alt="QR Code" />
                     </div>
-                    <div class="footer">E-Presensi SMABA</div>
+                    <div class="footer">E-Presensi SMA Negeri 1 Babat</div>
                 </div>
                 <script>
                     window.onload = function() {
@@ -322,7 +313,6 @@ export default function Welcome({ auth, stats: initialStats, canResetPassword = 
         printWindow.document.close();
     };
 
-    // Helper badge
     const getStatusBadge = (status) => {
         if (status === 'success') {
             return <span className="inline-flex rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold text-emerald-600 border border-emerald-200">Hadir</span>;
@@ -334,141 +324,191 @@ export default function Welcome({ auth, stats: initialStats, canResetPassword = 
 
     return (
         <>
-            <Head title="E-Presensi SMABA" />
-            {/* Toast is now handled globally via ToastProvider */}
+            <Head title="E-Presensi SMA Negeri 1 Babat" />
 
-            <div className="relative h-screen flex flex-col justify-between overflow-hidden bg-slate-50 text-slate-800">
+            <div className="relative min-h-screen flex flex-col overflow-hidden bg-slate-50 text-slate-800 font-sans">
                 
-                {/* Background decorative glow (subtle) */}
-                <div className="absolute top-0 left-0 -translate-x-1/2 -translate-y-1/2 w-96 h-96 rounded-full bg-indigo-600/5 blur-3xl"></div>
-                <div className="absolute bottom-0 right-0 translate-x-1/2 translate-y-1/2 w-[500px] h-[500px] rounded-full bg-purple-600/5 blur-3xl"></div>
+                {/* --- PREMIUM BACKGROUND ELEMENTS --- */}
+                <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                    {/* Top left deep green glow */}
+                    <div className="absolute -top-[20%] -left-[10%] w-[60%] h-[60%] rounded-full bg-gradient-to-br from-smaba-600/20 to-emerald-400/10 blur-[120px]"></div>
+                    {/* Bottom right subtle glow */}
+                    <div className="absolute -bottom-[20%] -right-[10%] w-[60%] h-[60%] rounded-full bg-gradient-to-tl from-smaba-500/20 to-teal-300/10 blur-[120px]"></div>
+                    {/* Grid Pattern overlay */}
+                    <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMCwgMCwgMCwgMC4wNSkiLz48L3N2Zz4=')] opacity-50 [mask-image:linear-gradient(to_bottom,white,transparent)]"></div>
+                </div>
 
-                {/* Navbar (fixed compact height) */}
-                <nav className="relative z-10 mx-auto w-full max-w-7xl px-6 py-4 flex items-center justify-between flex-none" data-aos="fade-down">
-                    <div className="flex items-center gap-3">
-                        <img
-                            src="/images/logo.png"
-                            alt="Logo E-Presensi SMABA"
-                            className="h-10 w-10 object-contain"
-                        />
-                        <div>
-                            <span className="font-extrabold text-lg tracking-tight text-slate-900 block">E-Presensi</span>
-                            <span className="text-[10px] text-indigo-600 block -mt-1 font-semibold">SMABA</span>
-                        </div>
-                    </div>
+                {/* --- MODERN GLASS NAVBAR --- */}
+                <nav className="relative z-50 w-full px-6 py-5">
+                    <div className="mx-auto max-w-7xl">
+                        <div className="flex items-center justify-between rounded-3xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] px-6 py-3">
+                            <div className="flex items-center gap-4">
+                                <div className="h-12 w-12 rounded-xl bg-white shadow-sm border border-slate-100 flex items-center justify-center overflow-hidden">
+                                    <img
+                                        src="/images/logo.png"
+                                        alt="Logo SMA Negeri 1 Babat"
+                                        className="h-9 w-9 object-contain"
+                                    />
+                                </div>
+                                <div>
+                                    <h1 className="font-black text-xl tracking-tight text-slate-900 leading-none">E-Presensi</h1>
+                                    <p className="text-[11px] font-bold text-smaba-600 tracking-widest uppercase mt-1">SMA Negeri 1 Babat</p>
+                                </div>
+                            </div>
 
-                    <div className="flex items-center gap-4">
-                        {user ? (
-                            <>
-                                {isAdmin && (
-                                    <Link
-                                        href={route('dashboard')}
-                                        className="text-sm font-semibold text-slate-600 hover:text-slate-900 transition-colors mr-2"
+                            <div className="flex items-center gap-3">
+                                {user ? (
+                                    <>
+                                        {isAdmin && (
+                                            <Link
+                                                href={route('dashboard')}
+                                                className="text-sm font-bold text-slate-600 hover:text-smaba-600 transition-colors mr-3"
+                                            >
+                                                Dashboard Admin
+                                            </Link>
+                                        )}
+                                        <Link
+                                            href={route('logout')}
+                                            method="post"
+                                            as="button"
+                                            className="rounded-2xl bg-white border border-slate-200 px-5 py-2.5 text-sm font-bold text-slate-700 transition-all hover:bg-slate-50 hover:border-slate-300 hover:shadow-sm"
+                                        >
+                                            Keluar
+                                        </Link>
+                                    </>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsLoginModalOpen(true)}
+                                        className="group relative rounded-2xl bg-slate-900 px-6 py-2.5 text-sm font-bold text-white transition-all hover:bg-slate-800 shadow-lg shadow-slate-900/20 active:scale-95 overflow-hidden"
                                     >
-                                        Dashboard
-                                    </Link>
+                                        <div className="absolute inset-0 bg-gradient-to-r from-smaba-500/20 to-emerald-500/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                        <span className="relative flex items-center gap-2">
+                                            Login
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                                            </svg>
+                                        </span>
+                                    </button>
                                 )}
-                                <Link
-                                    href={route('logout')}
-                                    method="post"
-                                    as="button"
-                                    className="rounded-xl bg-slate-200 px-4 py-2 text-sm font-bold text-slate-700 transition-all hover:bg-slate-300"
-                                >
-                                    Log Out
-                                </Link>
-                            </>
-                        ) : (
-                            <button
-                                type="button"
-                                onClick={() => setIsLoginModalOpen(true)}
-                                className="rounded-xl bg-indigo-700 px-5 py-2.5 text-sm font-bold text-white transition-all hover:bg-indigo-800 shadow-md shadow-indigo-500/10 active:scale-95 cursor-pointer"
-                            >
-                                Login
-                            </button>
-                        )}
+                            </div>
+                        </div>
                     </div>
                 </nav>
 
-                {/* Main Content (constrained height, overflow hidden) */}
-                <main className="relative z-10 flex-1 flex items-center justify-center py-4 px-6 overflow-hidden">
+                {/* --- MAIN CONTENT AREA --- */}
+                <main className="relative z-10 flex-1 flex items-center justify-center py-8 px-6">
                     <div className="w-full max-w-7xl mx-auto h-full flex flex-col justify-center">
                         
                         {/* ── Scenario 1: GUEST / GURU (Tampilan Pencarian QR Code) ── */}
                         {(!user || !isAdmin) && (
-                            <div className="grid grid-cols-1 gap-12 lg:grid-cols-12 items-center">
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-20 items-center">
                                 
-                                {/* Text Hero & Deskripsi */}
-                                <div className="lg:col-span-7 space-y-4 text-center lg:text-left" data-aos="fade-right">
-                                    <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-4 py-1 text-xs font-bold text-indigo-600 border border-indigo-100">
-                                        <span className="flex h-2 w-2 rounded-full bg-indigo-500 animate-pulse"></span>
-                                        E-Presensi SMABA
+                                {/* ── Left Column: Premium Typography & Copywriting ── */}
+                                <div className="lg:col-span-7 space-y-8 text-center lg:text-left">
+                                    <div className="inline-flex items-center gap-3 rounded-full bg-white px-4 py-2 text-xs font-bold text-smaba-700 border border-slate-100 shadow-sm shadow-smaba-500/5">
+                                        <span className="flex h-2.5 w-2.5 relative">
+                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-smaba-400 opacity-75"></span>
+                                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-smaba-500"></span>
+                                        </span>
+                                        Layanan Administrasi Digital Terpadu
                                     </div>
-                                    <h1 className="text-3xl font-extrabold tracking-tight text-slate-950 sm:text-5xl leading-tight">
-                                        Cari &amp; Cetak <br />
-                                        QR Code Presensi Anda
-                                    </h1>
-                                    <p className="text-sm text-slate-600 max-w-xl font-medium leading-relaxed">
-                                        Masukkan NIP (untuk Guru/Staf) atau Nama Lengkap Anda pada kolom pencarian di samping untuk menampilkan, mencetak, atau mengunduh QR Code pribadi Anda.
+                                    
+                                    <h2 className="text-5xl font-black tracking-tight text-slate-900 sm:text-7xl leading-[1.05]">
+                                        Sistem Presensi <br />
+                                        <span className="relative inline-block mt-2">
+                                            <span className="relative z-10 text-transparent bg-clip-text bg-gradient-to-r from-smaba-600 via-emerald-500 to-teal-500">
+                                                Cerdas &amp; Terintegrasi
+                                            </span>
+                                        </span>
+                                    </h2>
+                                    
+                                    <p className="text-base text-slate-600 max-w-2xl font-medium leading-relaxed mx-auto lg:mx-0">
+                                        Selamat datang di portal <strong className="font-bold text-slate-800">E-Presensi SMA Negeri 1 Babat</strong>. 
+                                        Dapatkan akses cepat ke QR Code identitas Anda untuk keperluan absensi kegiatan sekolah. Masukkan Nama Lengkap atau NIP Anda untuk mencetak atau mengunduh kode presensi pribadi.
                                     </p>
                                     
-                                    <div className="flex items-center gap-4 pt-2 justify-center lg:justify-start">
-                                        <div className="flex items-center gap-2 text-xs text-slate-500 font-semibold">
-                                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white border border-slate-200 text-indigo-600 font-bold shadow-sm">1</span>
-                                            Cari Identitas
+                                    <div className="flex flex-wrap items-center gap-6 pt-2 justify-center lg:justify-start">
+                                        <div className="flex flex-col gap-2">
+                                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm border border-slate-100 text-smaba-600">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                                </svg>
+                                            </div>
+                                            <span className="text-xs font-bold text-slate-700">1. Cari Data</span>
                                         </div>
-                                        <div className="flex items-center gap-2 text-xs text-slate-500 font-semibold">
-                                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white border border-slate-200 text-indigo-600 font-bold shadow-sm">2</span>
-                                            Cetak/Unduh QR
+                                        <div className="w-8 h-[2px] bg-slate-200 rounded-full hidden sm:block"></div>
+                                        <div className="flex flex-col gap-2">
+                                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm border border-slate-100 text-emerald-500">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                                </svg>
+                                            </div>
+                                            <span className="text-xs font-bold text-slate-700">2. Unduh QR</span>
                                         </div>
-                                        <div className="flex items-center gap-2 text-xs text-slate-500 font-semibold">
-                                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white border border-slate-200 text-indigo-600 font-bold shadow-sm">3</span>
-                                            Scan di Meja Panitia
+                                        <div className="w-8 h-[2px] bg-slate-200 rounded-full hidden sm:block"></div>
+                                        <div className="flex flex-col gap-2">
+                                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm border border-slate-100 text-teal-500">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                                                </svg>
+                                            </div>
+                                            <span className="text-xs font-bold text-slate-700">3. Scan di Lokasi</span>
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Form Pencarian + Kartu Tampilan QR */}
-                                <div className="lg:col-span-5 space-y-4" data-aos="fade-left">
-                                    {/* Form Pencarian */}
-                                    <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-xl">
-                                        <h3 className="text-sm font-bold mb-3 text-slate-800">Cari Kartu Presensi</h3>
-                                        <form onSubmit={handleLookup} className="space-y-3">
-                                            <div className="relative" ref={suggestionsRef}>
-                                                <input
-                                                    type="text"
-                                                    placeholder="Masukkan NIP atau Nama Anda..."
-                                                    value={searchQuery}
-                                                    onChange={(e) => handleInputChange(e.target.value)}
-                                                    onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
-                                                    className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-4 pr-12 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/10 font-medium"
-                                                    required
-                                                    autoComplete="off"
-                                                />
-                                                <button
-                                                    type="submit"
-                                                    disabled={isSearching}
-                                                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg bg-indigo-700 p-2 text-white transition-colors hover:bg-indigo-800 disabled:opacity-50"
-                                                >
-                                                    {isSearching ? (
-                                                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></div>
-                                                    ) : (
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                                        </svg>
-                                                    )}
-                                                </button>
+                                {/* ── Right Column: Interactive Search Card ── */}
+                                <div className="lg:col-span-5 relative">
+                                    {/* Decorative elements behind card */}
+                                    <div className="absolute -inset-4 bg-gradient-to-r from-smaba-400 to-emerald-400 rounded-[40px] blur-2xl opacity-20"></div>
+                                    
+                                    <div className="bg-white rounded-[32px] p-8 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] relative z-20 border border-slate-100/80">
+                                        <div className="mb-8">
+                                            <h3 className="text-xl font-black text-slate-900 mb-2">Akses QR Code</h3>
+                                            <p className="text-sm text-slate-500 font-medium">Temukan kartu identitas digital Anda</p>
+                                        </div>
+
+                                        <form onSubmit={handleLookup} className="space-y-4">
+                                            <div className="relative group" ref={suggestionsRef}>
+                                                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 ml-1">Nama Lengkap / NIP</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="Ketik nama untuk mencari..."
+                                                        value={searchQuery}
+                                                        onChange={(e) => handleInputChange(e.target.value)}
+                                                        onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+                                                        className="w-full rounded-2xl border-2 border-slate-100 bg-slate-50/50 py-4 pl-5 pr-14 text-sm text-slate-900 placeholder-slate-400 focus:border-smaba-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-smaba-500/10 font-semibold transition-all"
+                                                        required
+                                                        autoComplete="off"
+                                                    />
+                                                    <button
+                                                        type="submit"
+                                                        disabled={isSearching}
+                                                        className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 flex items-center justify-center rounded-xl bg-gradient-to-br from-smaba-500 to-smaba-600 text-white transition-all hover:shadow-lg hover:shadow-smaba-500/30 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
+                                                    >
+                                                        {isSearching ? (
+                                                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></div>
+                                                        ) : (
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                                            </svg>
+                                                        )}
+                                                    </button>
+                                                </div>
 
                                                 {/* Recommendations Floating Dropdown */}
                                                 {showSuggestions && (
-                                                    <div className="absolute left-0 right-0 mt-2 z-50 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl max-h-48 overflow-y-auto divide-y divide-slate-100 animate-[fadeIn_0.15s_ease-out]">
+                                                    <div className="absolute left-0 right-0 mt-3 z-50 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-2xl shadow-slate-900/10 max-h-60 overflow-y-auto divide-y divide-slate-50 animate-[fadeIn_0.15s_ease-out]">
                                                         {suggestions.map((p) => (
                                                             <div
                                                                 key={p.id}
                                                                 onClick={() => handleSelectSuggestion(p)}
-                                                                className="px-4 py-2.5 text-left transition-colors hover:bg-slate-50 cursor-pointer"
+                                                                className="px-5 py-3 text-left transition-colors hover:bg-slate-50 cursor-pointer group/item"
                                                             >
-                                                                <p className="text-sm font-semibold text-slate-800">{p.nama}</p>
-                                                                <p className="text-[11px] text-indigo-600 font-bold mt-0.5">{p.nis_nip}</p>
+                                                                <p className="text-sm font-bold text-slate-800 group-hover/item:text-smaba-700 transition-colors">{p.nama}</p>
+                                                                <p className="text-[11px] text-slate-500 font-semibold mt-0.5 tracking-wide">{p.nis_nip}</p>
                                                             </div>
                                                         ))}
                                                     </div>
@@ -477,233 +517,240 @@ export default function Welcome({ auth, stats: initialStats, canResetPassword = 
                                         </form>
 
                                         {lookupError && (
-                                            <p className="mt-2.5 text-xs text-red-700 font-medium flex items-center gap-1.5">
-                                                <span className="text-red-500">⚠</span> {lookupError}
-                                            </p>
+                                            <div className="mt-5 rounded-2xl bg-rose-50 border border-rose-100 p-4 flex items-start gap-3 animate-[fadeIn_0.2s_ease-out]">
+                                                <div className="bg-rose-100 rounded-full p-1 mt-0.5">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-rose-600" viewBox="0 0 20 20" fill="currentColor">
+                                                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                                    </svg>
+                                                </div>
+                                                <p className="text-xs text-rose-800 font-semibold leading-relaxed">
+                                                    {lookupError}
+                                                </p>
+                                            </div>
+                                        )}
+                                        
+                                        {/* Tampilan Kartu Hasil QR */}
+                                        {lookupResult && (
+                                            <div className="mt-6 pt-6 border-t border-slate-100 relative animate-[slideIn_0.4s_ease-out]">
+                                                <div className="flex flex-col items-center bg-slate-50/50 rounded-3xl p-6 border border-slate-100/80">
+                                                    <div className="mb-4 flex flex-col items-center text-center">
+                                                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-smaba-100 to-emerald-100 text-smaba-700 font-black text-xl mb-3 shadow-sm border border-white">
+                                                            {lookupResult.nama.charAt(0).toUpperCase()}
+                                                        </div>
+                                                        <h4 className="text-base font-black text-slate-900 leading-tight">{lookupResult.nama}</h4>
+                                                        <p className="text-xs text-slate-500 font-bold mt-1 tracking-wide bg-white px-2 py-0.5 rounded-md shadow-sm border border-slate-100">{lookupResult.nis_nip}</p>
+                                                    </div>
+
+                                                    <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-200 mb-6">
+                                                        <img
+                                                            src={route('participants.qr', lookupResult.id)}
+                                                            alt={`QR Code - ${lookupResult.nama}`}
+                                                            className="h-44 w-44"
+                                                        />
+                                                    </div>
+
+                                                    <div className="flex gap-3 w-full">
+                                                        <a
+                                                            href={route('participants.download.svg', lookupResult.id)}
+                                                            className="flex flex-1 items-center justify-center gap-2 rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-xs font-bold text-slate-700 transition-all hover:bg-slate-50 hover:border-slate-300"
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                                            </svg>
+                                                            Simpan
+                                                        </a>
+                                                        <button
+                                                            onClick={() => handlePrint(lookupResult)}
+                                                            className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-smaba-600 to-emerald-600 px-4 py-3 text-xs font-bold text-white transition-all hover:from-smaba-700 hover:to-emerald-700 shadow-lg shadow-smaba-500/25 active:scale-95"
+                                                        >
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                                            </svg>
+                                                            Cetak
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         )}
                                     </div>
-
-                                    {/* Hasil Pencarian (Kartu QR Code) */}
-                                    {lookupResult && (
-                                        <div className="bg-white border border-indigo-200 rounded-3xl p-5 text-center shadow-2xl animate-[slideIn_0.3s_ease-out] relative overflow-hidden" data-aos="zoom-in">
-                                            <div className="absolute top-0 right-0 w-24 h-24 rounded-full bg-indigo-500/5 blur-2xl pointer-events-none"></div>
-
-                                            <div className="mb-3 flex items-center justify-center gap-3">
-                                                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 font-bold border border-indigo-100">
-                                                    {lookupResult.nama.charAt(0).toUpperCase()}
-                                                </div>
-                                                <div className="text-left">
-                                                    <h4 className="text-sm font-extrabold text-slate-900 leading-tight">{lookupResult.nama}</h4>
-                                                    <p className="text-xs text-indigo-600 font-bold mt-0.5">{lookupResult.nis_nip}</p>
-                                                </div>
-                                            </div>
-
-                                            <div className="my-3 flex items-center justify-center rounded-2xl bg-white p-3 shadow-inner border border-slate-300">
-                                                <img
-                                                    src={route('participants.qr', lookupResult.id)}
-                                                    alt={`QR Code - ${lookupResult.nama}`}
-                                                    className="h-36 w-36"
-                                                />
-                                            </div>
-
-                                            <div className="flex gap-2">
-                                                <a
-                                                    href={route('participants.download.svg', lookupResult.id)}
-                                                    className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100"
-                                                >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                                    </svg>
-                                                    Unduh SVG
-                                                </a>
-                                                <button
-                                                    onClick={() => handlePrint(lookupResult)}
-                                                    className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-indigo-700 px-3 py-2 text-xs font-bold text-white transition-all hover:bg-indigo-800 shadow-md shadow-indigo-500/10"
-                                                >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                                                    </svg>
-                                                    Cetak
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                             </div>
                         )}
 
                         {/* ── Scenario 2: ADMIN (Tampilan QR Scanner utama) ── */}
                         {user && isAdmin && (
-                            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 h-full max-h-[560px] items-stretch">
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full max-h-[600px]">
                                 
-                                {/* ── Left: Scanner + Stats ── */}
-                                <div className="lg:col-span-2 flex flex-col justify-between space-y-4" data-aos="fade-right">
-                                    <div className="flex items-center justify-between flex-none">
-                                        <div>
-                                            <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-0.5 text-xs font-bold text-indigo-600 border border-indigo-100">
-                                                Mode Panitia / Admin
-                                            </span>
-                                            <h2 className="text-xl font-bold mt-1 text-slate-900">Scanner Presensi Utama</h2>
-                                        </div>
-                                        <div>
-                                            {isScanning && (
-                                                <span className="flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-bold text-emerald-600 border border-emerald-100">
-                                                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500"></span>
-                                                    Kamera Aktif
-                                                </span>
-                                            )}
+                                {/* ── Left: Scanner Dashboard ── */}
+                                <div className="lg:col-span-8 flex flex-col space-y-6">
+                                    <div className="flex items-end justify-between bg-white rounded-[24px] p-6 shadow-sm border border-slate-100 relative overflow-hidden">
+                                        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-smaba-50 to-transparent rounded-bl-full"></div>
+                                        <div className="relative z-10">
+                                            <div className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-3 py-1 text-[10px] font-bold text-white uppercase tracking-wider mb-2">
+                                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
+                                                Dashboard Admin
+                                            </div>
+                                            <h2 className="text-3xl font-black text-slate-900 tracking-tight">Kamera Presensi</h2>
+                                            <p className="text-sm text-slate-500 font-medium mt-1">Arahkan QR Code peserta ke kamera untuk memvalidasi kehadiran.</p>
                                         </div>
                                     </div>
 
-                                    {/* Live Stats Bar (compact) */}
-                                    <div className="grid grid-cols-3 gap-3 flex-none">
-                                        <div className="rounded-xl bg-white border border-slate-200 p-3 shadow-sm">
-                                            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Total Peserta</p>
-                                            <p className="text-xl font-extrabold text-slate-800 mt-0.5">{stats.total}</p>
+                                    {/* Stats Cards */}
+                                    <div className="grid grid-cols-3 gap-4">
+                                        <div className="bg-white rounded-[24px] p-5 shadow-sm border border-slate-100 flex flex-col justify-center">
+                                            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Data</p>
+                                            <p className="text-3xl font-black text-slate-800 mt-1">{stats.total}</p>
                                         </div>
-                                        <div className="rounded-xl bg-white border border-slate-200 p-3 shadow-sm">
-                                            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Hadir</p>
-                                            <p className="text-xl font-extrabold text-emerald-600 mt-0.5">{stats.hadir}</p>
+                                        <div className="bg-gradient-to-br from-smaba-600 to-emerald-600 rounded-[24px] p-5 shadow-md shadow-smaba-500/20 text-white flex flex-col justify-center">
+                                            <p className="text-[11px] font-bold text-emerald-100 uppercase tracking-wider">Telah Hadir</p>
+                                            <p className="text-3xl font-black mt-1">{stats.hadir}</p>
                                         </div>
-                                        <div className="rounded-xl bg-white border border-slate-200 p-3 shadow-sm flex flex-col justify-between">
-                                            <div className="flex items-center justify-between">
-                                                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Progress</p>
-                                                <p className="text-xs font-bold text-indigo-600">{attendancePercentage}%</p>
+                                        <div className="bg-white rounded-[24px] p-5 shadow-sm border border-slate-100 flex flex-col justify-center">
+                                            <div className="flex items-end justify-between mb-2">
+                                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Progress</p>
+                                                <p className="text-base font-black text-smaba-600 leading-none">{attendancePercentage}%</p>
                                             </div>
-                                            <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                                            <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
                                                 <div
-                                                    className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-indigo-700 transition-all duration-700"
+                                                    className="h-full rounded-full bg-gradient-to-r from-smaba-400 to-emerald-500 transition-all duration-1000 ease-out"
                                                     style={{ width: `${attendancePercentage}%` }}
                                                 />
                                             </div>
                                         </div>
                                     </div>
 
-                                    {/* Scanner Card (fixed vertical fit) */}
-                                    <div className="overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-md flex-1 flex flex-col">
-                                        <div className="bg-gradient-to-r from-indigo-700 to-indigo-800 px-4 py-2 flex-none">
-                                            <div className="flex items-center justify-between text-white">
-                                                <div className="flex items-center gap-2">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                                                    </svg>
-                                                    <span className="text-xs font-bold">
-                                                        {cooldownActive ? 'Memproses...' : 'Arahkan ke QR Code'}
-                                                    </span>
+                                    {/* Scanner Camera Box */}
+                                    <div className="bg-white rounded-[32px] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex-1 flex flex-col relative overflow-hidden">
+                                        
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-smaba-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                                </svg>
+                                                Pratinjau Kamera
+                                            </h3>
+                                            {isScanning && (
+                                                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-rose-50 text-rose-600">
+                                                    <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse"></span>
+                                                    <span className="text-[11px] font-bold uppercase tracking-wider">Live</span>
                                                 </div>
-                                                {cooldownActive && (
-                                                    <div className="h-3 w-3 animate-spin rounded-full border-2 border-white/30 border-t-white"></div>
-                                                )}
-                                            </div>
+                                            )}
                                         </div>
 
-                                        <div className="p-3 bg-white flex-1 flex flex-col justify-center overflow-hidden">
-                                            {/* Camera View Wrapper (fixed height to fit page) */}
-                                            <div className="relative overflow-hidden rounded-xl bg-slate-900 w-full flex-1 max-h-[300px] flex items-center justify-center">
-                                                {isScanning && (
-                                                    <div id="qr-reader" className="w-full text-center" />
-                                                )}
+                                        <div className="relative flex-1 rounded-[24px] bg-slate-900 overflow-hidden shadow-inner flex items-center justify-center min-h-[250px]">
+                                            {isScanning && (
+                                                <div id="qr-reader" className="w-full h-full object-cover" />
+                                            )}
 
-                                                {isScanning && !isCameraLoading && (
-                                                    <div className="scanner-search-overlay" aria-hidden="true">
-                                                        <div className="scanner-search-box">
-                                                            <span className="scanner-search-corner scanner-search-corner-tl"></span>
-                                                            <span className="scanner-search-corner scanner-search-corner-tr"></span>
-                                                            <span className="scanner-search-corner scanner-search-corner-bl"></span>
-                                                            <span className="scanner-search-corner scanner-search-corner-br"></span>
-                                                            <span className="scanner-search-line"></span>
-                                                        </div>
+                                            {isScanning && !isCameraLoading && (
+                                                <div className="scanner-search-overlay" aria-hidden="true">
+                                                    <div className="scanner-search-box">
+                                                        <span className="scanner-search-corner scanner-search-corner-tl"></span>
+                                                        <span className="scanner-search-corner scanner-search-corner-tr"></span>
+                                                        <span className="scanner-search-corner scanner-search-corner-bl"></span>
+                                                        <span className="scanner-search-corner scanner-search-corner-br"></span>
+                                                        <span className="scanner-search-line"></span>
                                                     </div>
-                                                )}
+                                                </div>
+                                            )}
 
-                                                {isScanning && isCameraLoading && (
-                                                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900 text-slate-200 z-10">
-                                                        <div className="mb-2 h-6 w-6 animate-spin rounded-full border-2 border-white/20 border-t-indigo-500"></div>
-                                                        <p className="text-xs text-slate-300">Menghubungkan ke kamera...</p>
-                                                    </div>
-                                                )}
-                                            </div>
+                                            {isScanning && isCameraLoading && (
+                                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/80 backdrop-blur-sm z-10">
+                                                    <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-700 border-t-smaba-500 mb-4"></div>
+                                                    <p className="text-xs font-bold text-white tracking-widest uppercase">Inisialisasi Kamera</p>
+                                                </div>
+                                            )}
 
                                             {!isScanning && (
-                                                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 py-8 flex-1">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="mb-2 h-12 w-12 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                    </svg>
-                                                    <p className="text-xs text-slate-700 font-bold">Kamera dinonaktifkan</p>
+                                                <div className="flex flex-col items-center justify-center text-center p-8">
+                                                    <div className="h-16 w-16 rounded-full bg-slate-800 flex items-center justify-center mb-4 text-slate-500">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                                                        </svg>
+                                                    </div>
+                                                    <p className="text-sm font-bold text-slate-300 mb-1">Kamera Dinonaktifkan</p>
+                                                    <p className="text-xs text-slate-500 mb-6">Sistem menunggu untuk mengaktifkan pemindai QR Code</p>
                                                     <button
                                                         onClick={startScanner}
-                                                        className="mt-3 rounded-xl bg-indigo-700 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-800 transition-colors shadow-md shadow-indigo-500/10"
+                                                        className="rounded-xl bg-smaba-600 px-6 py-3 text-sm font-bold text-white hover:bg-smaba-700 transition-all shadow-lg active:scale-95"
                                                     >
-                                                        Nyalakan Kamera
-                                                    </button>
-                                                </div>
-                                            )}
-
-                                            {error && (
-                                                <div className="mt-2 rounded-xl bg-red-50 border border-red-200 p-2 text-center flex-none">
-                                                    <p className="text-xs font-semibold text-red-700">{error}</p>
-                                                </div>
-                                            )}
-
-                                            {isScanning && (
-                                                <div className="mt-2 flex-none">
-                                                    <button
-                                                        onClick={stopScanner}
-                                                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-50 border border-red-200 px-3 py-1.5 text-xs font-bold text-red-600 transition-all hover:bg-red-100/60"
-                                                    >
-                                                        Hentikan Pemindaian
+                                                        Mulai Pemindaian
                                                     </button>
                                                 </div>
                                             )}
                                         </div>
+
+                                        {error && (
+                                            <div className="mt-4 p-3 rounded-xl bg-rose-50 border border-rose-100 text-center">
+                                                <p className="text-xs font-bold text-rose-600">{error}</p>
+                                            </div>
+                                        )}
+
+                                        {isScanning && (
+                                            <div className="mt-4 flex justify-end">
+                                                <button
+                                                    onClick={stopScanner}
+                                                    className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors"
+                                                >
+                                                    Hentikan Kamera
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
-                                {/* ── Right: Scan History (fixed height) ── */}
-                                <div className="lg:col-span-1 h-full flex flex-col overflow-hidden" data-aos="fade-left">
-                                    <div className="overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-lg flex-1 flex flex-col">
-                                        <div className="border-b border-slate-200 px-4 py-2.5 flex items-center justify-between bg-slate-50 flex-none">
-                                            <h3 className="text-xs font-extrabold text-slate-800">Riwayat Pemindaian</h3>
+                                {/* ── Right: Live Scan History ── */}
+                                <div className="lg:col-span-4 h-full">
+                                    <div className="bg-white rounded-[32px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 h-full flex flex-col overflow-hidden">
+                                        <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                                            <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-smaba-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                                Aktivitas Real-time
+                                            </h3>
                                             {scanHistory.length > 0 && (
                                                 <button
                                                     onClick={() => setScanHistory([])}
-                                                    className="text-xs text-slate-600 hover:text-slate-900 font-bold transition-colors"
+                                                    className="text-[10px] font-bold uppercase tracking-wider text-slate-400 hover:text-rose-500 transition-colors"
                                                 >
                                                     Bersihkan
                                                 </button>
                                             )}
                                         </div>
 
-                                        <div className="flex-1 overflow-y-auto divide-y divide-slate-100 max-h-[460px]">
+                                        <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-slate-50/30">
                                             {scanHistory.length === 0 ? (
-                                                <div className="flex flex-col items-center justify-center py-20 text-center text-slate-700 h-full">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="mb-2 h-8 w-8 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                                                    </svg>
-                                                    <p className="text-xs font-bold">Menunggu data scan...</p>
+                                                <div className="flex flex-col items-center justify-center h-full text-center text-slate-500">
+                                                    <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                                        </svg>
+                                                    </div>
+                                                    <p className="text-sm font-bold text-slate-700">Belum ada aktivitas</p>
+                                                    <p className="text-xs mt-1 text-slate-400">Log scan peserta akan muncul di sini</p>
                                                 </div>
                                             ) : (
                                                 scanHistory.map((item, index) => (
                                                     <div
                                                         key={item.id}
-                                                        className={`flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-slate-50/50 ${index === 0 ? 'bg-indigo-50/30' : ''}`}
+                                                        className={`flex items-start gap-3 p-4 rounded-2xl transition-all ${index === 0 ? 'bg-white shadow-md border border-slate-100 scale-[1.02] relative z-10' : 'bg-white/50 hover:bg-white border border-transparent'}`}
                                                     >
-                                                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                                                            item.status === 'success' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
-                                                            item.status === 'already' ? 'bg-amber-100 text-amber-700 border border-emerald-200' :
-                                                            'bg-rose-100 text-rose-700 border border-rose-200'
+                                                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-black shadow-sm ${
+                                                            item.status === 'success' ? 'bg-gradient-to-br from-emerald-400 to-emerald-500 text-white' :
+                                                            item.status === 'already' ? 'bg-gradient-to-br from-amber-400 to-amber-500 text-white' :
+                                                            'bg-gradient-to-br from-rose-400 to-rose-500 text-white'
                                                         }`}>
                                                             {item.nama?.charAt(0)?.toUpperCase() || '?'}
                                                         </div>
-                                                        <div className="min-w-0 flex-1">
-                                                            <p className="truncate text-xs font-bold text-slate-800 leading-tight">{item.nama}</p>
-                                                            <div className="flex items-center gap-1.5 mt-0.5">
-                                                                <span className="text-[10px] text-slate-600 font-semibold">{item.nis_nip}</span>
+                                                        <div className="min-w-0 flex-1 pt-0.5">
+                                                            <p className="truncate text-sm font-bold text-slate-800 leading-none">{item.nama}</p>
+                                                            <div className="flex items-center gap-2 mt-2">
+                                                                <span className="text-[10px] text-slate-500 font-semibold">{item.nis_nip}</span>
                                                                 {getStatusBadge(item.status)}
                                                             </div>
                                                         </div>
-                                                        <span className="shrink-0 text-[10px] text-slate-500 font-bold">{item.timestamp}</span>
+                                                        <span className="shrink-0 text-[10px] text-slate-400 font-bold">{item.timestamp}</span>
                                                     </div>
                                                 ))
                                             )}
@@ -716,106 +763,103 @@ export default function Welcome({ auth, stats: initialStats, canResetPassword = 
                     </div>
                 </main>
 
-                {/* Footer (compact, flex-none) */}
-                <footer className="relative z-10 border-t border-slate-200 bg-white py-3.5 text-center text-xs text-slate-500 font-medium">
-                    <p>&copy; {new Date().getFullYear()} E-Presensi SMABA. Hak Cipta Dilindungi.</p>
+                {/* --- FOOTER --- */}
+                <footer className="relative z-10 py-6 text-center mt-auto border-t border-slate-200/60 bg-white/40 backdrop-blur-sm">
+                    <p className="text-xs font-bold text-slate-500">
+                        &copy; {new Date().getFullYear()} E-Presensi SMA Negeri 1 Babat. 
+                        <span className="font-medium ml-1 text-slate-400">Dikelola oleh Tim IT Sekolah.</span>
+                    </p>
                 </footer>
             </div>
 
+            {/* --- INLINE STYLES FOR ANIMATIONS --- */}
             <style>{`
-                @keyframes slideIn {
-                    from { opacity: 0; transform: translateY(10px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
                 @keyframes fadeIn {
-                    from { opacity: 0; transform: translateY(-5px); }
+                    from { opacity: 0; transform: translateY(-4px); }
                     to { opacity: 1; transform: translateY(0); }
                 }
-                .qr-svg-container svg {
-                    width: 100% !important;
-                    height: auto !important;
+                @keyframes slideIn {
+                    from { opacity: 0; transform: translateY(10px) scale(0.98); }
+                    to { opacity: 1; transform: translateY(0) scale(1); }
                 }
                 .scanner-search-overlay {
                     position: absolute;
                     inset: 0;
-                    z-index: 5;
                     pointer-events: none;
                     overflow: hidden;
-                    background:
-                        radial-gradient(circle at center, transparent 0 34%, rgba(3, 7, 18, 0.18) 35% 100%);
+                    background: radial-gradient(circle at center, transparent 0 35%, rgba(15, 23, 42, 0.4) 36% 100%);
                 }
                 .scanner-search-box {
                     position: absolute;
                     left: 50%;
                     top: 50%;
-                    width: clamp(130px, 42%, 220px);
+                    width: clamp(160px, 50%, 260px);
                     aspect-ratio: 1 / 1;
-                    border: 2px solid rgba(99, 102, 241, 0.95);
-                    border-radius: 18px;
-                    box-shadow: 0 0 0 999px rgba(3, 7, 18, 0.12), 0 0 28px rgba(99, 102, 241, 0.45);
+                    border: 2px solid rgba(16, 185, 129, 0.8);
+                    border-radius: 32px;
+                    box-shadow: 0 0 0 999px rgba(15, 23, 42, 0.5), 0 0 40px rgba(16, 185, 129, 0.3);
                     transform: translate(-50%, -50%);
-                    animation: qr-search-box 4.8s ease-in-out infinite;
+                    animation: qr-search-box 6s ease-in-out infinite;
                 }
                 .scanner-search-line {
                     position: absolute;
-                    left: 12%;
-                    right: 12%;
-                    top: 14%;
-                    height: 3px;
+                    left: 10%;
+                    right: 10%;
+                    top: 15%;
+                    height: 4px;
                     border-radius: 999px;
-                    background: linear-gradient(90deg, transparent, #22c55e, #a7f3d0, transparent);
-                    box-shadow: 0 0 18px rgba(34, 197, 94, 0.9);
-                    animation: qr-search-line 1.6s ease-in-out infinite;
+                    background: linear-gradient(90deg, transparent, #34d399, #10b981, transparent);
+                    box-shadow: 0 0 20px rgba(52, 211, 153, 0.8);
+                    animation: qr-search-line 2s ease-in-out infinite;
                 }
                 .scanner-search-corner {
                     position: absolute;
-                    width: 24px;
-                    height: 24px;
+                    width: 32px;
+                    height: 32px;
                     border-color: #ffffff;
-                    filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.85));
+                    filter: drop-shadow(0 0 10px rgba(16, 185, 129, 0.6));
                 }
                 .scanner-search-corner-tl {
                     left: -2px;
                     top: -2px;
-                    border-left: 4px solid;
-                    border-top: 4px solid;
-                    border-top-left-radius: 18px;
+                    border-left: 5px solid;
+                    border-top: 5px solid;
+                    border-top-left-radius: 32px;
                 }
                 .scanner-search-corner-tr {
                     right: -2px;
                     top: -2px;
-                    border-right: 4px solid;
-                    border-top: 4px solid;
-                    border-top-right-radius: 18px;
+                    border-right: 5px solid;
+                    border-top: 5px solid;
+                    border-top-right-radius: 32px;
                 }
                 .scanner-search-corner-bl {
                     left: -2px;
                     bottom: -2px;
-                    border-left: 4px solid;
-                    border-bottom: 4px solid;
-                    border-bottom-left-radius: 18px;
+                    border-left: 5px solid;
+                    border-bottom: 5px solid;
+                    border-bottom-left-radius: 32px;
                 }
                 .scanner-search-corner-br {
                     right: -2px;
                     bottom: -2px;
-                    border-right: 4px solid;
-                    border-bottom: 4px solid;
-                    border-bottom-right-radius: 18px;
+                    border-right: 5px solid;
+                    border-bottom: 5px solid;
+                    border-bottom-right-radius: 32px;
                 }
                 @keyframes qr-search-box {
                     0%, 100% { transform: translate(-50%, -50%); }
-                    20% { transform: translate(-68%, -58%); }
-                    40% { transform: translate(-35%, -60%); }
-                    60% { transform: translate(-38%, -36%); }
-                    80% { transform: translate(-64%, -34%); }
+                    25% { transform: translate(-60%, -55%); }
+                    50% { transform: translate(-40%, -45%); }
+                    75% { transform: translate(-45%, -55%); }
                 }
                 @keyframes qr-search-line {
-                    0%, 100% { top: 14%; opacity: 0.45; }
-                    50% { top: 84%; opacity: 1; }
+                    0%, 100% { top: 15%; opacity: 0.2; }
+                    50% { top: 85%; opacity: 1; }
                 }
             `}</style>
 
-            {/* Login Popup Modal with Backdrop Blur */}
+            {/* Login Popup Modal */}
             <LoginModal
                 isOpen={isLoginModalOpen}
                 onClose={() => setIsLoginModalOpen(false)}

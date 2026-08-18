@@ -4,15 +4,21 @@ import { useState } from 'react';
 
 export default function ReportIndex({ workcodes = [], selectedWorkcodeId, selectedWorkcode, stats, attendances = [] }) {
     const [searchQuery, setSearchQuery] = useState('');
+    const [statusFilter, setStatusFilter] = useState('');
+
+    const uniqueStatuses = [...new Set(attendances.map(a => a.status_pegawai).filter(Boolean))].sort();
 
     const handleWorkcodeChange = (workcodeId) => {
         router.get(route('report'), { workcode_id: workcodeId }, { preserveState: true, preserveScroll: true });
     };
 
     const filteredAttendances = attendances.filter(
-        (a) =>
-            a.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            a.nis_nip.toLowerCase().includes(searchQuery.toLowerCase())
+        (a) => {
+            const matchSearch = a.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                a.nis_nip.toLowerCase().includes(searchQuery.toLowerCase());
+            const matchStatus = statusFilter === '' || a.status_pegawai === statusFilter;
+            return matchSearch && matchStatus;
+        }
     );
 
     const attendancePercentage = stats.total > 0 ? Math.round((stats.hadir / stats.total) * 100) : 0;
@@ -29,11 +35,11 @@ export default function ReportIndex({ workcodes = [], selectedWorkcodeId, select
                 <td style="padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.status_pegawai || '-'}</td>
                 ${selectedWorkcode.kategori === 'harian' 
                     ? `
-                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.total_hadir || '0'}</td>
                         <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.total_alpha || '0'}</td>
                         <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.total_izin || '0'}</td>
                         <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.total_sakit || '0'}</td>
                         <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.total_lupa_absen || '0'}</td>
+                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.total_menit_terlambat ? a.total_menit_terlambat + ' Menit' : '0 Menit'}</td>
                     ` 
                     : `
                         <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.waktu_hadir}</td>
@@ -46,14 +52,14 @@ export default function ReportIndex({ workcodes = [], selectedWorkcodeId, select
         const tableHeadersHtml = selectedWorkcode.kategori === 'harian'
             ? `
                 <th style="width: 35px;">No</th>
-                <th>Nama Lengkap</th>
+                <th style="width: 250px;">Nama Lengkap</th>
                 <th style="width: 150px;">NIP</th>
-                <th style="width: 130px;">Status Pegawai</th>
-                <th style="width: 50px;">Hadir</th>
+                <th style="width: 90px;">Status Pegawai</th>
                 <th style="width: 50px;">Alpha</th>
                 <th style="width: 50px;">Izin</th>
                 <th style="width: 50px;">Sakit</th>
                 <th style="width: 60px;">Lupa Absen</th>
+                <th style="width: 90px;">Total Terlambat</th>
             `
             : `
                 <th style="width: 35px;">No</th>
@@ -227,7 +233,7 @@ export default function ReportIndex({ workcodes = [], selectedWorkcodeId, select
                 </div>
 
                 <div class="title-doc">
-                    <h2>REKAP PRESENSI ${selectedWorkcode.nama_workcode.toUpperCase()}</h2>
+                    <h2>REKAP PRESENSI BULAN ${new Date().toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }).toUpperCase()}</h2>
                 </div>
 
                 <div class="meta-info">
@@ -625,9 +631,9 @@ export default function ReportIndex({ workcodes = [], selectedWorkcodeId, select
                         </div>
                     </div>
 
-                    {/* Search (flex-none) */}
-                    <div className="mb-2 flex-none" data-aos="fade-up" data-aos-delay="150">
-                        <div className="relative">
+                    {/* Search and Filters (flex-none) */}
+                    <div className="mb-2 flex flex-col sm:flex-row gap-3 flex-none" data-aos="fade-up" data-aos-delay="150">
+                        <div className="relative flex-1">
                             <svg xmlns="http://www.w3.org/2000/svg" className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                             </svg>
@@ -638,6 +644,18 @@ export default function ReportIndex({ workcodes = [], selectedWorkcodeId, select
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-11 pr-4 text-sm text-slate-800 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 shadow-sm font-medium"
                             />
+                        </div>
+                        <div className="sm:w-64">
+                            <select
+                                value={statusFilter}
+                                onChange={(e) => setStatusFilter(e.target.value)}
+                                className="w-full rounded-xl border border-slate-200 bg-white py-2.5 px-4 text-sm text-slate-800 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 font-medium cursor-pointer"
+                            >
+                                <option value="">Semua Status Pegawai</option>
+                                {uniqueStatuses.map((status, idx) => (
+                                    <option key={idx} value={status}>{status}</option>
+                                ))}
+                            </select>
                         </div>
                     </div>
 
@@ -653,11 +671,11 @@ export default function ReportIndex({ workcodes = [], selectedWorkcodeId, select
                                         <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Status Pegawai</th>
                                         {selectedWorkcode?.kategori === 'harian' ? (
                                             <>
-                                                <th className="px-6 py-3 text-center text-xs font-extrabold uppercase tracking-wider text-slate-500">Hadir</th>
                                                 <th className="px-6 py-3 text-center text-xs font-extrabold uppercase tracking-wider text-slate-500">Alpha</th>
                                                 <th className="px-6 py-3 text-center text-xs font-extrabold uppercase tracking-wider text-slate-500">Izin</th>
                                                 <th className="px-6 py-3 text-center text-xs font-extrabold uppercase tracking-wider text-slate-500">Sakit</th>
                                                 <th className="px-6 py-3 text-center text-xs font-extrabold uppercase tracking-wider text-slate-500">Lupa Absen</th>
+                                                <th className="px-6 py-3 text-center text-xs font-extrabold uppercase tracking-wider text-slate-500">Total Terlambat</th>
                                                 <th className="px-6 py-3 text-center text-xs font-extrabold uppercase tracking-wider text-slate-500">Aksi</th>
                                             </>
                                         ) : (
@@ -694,11 +712,11 @@ export default function ReportIndex({ workcodes = [], selectedWorkcodeId, select
                                                 <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-600">{attendance.status_pegawai || '-'}</td>
                                                 {selectedWorkcode?.kategori === 'harian' ? (
                                                     <>
-                                                        <td className="whitespace-nowrap px-6 py-3.5 text-xs text-emerald-600 font-bold text-center">{attendance.total_hadir || '0'}</td>
                                                         <td className="whitespace-nowrap px-6 py-3.5 text-xs text-red-600 font-bold text-center">{attendance.total_alpha || '0'}</td>
                                                         <td className="whitespace-nowrap px-6 py-3.5 text-xs text-amber-600 font-bold text-center">{attendance.total_izin || '0'}</td>
                                                         <td className="whitespace-nowrap px-6 py-3.5 text-xs text-blue-600 font-bold text-center">{attendance.total_sakit || '0'}</td>
                                                         <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-600 font-bold text-center">{attendance.total_lupa_absen || '0'}</td>
+                                                        <td className="whitespace-nowrap px-6 py-3.5 text-xs text-orange-600 font-bold text-center">{attendance.total_menit_terlambat ? attendance.total_menit_terlambat + ' Menit' : '0 Menit'}</td>
                                                         <td className="whitespace-nowrap px-6 py-3.5 text-center">
                                                             <button 
                                                                 onClick={() => handlePrintIndividualRecap(attendance.participant_id, attendance.nama)}

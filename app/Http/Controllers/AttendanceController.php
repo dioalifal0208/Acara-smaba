@@ -176,12 +176,20 @@ class AttendanceController extends Controller
                 }
 
                 if ($attendance) {
-                    $attendance->update(['waktu_pulang' => now()]);
+                    $attendance->update([
+                        'waktu_pulang' => now(),
+                        // Status tetap 'hadir' karena sudah ada waktu_hadir sebelumnya (jika bukan lupa absen/alpha).
+                        // Jika sebelumnya lupa absen masuk, kita tetap catat pulang dan biarkan status lupa absen/hadir?
+                        // Karena absen masuk wajib, jika absen masuk kosong dan absen pulang diisi, 
+                        // kita update status jadi 'lupa_absen' di cron nanti. Tapi sementara biarkan.
+                    ]);
                 } else {
+                    // Jika belum pernah absen datang, tapi langsung absen pulang:
                     $attendance = Attendance::create([
                         'workcode_id' => $activeWorkcode->id,
                         'participant_id' => $participant->id,
                         'waktu_pulang' => now(),
+                        'status' => 'lupa_absen' // lupa absen masuk
                     ]);
                 }
 
@@ -245,12 +253,16 @@ class AttendanceController extends Controller
                 }
 
                 if ($attendance) {
-                    $attendance->update(['waktu_hadir' => now()]);
+                    $attendance->update([
+                        'waktu_hadir' => now(),
+                        'status' => 'hadir'
+                    ]);
                 } else {
                     $attendance = Attendance::create([
                         'workcode_id' => $activeWorkcode->id,
                         'participant_id' => $participant->id,
                         'waktu_hadir' => now(),
+                        'status' => 'hadir'
                     ]);
                 }
 
@@ -377,19 +389,35 @@ class AttendanceController extends Controller
             if ($selectedWorkcode && $selectedWorkcode->kategori === 'harian') {
                 $allParticipants = Participant::all();
                 $grouped = $attendancesRaw->groupBy('participant_id');
+                $jamDatangSelesai = $selectedWorkcode->jam_datang_selesai;
                 
-                $attendances = $allParticipants->map(function ($participant) use ($grouped) {
+                $attendances = $allParticipants->map(function ($participant) use ($grouped, $jamDatangSelesai) {
                     $participantAttendances = $grouped->get($participant->id) ?? collect();
+                    
+                    $totalMenitTerlambat = 0;
+                    if ($jamDatangSelesai) {
+                        foreach ($participantAttendances as $att) {
+                            if ($att->waktu_hadir) {
+                                $waktuHadirTime = $att->waktu_hadir->format('H:i:s');
+                                if ($waktuHadirTime > $jamDatangSelesai) {
+                                    $target = \Carbon\Carbon::parse($att->waktu_hadir->format('Y-m-d') . ' ' . $jamDatangSelesai);
+                                    $diff = (int) max(1, round($target->diffInMinutes($att->waktu_hadir)));
+                                    $totalMenitTerlambat += $diff;
+                                }
+                            }
+                        }
+                    }
+
                     return [
                         'participant_id' => $participant->id,
                         'nama' => $participant->nama,
                         'nis_nip' => $participant->nis_nip ?? '-',
                         'status_pegawai' => $participant->status ?? '-',
-                        'total_hadir' => $participantAttendances->where('status', 'hadir')->count(),
                         'total_alpha' => $participantAttendances->where('status', 'alpha')->count(),
                         'total_izin' => $participantAttendances->where('status', 'izin')->count(),
                         'total_sakit' => $participantAttendances->where('status', 'sakit')->count(),
                         'total_lupa_absen' => $participantAttendances->where('status', 'lupa_absen')->count(),
+                        'total_menit_terlambat' => $totalMenitTerlambat,
                     ];
                 });
             } else {
