@@ -2,6 +2,7 @@ import { Head } from '@inertiajs/react';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import * as faceapi from 'face-api.js';
 import axios from 'axios';
+import { getRandomChallenge } from '@/Utils/liveness';
 
 // Simple Device ID Generator
 function getOrCreateDeviceId() {
@@ -26,9 +27,9 @@ export default function FaceForm({ token, activeWorkcode }) {
     const [isProcessing, setIsProcessing] = useState(false);
     
     // Liveness states
-    const [challenge, setChallenge] = useState(null); // 'smile' | 'mouth'
+    const [challenge, setChallenge] = useState(null);
     const [challengePassed, setChallengePassed] = useState(false);
-    const [timeLeft, setTimeLeft] = useState(10); // 10 seconds for challenge
+    const [timeLeft, setTimeLeft] = useState(15); // 15 seconds for challenge
     
     // Result
     const [result, setResult] = useState(null);
@@ -109,11 +110,11 @@ export default function FaceForm({ token, activeWorkcode }) {
     // 4. Generate Random Challenge
     useEffect(() => {
         if (isStreamActive && !challenge && !result) {
-            const challenges = ['smile', 'mouth'];
-            setChallenge(challenges[Math.floor(Math.random() * challenges.length)]);
-            setTimeLeft(10);
+            const initialChallenge = getRandomChallenge();
+            setChallenge(initialChallenge);
+            setTimeLeft(15);
         }
-    }, [isStreamActive, result]);
+    }, [isStreamActive, challenge, result]);
 
     // Timer for challenge
     useEffect(() => {
@@ -145,7 +146,7 @@ export default function FaceForm({ token, activeWorkcode }) {
             faceapi.matchDimensions(canvas, displaySize);
 
             try {
-                const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+                const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.5 }))
                     .withFaceLandmarks()
                     .withFaceExpressions()
                     .withFaceDescriptor();
@@ -159,21 +160,11 @@ export default function FaceForm({ token, activeWorkcode }) {
                     faceapi.draw.drawDetections(canvas, resizedDetection);
                     faceapi.draw.drawFaceLandmarks(canvas, resizedDetection);
 
-                    // Liveness Validation
-                    if (challenge === 'smile') {
-                        setStatus("Tantangan Liveness: TERSENYUM LEBAR 😊");
-                        if (detection.expressions.happy > 0.8) {
-                            setChallengePassed(true);
-                            processAttendance(detection.descriptor);
-                        }
-                    } else if (challenge === 'mouth') {
-                        setStatus("Tantangan Liveness: BUKA MULUT LEBAR 😲");
-                        const landmarks = detection.landmarks;
-                        const topLip = landmarks.positions[62];
-                        const bottomLip = landmarks.positions[66];
-                        const distance = Math.abs(topLip.y - bottomLip.y);
+                    if (challenge) {
+                        setStatus(challenge.instruction);
                         
-                        if (distance > 20) { // Threshold for open mouth
+                        // Execute challenge validator
+                        if (challenge.validate(resizedDetection, displaySize)) {
                             setChallengePassed(true);
                             processAttendance(detection.descriptor);
                         }
@@ -341,15 +332,18 @@ export default function FaceForm({ token, activeWorkcode }) {
 
                                     {/* Challenge Badge */}
                                     {challenge && !challengePassed && !isProcessing && (
-                                        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 w-[90%]">
-                                            <div className="bg-indigo-600/90 backdrop-blur text-white px-4 py-3 rounded-2xl shadow-xl text-center border border-indigo-400/30">
-                                                <p className="text-[11px] font-semibold text-indigo-200 uppercase tracking-wider mb-1">Tantangan Anti-Palsu</p>
-                                                <p className="text-base font-extrabold">
-                                                    {challenge === 'smile' ? '😁 Tersenyum Lebar!' : '😲 Buka Mulut Lebar!'}
+                                        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 w-[90%] animate-[fadeIn_0.2s_ease-out]">
+                                            <div className="bg-indigo-600/90 backdrop-blur-md text-white px-4 py-3 rounded-2xl shadow-xl text-center border border-indigo-400/30">
+                                                <p className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-0.5">Tantangan Anti-Palsu</p>
+                                                <p className="text-base font-extrabold flex items-center justify-center gap-1.5">
+                                                    {challenge.badge}
                                                 </p>
+                                                {challenge.description && (
+                                                    <p className="text-[11px] text-indigo-100/80 mt-0.5 font-medium">{challenge.description}</p>
+                                                )}
                                             </div>
-                                            <div className="mx-auto mt-2 w-10 h-10 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center border border-white/10">
-                                                <span className={`text-sm font-extrabold ${timeLeft <= 3 ? 'text-red-400 animate-pulse' : 'text-white'}`}>{timeLeft}s</span>
+                                            <div className="mx-auto mt-2 w-10 h-10 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-lg">
+                                                <span className={`text-xs font-black ${timeLeft <= 3 ? 'text-rose-400 animate-pulse' : 'text-white'}`}>{timeLeft}s</span>
                                             </div>
                                         </div>
                                     )}

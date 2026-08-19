@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { router } from '@inertiajs/react';
 import axios from 'axios';
 import * as faceapi from 'face-api.js';
+import { getRandomChallenge } from '@/Utils/liveness';
 
 export default function SelfFaceRegistrationModal({ participant, onClose }) {
     const videoRef = useRef();
@@ -14,6 +15,11 @@ export default function SelfFaceRegistrationModal({ participant, onClose }) {
     const [errorMsg, setErrorMsg] = useState(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [detectedFace, setDetectedFace] = useState(null);
+    
+    // Liveness challenge states
+    const [challenge, setChallenge] = useState(null);
+    const [challengePassed, setChallengePassed] = useState(false);
+    const [timeLeft, setTimeLeft] = useState(15); // 15 seconds
 
     // Load Models
     useEffect(() => {
@@ -63,10 +69,33 @@ export default function SelfFaceRegistrationModal({ participant, onClose }) {
         };
     }, [isModelsLoaded, errorMsg]);
 
+    // Generate Random Challenge when stream starts
+    useEffect(() => {
+        if (isStreamActive && !challenge && !challengePassed) {
+            const initialChallenge = getRandomChallenge();
+            setChallenge(initialChallenge);
+            setTimeLeft(15);
+        }
+    }, [isStreamActive, challenge, challengePassed]);
+
+    // Timer for challenge
+    useEffect(() => {
+        if (challenge && !challengePassed && timeLeft > 0 && isStreamActive) {
+            const timerId = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
+            return () => clearTimeout(timerId);
+        } else if (timeLeft === 0 && !challengePassed) {
+            setErrorMsg("Waktu verifikasi habis! Silakan coba lagi.");
+            if (videoRef.current && videoRef.current.srcObject) {
+                videoRef.current.srcObject.getTracks().forEach(t => t.stop());
+            }
+            setIsStreamActive(false);
+        }
+    }, [challenge, timeLeft, challengePassed, isStreamActive]);
+
     // Video Detection Loop
     const handleVideoPlay = () => {
         const interval = setInterval(async () => {
-            if (!videoRef.current || !canvasRef.current || !isStreamActive || isProcessing) return;
+            if (!videoRef.current || !canvasRef.current || !isStreamActive || isProcessing || challengePassed) return;
 
             const video = videoRef.current;
             const canvas = canvasRef.current;
@@ -79,8 +108,9 @@ export default function SelfFaceRegistrationModal({ participant, onClose }) {
             faceapi.matchDimensions(canvas, displaySize);
 
             try {
-                const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+                const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.5 }))
                     .withFaceLandmarks()
+                    .withFaceExpressions()
                     .withFaceDescriptor();
 
                 if (detection) {
@@ -92,8 +122,33 @@ export default function SelfFaceRegistrationModal({ participant, onClose }) {
                     faceapi.draw.drawDetections(canvas, resizedDetection);
                     faceapi.draw.drawFaceLandmarks(canvas, resizedDetection);
 
-                    setStatus("Wajah terdeteksi. Klik tombol untuk mendaftar.");
                     setDetectedFace(detection);
+
+                    if (challenge && !challengePassed) {
+                        setStatus(challenge.instruction);
+
+                        // Validate current challenge
+                        if (challenge.validate(resizedDetection, displaySize)) {
+                            setChallengePassed(true);
+                            setStatus("✅ Verifikasi liveness lolos! Menyimpan profil wajah...");
+                            
+                            // Delay slightly (350ms) to ensure a high quality frontal frame is captured
+                            setTimeout(async () => {
+                                try {
+                                    if (videoRef.current && !videoRef.current.paused) {
+                                        const cleanDetection = await faceapi.detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.5 }))
+                                            .withFaceLandmarks()
+                                            .withFaceDescriptor();
+                                        processRegistration(cleanDetection || detection);
+                                    } else {
+                                        processRegistration(detection);
+                                    }
+                                } catch (err) {
+                                    processRegistration(detection);
+                                }
+                            }, 350);
+                        }
+                    }
                 } else {
                     const ctx = canvas.getContext('2d');
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -108,10 +163,12 @@ export default function SelfFaceRegistrationModal({ participant, onClose }) {
         return () => clearInterval(interval);
     };
 
-    const processRegistration = async () => {
-        if (!detectedFace) return;
+    const processRegistration = async (passedDetection = null) => {
+        const targetDetection = passedDetection || detectedFace;
+        if (!targetDetection) return;
+
         setIsProcessing(true);
-        setStatus("Mengunggah data wajah...");
+        setStatus("Verifikasi berhasil! Mengunggah data wajah...");
 
         try {
             const video = videoRef.current;
@@ -124,10 +181,10 @@ export default function SelfFaceRegistrationModal({ participant, onClose }) {
             ctx.scale(-1, 1);
             ctx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
             
-            const photoDataUrl = captureCanvas.toDataURL('image/jpeg', 0.8);
+            const photoDataUrl = captureCanvas.toDataURL('image/jpeg', 0.85);
 
             const payload = {
-                descriptor: Array.from(detectedFace.descriptor),
+                descriptor: Array.from(targetDetection.descriptor),
                 photo: photoDataUrl
             };
 
@@ -191,7 +248,7 @@ export default function SelfFaceRegistrationModal({ participant, onClose }) {
                 <div className="bg-white px-5 py-4 border-b border-slate-100 flex items-center justify-between relative z-10">
                     <div>
                         <h2 className="text-sm font-extrabold text-slate-800">Pendaftaran Wajah</h2>
-                        <p className="text-[10px] text-slate-500 font-semibold">Self-Registration</p>
+                        <p className="text-[10px] text-slate-500 font-semibold">Self-Registration (Verifikasi Liveness)</p>
                     </div>
                     <button onClick={handleClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -210,7 +267,15 @@ export default function SelfFaceRegistrationModal({ participant, onClose }) {
                                 </svg>
                             </div>
                             <p className="text-sm font-bold text-white mb-4">{errorMsg}</p>
-                            <button onClick={() => setErrorMsg(null)} className="rounded-xl bg-white/20 px-6 py-2.5 text-sm font-bold text-white hover:bg-white/30 backdrop-blur-sm mb-2 w-full">
+                            <button 
+                                onClick={() => {
+                                    setErrorMsg(null);
+                                    setChallenge(getRandomChallenge(challenge?.id));
+                                    setChallengePassed(false);
+                                    setTimeLeft(15);
+                                }} 
+                                className="rounded-xl bg-white/20 px-6 py-2.5 text-sm font-bold text-white hover:bg-white/30 backdrop-blur-sm mb-2 w-full"
+                            >
                                 Coba Lagi
                             </button>
                         </div>
@@ -241,15 +306,24 @@ export default function SelfFaceRegistrationModal({ participant, onClose }) {
                                     
                                     {/* Overlay Frame */}
                                     <div className="absolute inset-0 pointer-events-none flex items-center justify-center p-6">
-                                        <div className={`w-full h-72 border-[3px] border-dashed rounded-full transition-colors duration-300 ${detectedFace ? 'border-emerald-400 bg-emerald-400/20' : 'border-white/50'}`}></div>
+                                        <div className={`w-full h-72 border-[3px] border-dashed rounded-full transition-colors duration-300 ${challengePassed ? 'border-emerald-400 bg-emerald-400/20' : 'border-white/50'}`}></div>
                                     </div>
 
-                                    {/* Action Button */}
-                                    {detectedFace && !isProcessing && (
-                                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 w-[90%]">
-                                            <button onClick={processRegistration} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all">
-                                                Ambil Foto & Daftar
-                                            </button>
+                                    {/* Challenge Badge */}
+                                    {challenge && !challengePassed && !isProcessing && (
+                                        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 w-[90%] animate-[fadeIn_0.2s_ease-out]">
+                                            <div className="bg-indigo-600/90 backdrop-blur-md text-white px-4 py-3 rounded-2xl shadow-xl text-center border border-indigo-400/30">
+                                                <p className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-0.5">Tantangan Anti-Palsu</p>
+                                                <p className="text-base font-extrabold flex items-center justify-center gap-1.5">
+                                                    {challenge.badge}
+                                                </p>
+                                                {challenge.description && (
+                                                    <p className="text-[11px] text-indigo-100/80 mt-0.5 font-medium">{challenge.description}</p>
+                                                )}
+                                            </div>
+                                            <div className="mx-auto mt-2 w-10 h-10 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-lg">
+                                                <span className={`text-xs font-black ${timeLeft <= 3 ? 'text-rose-400 animate-pulse' : 'text-white'}`}>{timeLeft}s</span>
+                                            </div>
                                         </div>
                                     )}
 
@@ -279,3 +353,4 @@ export default function SelfFaceRegistrationModal({ participant, onClose }) {
 
     return createPortal(modalContent, document.body);
 }
+

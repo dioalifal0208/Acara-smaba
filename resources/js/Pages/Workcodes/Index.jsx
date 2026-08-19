@@ -15,10 +15,23 @@ L.Icon.Default.mergeOptions({
     iconUrl: markerIcon,
     shadowUrl: markerShadow
 });
-import { MapContainer, TileLayer, Marker, Circle, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Circle, useMapEvents, useMap } from 'react-leaflet';
 import { useToast } from '@/Components/Toast';
 import { useConfirm } from '@/Components/ConfirmDialog';
 
+function MapModalCenter({ center }) {
+    const map = useMap();
+    useEffect(() => {
+        if (center) {
+            const timer = setTimeout(() => {
+                map.invalidateSize();
+                map.setView(center, 17);
+            }, 150);
+            return () => clearTimeout(timer);
+        }
+    }, [center, map]);
+    return null;
+}
 
 function LocationMarker({ position, setPosition, radius }) {
     const map = useMapEvents({
@@ -96,6 +109,7 @@ export default function WorkcodesIndex({ workcodes }) {
     const { toast } = useToast();
     const confirm = useConfirm();
     const [showCreateModal, setShowCreateModal] = useState(false);
+    const [previewMapWorkcode, setPreviewMapWorkcode] = useState(null);
     const [mapPosition, setMapPosition] = useState({ lat: -7.1086, lng: 112.1715 }); // default to SMAN 1 Babat approx area
 
     const { data, setData, post, processing, errors, reset } = useForm({
@@ -213,6 +227,22 @@ export default function WorkcodesIndex({ workcodes }) {
                                         ? activeWorkcode.deskripsi || 'Workcode ini sedang berlangsung. Semua presensi scanner & self check-in akan dicatat ke workcode ini.'
                                         : 'Sistem presensi terkunci. Buat atau pilih workcode di bawah untuk mengizinkan peserta/panitia melakukan scan.'}
                                 </p>
+                                {activeWorkcode?.latitude && activeWorkcode?.longitude && (
+                                    <div className="mt-3 inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-white/10 backdrop-blur-md border border-white/15 text-xs text-white">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        </svg>
+                                        <span>Radius Presensi: <strong className="text-emerald-300">{activeWorkcode.radius_meters || 100}m</strong></span>
+                                        <button 
+                                            type="button"
+                                            onClick={() => setPreviewMapWorkcode(activeWorkcode)}
+                                            className="text-indigo-200 hover:text-white underline font-bold ml-1 text-[11px] inline-flex items-center gap-0.5 cursor-pointer"
+                                        >
+                                            Lihat Peta ↗
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                             {activeWorkcode && (
                                 <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2 bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/10 shrink-0">
@@ -305,6 +335,45 @@ export default function WorkcodesIndex({ workcodes }) {
                                                     </div>
                                                 </div>
                                             )}
+
+                                            {/* Informasi Lokasi & Radius Map */}
+                                            {workcode.latitude && workcode.longitude ? (
+                                                <div className="mt-2.5 rounded-xl bg-slate-50 border border-slate-200/80 p-2.5 flex items-center justify-between gap-2">
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <div className="h-7 w-7 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shrink-0">
+                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                            </svg>
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-none">Lokasi & Radius</p>
+                                                            <p className="text-xs font-extrabold text-slate-800 truncate mt-0.5">
+                                                                Radius <span className="text-indigo-600 font-black">{workcode.radius_meters || 100}m</span>
+                                                                <span className="text-slate-400 font-medium text-[10px] ml-1.5 font-mono">({Number(workcode.latitude).toFixed(4)}, {Number(workcode.longitude).toFixed(4)})</span>
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setPreviewMapWorkcode(workcode)}
+                                                        className="inline-flex items-center gap-1 rounded-lg bg-white border border-slate-200 px-2.5 py-1 text-[10px] font-bold text-slate-700 hover:text-indigo-600 hover:border-indigo-300 hover:bg-indigo-50/60 shadow-2xs transition shrink-0 cursor-pointer"
+                                                        title="Lihat Peta & Radius Geofencing"
+                                                    >
+                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                                                        </svg>
+                                                        <span>Peta</span>
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="mt-2.5 rounded-xl bg-slate-50/70 border border-dashed border-slate-200 p-2 flex items-center gap-2 text-slate-400">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 shrink-0 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                    </svg>
+                                                    <span className="text-[11px] font-medium">Tanpa Batasan Lokasi GPS</span>
+                                                </div>
+                                            )}
                                         </div>
 
                                         <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
@@ -313,17 +382,6 @@ export default function WorkcodesIndex({ workcodes }) {
                                             </div>
 
                                             <div className="flex items-center gap-2">
-                                                <a
-                                                    href={route('workcodes.export', workcode.id)}
-                                                    className="rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100 transition inline-flex items-center gap-1 shadow-xs"
-                                                    title="Export Bukti Hadir Excel (.xlsx)"
-                                                >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                                    </svg>
-                                                    <span>Export</span>
-                                                </a>
-
                                                 {workcode.is_active ? (
                                                     <button
                                                         onClick={() => handleDeactivate(workcode.id, workcode.nama_workcode)}
@@ -644,6 +702,105 @@ export default function WorkcodesIndex({ workcodes }) {
                             >
                                 {processing ? 'Menyimpan...' : 'Simpan & Aktifkan'}
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Modal Popup Peta & Radius Workcode */}
+            {previewMapWorkcode && previewMapWorkcode.latitude && previewMapWorkcode.longitude && (
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+                    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm transition-opacity" onClick={() => setPreviewMapWorkcode(null)} />
+
+                    <div className="relative w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl border border-slate-200/80 animate-[fadeIn_0.2s_ease-out] flex flex-col my-auto z-10">
+                        {/* Header */}
+                        <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-5 py-3.5">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 shrink-0 shadow-xs">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    </svg>
+                                </div>
+                                <div className="min-w-0">
+                                    <h3 className="text-sm font-extrabold text-slate-800 truncate">
+                                        {previewMapWorkcode.nama_workcode}
+                                    </h3>
+                                    <p className="text-[11px] text-slate-500 font-semibold flex items-center gap-1.5 mt-0.5">
+                                        <span>Area Geofencing Presensi</span>
+                                        <span className="w-1 h-1 rounded-full bg-slate-300"></span>
+                                        <span className="text-indigo-600 font-bold">Radius: {previewMapWorkcode.radius_meters || 100} Meter</span>
+                                    </p>
+                                </div>
+                            </div>
+                            <button 
+                                type="button"
+                                onClick={() => setPreviewMapWorkcode(null)} 
+                                className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-200/60 hover:text-slate-700 transition"
+                            >
+                                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        {/* Map Body */}
+                        <div className="relative w-full h-[360px] sm:h-[400px] bg-slate-100">
+                            <MapErrorBoundary>
+                                <MapContainer 
+                                    center={[Number(previewMapWorkcode.latitude), Number(previewMapWorkcode.longitude)]} 
+                                    zoom={17} 
+                                    style={{ height: '100%', width: '100%' }}
+                                    className="z-0"
+                                >
+                                    <MapModalCenter center={[Number(previewMapWorkcode.latitude), Number(previewMapWorkcode.longitude)]} />
+                                    <TileLayer
+                                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+                                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                    />
+                                    <Marker position={[Number(previewMapWorkcode.latitude), Number(previewMapWorkcode.longitude)]} />
+                                    <Circle 
+                                        center={[Number(previewMapWorkcode.latitude), Number(previewMapWorkcode.longitude)]} 
+                                        radius={Number(previewMapWorkcode.radius_meters) || 100}
+                                        pathOptions={{ 
+                                            fillColor: '#6366f1', 
+                                            fillOpacity: 0.25, 
+                                            color: '#4f46e5', 
+                                            weight: 2.5,
+                                            dashArray: '4, 4'
+                                        }} 
+                                    />
+                                </MapContainer>
+                            </MapErrorBoundary>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/80 px-5 py-3 text-xs">
+                            <div className="flex items-center gap-2 text-slate-600 font-medium">
+                                <span className="font-mono text-[11px] bg-white border border-slate-200 px-2 py-0.5 rounded-md text-slate-700">
+                                    Lat: {Number(previewMapWorkcode.latitude).toFixed(6)}, Lng: {Number(previewMapWorkcode.longitude).toFixed(6)}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <a
+                                    href={`https://www.google.com/maps?q=${previewMapWorkcode.latitude},${previewMapWorkcode.longitude}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="rounded-xl bg-white border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:text-indigo-600 hover:bg-slate-50 transition inline-flex items-center gap-1 shadow-2xs"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                    </svg>
+                                    <span>Buka Google Maps</span>
+                                </a>
+                                <button
+                                    type="button"
+                                    onClick={() => setPreviewMapWorkcode(null)}
+                                    className="rounded-xl bg-slate-800 px-4 py-1.5 text-xs font-bold text-white hover:bg-slate-700 transition"
+                                >
+                                    Tutup
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

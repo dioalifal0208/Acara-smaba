@@ -14,7 +14,7 @@ const Dropdown = ({ children }) => {
     return (
         <DropDownContext.Provider value={{ open, setOpen, toggleOpen }}>
             <div 
-                className="relative"
+                className="relative z-30"
                 onMouseEnter={() => setOpen(true)}
                 onMouseLeave={() => setOpen(false)}
             >

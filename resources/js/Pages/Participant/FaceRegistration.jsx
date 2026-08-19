@@ -2,6 +2,7 @@ import { Head } from '@inertiajs/react';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import * as faceapi from 'face-api.js';
 import axios from 'axios';
+import { getRandomChallenge } from '@/Utils/liveness';
 
 // Simple Device ID Generator
 function getOrCreateDeviceId() {
@@ -25,6 +26,11 @@ export default function FaceRegistration({ participant }) {
     const [isProcessing, setIsProcessing] = useState(false);
     const [detectedFace, setDetectedFace] = useState(null);
     const [result, setResult] = useState(null);
+
+    // Liveness challenge states
+    const [challenge, setChallenge] = useState(null);
+    const [challengePassed, setChallengePassed] = useState(false);
+    const [timeLeft, setTimeLeft] = useState(15); // 15 seconds
 
     // 2. Load Models
     useEffect(() => {
@@ -74,10 +80,33 @@ export default function FaceRegistration({ participant }) {
         };
     }, [isModelsLoaded, errorMsg, result]);
 
+    // Generate Random Challenge when stream starts
+    useEffect(() => {
+        if (isStreamActive && !challenge && !challengePassed && !result) {
+            const initialChallenge = getRandomChallenge();
+            setChallenge(initialChallenge);
+            setTimeLeft(15);
+        }
+    }, [isStreamActive, challenge, challengePassed, result]);
+
+    // Timer for challenge
+    useEffect(() => {
+        if (challenge && !challengePassed && timeLeft > 0 && isStreamActive && !result) {
+            const timerId = setTimeout(() => setTimeLeft(timeLeft - 1), 1000);
+            return () => clearTimeout(timerId);
+        } else if (timeLeft === 0 && !challengePassed && !result) {
+            setErrorMsg("Waktu verifikasi habis! Silakan coba lagi.");
+            if (videoRef.current && videoRef.current.srcObject) {
+                videoRef.current.srcObject.getTracks().forEach(t => t.stop());
+            }
+            setIsStreamActive(false);
+        }
+    }, [challenge, timeLeft, challengePassed, isStreamActive, result]);
+
     // 5. Video Detection Loop
     const handleVideoPlay = () => {
         const interval = setInterval(async () => {
-            if (!videoRef.current || !canvasRef.current || !isStreamActive || isProcessing || result) return;
+            if (!videoRef.current || !canvasRef.current || !isStreamActive || isProcessing || result || challengePassed) return;
 
             const video = videoRef.current;
             const canvas = canvasRef.current;
@@ -90,8 +119,9 @@ export default function FaceRegistration({ participant }) {
             faceapi.matchDimensions(canvas, displaySize);
 
             try {
-                const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+                const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.5 }))
                     .withFaceLandmarks()
+                    .withFaceExpressions()
                     .withFaceDescriptor();
 
                 if (detection) {
@@ -103,8 +133,33 @@ export default function FaceRegistration({ participant }) {
                     faceapi.draw.drawDetections(canvas, resizedDetection);
                     faceapi.draw.drawFaceLandmarks(canvas, resizedDetection);
 
-                    setStatus("Wajah terdeteksi. Klik tombol untuk mendaftar.");
                     setDetectedFace(detection);
+
+                    if (challenge && !challengePassed) {
+                        setStatus(challenge.instruction);
+
+                        // Validate challenge
+                        if (challenge.validate(resizedDetection, displaySize)) {
+                            setChallengePassed(true);
+                            setStatus("✅ Verifikasi liveness lolos! Menyimpan profil wajah...");
+
+                            // Delay slightly (350ms) to ensure a high quality frontal frame is captured
+                            setTimeout(async () => {
+                                try {
+                                    if (videoRef.current && !videoRef.current.paused) {
+                                        const cleanDetection = await faceapi.detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.5 }))
+                                            .withFaceLandmarks()
+                                            .withFaceDescriptor();
+                                        processRegistration(cleanDetection || detection);
+                                    } else {
+                                        processRegistration(detection);
+                                    }
+                                } catch (err) {
+                                    processRegistration(detection);
+                                }
+                            }, 350);
+                        }
+                    }
                 } else {
                     const ctx = canvas.getContext('2d');
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -119,11 +174,12 @@ export default function FaceRegistration({ participant }) {
         return () => clearInterval(interval);
     };
 
+    const processRegistration = async (passedDetection = null) => {
+        const targetDetection = passedDetection || detectedFace;
+        if (!targetDetection) return;
 
-    const processRegistration = async () => {
-        if (!detectedFace) return;
         setIsProcessing(true);
-        setStatus("Mengunggah data wajah...");
+        setStatus("Verifikasi berhasil! Mengunggah data wajah...");
 
         try {
             const video = videoRef.current;
@@ -136,10 +192,10 @@ export default function FaceRegistration({ participant }) {
             ctx.scale(-1, 1);
             ctx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
             
-            const photoDataUrl = captureCanvas.toDataURL('image/jpeg', 0.8);
+            const photoDataUrl = captureCanvas.toDataURL('image/jpeg', 0.85);
 
             const payload = {
-                descriptor: Array.from(detectedFace.descriptor),
+                descriptor: Array.from(targetDetection.descriptor),
                 photo: photoDataUrl
             };
 
@@ -220,7 +276,7 @@ export default function FaceRegistration({ participant }) {
                 <div className="bg-white px-5 py-4 border-b border-slate-100 text-center relative z-10">
                     <img src="/images/logo.png" alt="Logo" className="h-10 w-10 mx-auto object-contain mb-2" />
                     <h2 className="text-sm font-extrabold text-slate-800">Pendaftaran Wajah</h2>
-                    <p className="text-[10px] text-slate-500 font-semibold">Self-Registration</p>
+                    <p className="text-[10px] text-slate-500 font-semibold">Self-Registration (Verifikasi Liveness)</p>
                 </div>
 
                 {/* Main Camera Area */}
@@ -233,7 +289,15 @@ export default function FaceRegistration({ participant }) {
                                 </svg>
                             </div>
                             <p className="text-sm font-bold text-white mb-4">{errorMsg}</p>
-                            <button onClick={() => window.location.reload()} className="rounded-xl bg-white/20 px-6 py-2.5 text-sm font-bold text-white hover:bg-white/30 backdrop-blur-sm mb-2 w-full">
+                            <button 
+                                onClick={() => {
+                                    setErrorMsg(null);
+                                    setChallenge(getRandomChallenge(challenge?.id));
+                                    setChallengePassed(false);
+                                    setTimeLeft(15);
+                                }} 
+                                className="rounded-xl bg-white/20 px-6 py-2.5 text-sm font-bold text-white hover:bg-white/30 backdrop-blur-sm mb-2 w-full"
+                            >
                                 Coba Lagi
                             </button>
                             <a href={route('participant.dashboard')} className="block rounded-xl bg-slate-800 px-6 py-2.5 text-sm font-bold text-white hover:bg-slate-700">
@@ -267,15 +331,24 @@ export default function FaceRegistration({ participant }) {
                                     
                                     {/* Overlay Frame */}
                                     <div className="absolute inset-0 pointer-events-none flex items-center justify-center p-6">
-                                        <div className={`w-full h-72 border-[3px] border-dashed rounded-full transition-colors duration-300 ${detectedFace ? 'border-emerald-400 bg-emerald-400/20' : 'border-white/50'}`}></div>
+                                        <div className={`w-full h-72 border-[3px] border-dashed rounded-full transition-colors duration-300 ${challengePassed ? 'border-emerald-400 bg-emerald-400/20' : 'border-white/50'}`}></div>
                                     </div>
 
-                                    {/* Action Button */}
-                                    {detectedFace && !isProcessing && (
-                                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 w-[90%]">
-                                            <button onClick={processRegistration} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all">
-                                                Ambil Foto & Daftar
-                                            </button>
+                                    {/* Challenge Badge */}
+                                    {challenge && !challengePassed && !isProcessing && (
+                                        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 w-[90%] animate-[fadeIn_0.2s_ease-out]">
+                                            <div className="bg-indigo-600/90 backdrop-blur-md text-white px-4 py-3 rounded-2xl shadow-xl text-center border border-indigo-400/30">
+                                                <p className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-0.5">Tantangan Anti-Palsu</p>
+                                                <p className="text-base font-extrabold flex items-center justify-center gap-1.5">
+                                                    {challenge.badge}
+                                                </p>
+                                                {challenge.description && (
+                                                    <p className="text-[11px] text-indigo-100/80 mt-0.5 font-medium">{challenge.description}</p>
+                                                )}
+                                            </div>
+                                            <div className="mx-auto mt-2 w-10 h-10 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-lg">
+                                                <span className={`text-xs font-black ${timeLeft <= 3 ? 'text-rose-400 animate-pulse' : 'text-white'}`}>{timeLeft}s</span>
+                                            </div>
                                         </div>
                                     )}
 
@@ -283,7 +356,7 @@ export default function FaceRegistration({ participant }) {
                                     {isProcessing && (
                                         <div className="absolute inset-0 z-30 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center text-white">
                                             <div className="h-12 w-12 rounded-full border-4 border-emerald-500 border-t-transparent animate-spin mb-4"></div>
-                                            <p className="text-sm font-bold animate-pulse">Memvalidasi Wajah & Lokasi...</p>
+                                            <p className="text-sm font-bold animate-pulse">Memvalidasi Wajah...</p>
                                         </div>
                                     )}
                                 </>
@@ -307,3 +380,4 @@ export default function FaceRegistration({ participant }) {
         </div>
     );
 }
+

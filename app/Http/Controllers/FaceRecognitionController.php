@@ -47,13 +47,40 @@ class FaceRecognitionController extends Controller
     }
 
     /**
+     * Hitung jarak terdekat antara input descriptor dan stored descriptor(s)
+     * Mendukung single vector (128D) maupun multi-vector array
+     */
+    private function getMinDistance(array $inputDescriptor, $dbDescriptor)
+    {
+        if (!is_array($dbDescriptor) || empty($dbDescriptor)) {
+            return INF;
+        }
+
+        // Single 128-dimensional vector
+        if (count($dbDescriptor) === 128 && !is_array($dbDescriptor[0])) {
+            return $this->euclideanDistance($inputDescriptor, $dbDescriptor);
+        }
+
+        // Multiple 128-dimensional vectors
+        $minDist = INF;
+        foreach ($dbDescriptor as $vec) {
+            if (is_array($vec) && count($vec) === 128) {
+                $d = $this->euclideanDistance($inputDescriptor, $vec);
+                if ($d < $minDist) {
+                    $minDist = $d;
+                }
+            }
+        }
+        return $minDist;
+    }
+
+    /**
      * Register Face Descriptor untuk seorang Participant (Admin Only)
      */
     public function register(Request $request, Participant $participant)
     {
         $request->validate([
             'descriptor' => 'required|array',
-            'descriptor.*' => 'numeric',
             'photo' => 'nullable|string'
         ]);
 
@@ -103,7 +130,6 @@ class FaceRecognitionController extends Controller
 
         $request->validate([
             'descriptor' => 'required|array',
-            'descriptor.*' => 'numeric',
             'photo' => 'nullable|string'
         ]);
 
@@ -205,7 +231,6 @@ class FaceRecognitionController extends Controller
 
         $request->validate([
             'descriptor' => 'required|array',
-            'descriptor.*' => 'numeric',
             'latitude' => 'nullable|numeric',
             'longitude' => 'nullable|numeric',
             'accuracy' => 'nullable|numeric',
@@ -230,8 +255,6 @@ class FaceRecognitionController extends Controller
                         'message' => 'Peringatan Keamanan: Terdeteksi manipulasi lokasi (Mock Location).',
                     ], 403);
                 }
-                
-                // We no longer reject based on high accuracy numbers, as the radius check below will handle distance failures more gracefully.
             }
 
             // Cek anomali waktu sensor GPS
@@ -275,20 +298,35 @@ class FaceRecognitionController extends Controller
         }
 
         // === Pencocokan Wajah ===
-        // Karena data max ~150, brute force Euclidean distance sangat aman dan cepat
         // HANYA COCOKKAN WAJAH YANG STATUSNYA APPROVED
         $participants = Participant::whereNotNull('face_descriptor')
             ->where('face_status', 'approved')
             ->get();
         
         $bestMatch = null;
-        $bestDistance = 0.45; // Threshold yang direkomendasikan face-api.js adalah ~0.6, kita perketat ke 0.45 agar lebih akurat dan strict.
+        // Standar dlib / face-api.js euclidean distance threshold: ~0.58
+        // 0.45 sebelumnya terlalu ketat sehingga menolak wajah asli karena pencahayaan webcam.
+        $bestDistance = 0.58; 
 
-        foreach ($participants as $p) {
-            // descriptor DB is cast to array
-            $dbDescriptor = $p->face_descriptor;
-            if (is_array($dbDescriptor) && count($dbDescriptor) === 128) {
-                $dist = $this->euclideanDistance($inputDescriptor, $dbDescriptor);
+        // Jika user yang login adalah peserta terdaftar, cek wajah dirinya terlebih dahulu
+        $loggedInParticipantId = auth()->check() ? auth()->user()->participant_id : null;
+        if ($loggedInParticipantId) {
+            $myParticipant = $participants->firstWhere('id', $loggedInParticipantId);
+            if ($myParticipant && $myParticipant->face_descriptor) {
+                $myDist = $this->getMinDistance($inputDescriptor, $myParticipant->face_descriptor);
+                \Log::info("Distance computed for logged in user ({$myParticipant->nama}): " . $myDist);
+                if ($myDist < $bestDistance) {
+                    $bestDistance = $myDist;
+                    $bestMatch = $myParticipant;
+                }
+            }
+        }
+
+        // Jika belum match atau bukan self-presensi, cari dari seluruh database
+        if (!$bestMatch) {
+            foreach ($participants as $p) {
+                $dbDescriptor = $p->face_descriptor;
+                $dist = $this->getMinDistance($inputDescriptor, $dbDescriptor);
                 
                 \Log::info("Distance computed between input and " . $p->nama . ": " . $dist);
                 
