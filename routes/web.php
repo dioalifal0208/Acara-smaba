@@ -77,6 +77,9 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::get('/participants/template', [ParticipantController::class, 'downloadTemplate'])->name('participants.template');
     Route::post('/participants', [ParticipantController::class, 'store'])->name('participants.store');
     Route::post('/participants/import', [ParticipantController::class, 'import'])->name('participants.import');
+    Route::post('/participants/import/preview', [ParticipantController::class, 'importPreview'])->name('participants.import.preview');
+    Route::post('/participants/import/confirm', [ParticipantController::class, 'importConfirm'])->name('participants.import.confirm');
+    Route::delete('/participants/bulk-delete', [ParticipantController::class, 'bulkDestroy'])->name('participants.bulk-destroy');
     Route::put('/participants/{participant}', [ParticipantController::class, 'update'])->name('participants.update');
     Route::delete('/participants/{participant}', [ParticipantController::class, 'destroy'])->name('participants.destroy');
 

@@ -9,6 +9,7 @@ use Illuminate\Support\Str;
 use Inertia\Inertia;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -46,15 +47,64 @@ class ParticipantController extends Controller
     }
 
     /**
+     * Bersihkan NIP dari tanda petik awal dan format desimal (.00).
+     */
+    private function cleanNisNip($val): string
+    {
+        if (empty($val)) return '';
+        $val = trim((string)$val);
+        // Hapus tanda petik tunggal/ganda di awal (contoh: '1980... atau "1980...)
+        $val = preg_replace('/^[\'"]+/', '', $val);
+        // Hapus desimal .00 / .0 di akhir jika terbaca sebagai float oleh Excel
+        if (preg_match('/^(\d+)\.0+$/', $val, $m)) {
+            $val = $m[1];
+        }
+        return trim($val);
+    }
+
+    /**
+     * Normalisasi status kepegawaian standar.
+     */
+    private function normalizeStatus($status): ?string
+    {
+        if (empty($status)) return null;
+        $norm = strtolower(preg_replace('/\s+/', ' ', trim($status)));
+        if ($norm === 'pns') return 'PNS';
+        if ($norm === 'pppk') return 'PPPK';
+        if ($norm === 'pppk paruh waktu' || str_contains($norm, 'paruh waktu')) return 'PPPK Paruh Waktu';
+        return trim($status);
+    }
+
+    /**
      * Simpan peserta baru — QR token otomatis di-generate via Model boot().
      */
     public function store(Request $request)
     {
+        $cleanNip = $this->cleanNisNip($request->input('nis_nip'));
+        $cleanNama = trim((string)$request->input('nama'));
+        $cleanStatus = $this->normalizeStatus($request->input('status'));
+
+        $request->merge([
+            'nama' => $cleanNama,
+            'nis_nip' => $cleanNip,
+            'status' => $cleanStatus,
+        ]);
+
         $validated = $request->validate([
             'nama' => 'required|string|max:255',
             'nis_nip' => 'required|string|max:50|unique:participants,nis_nip',
             'status' => 'nullable|in:PNS,PPPK,PPPK Paruh Waktu',
+        ], [
+            'nis_nip.unique' => 'NIP sudah terdaftar pada sistem.',
         ]);
+
+        // Cek apakah nama sudah terdaftar (case-insensitive & spasi seragam)
+        $existingByName = Participant::whereRaw('LOWER(TRIM(nama)) = ?', [strtolower($cleanNama)])->first();
+        if ($existingByName) {
+            return back()->withErrors([
+                'nama' => "Nama \"{$cleanNama}\" sudah terdaftar pada sistem (NIP: {$existingByName->nis_nip}).",
+            ])->withInput();
+        }
 
         // QR token di-generate otomatis oleh Participant model boot()
         $participant = Participant::create($validated);
@@ -79,27 +129,98 @@ class ParticipantController extends Controller
      */
     public function update(Request $request, Participant $participant)
     {
+        $cleanNip = $this->cleanNisNip($request->input('nis_nip'));
+        $cleanNama = trim((string)$request->input('nama'));
+        $cleanStatus = $this->normalizeStatus($request->input('status'));
+
+        $request->merge([
+            'nama' => $cleanNama,
+            'nis_nip' => $cleanNip,
+            'status' => $cleanStatus,
+        ]);
+
         $validated = $request->validate([
             'nama' => 'required|string|max:255',
             'nis_nip' => 'required|string|max:50|unique:participants,nis_nip,' . $participant->id,
             'status' => 'nullable|in:PNS,PPPK,PPPK Paruh Waktu',
+        ], [
+            'nis_nip.unique' => 'NIP sudah digunakan oleh peserta lain.',
         ]);
 
+        // Cek nama sama pada peserta lain
+        $existingByName = Participant::whereRaw('LOWER(TRIM(nama)) = ?', [strtolower($cleanNama)])
+            ->where('id', '!=', $participant->id)
+            ->first();
+
+        if ($existingByName) {
+            return back()->withErrors([
+                'nama' => "Nama \"{$cleanNama}\" sudah digunakan oleh peserta lain (NIP: {$existingByName->nis_nip}).",
+            ])->withInput();
+        }
+
+        $oldNip = $participant->nis_nip;
         $participant->update($validated);
+
+        // Perbarui akun user jika ada
+        User::where('participant_id', $participant->id)
+            ->orWhere('username', $oldNip)
+            ->update([
+                'name' => $cleanNama,
+                'username' => $cleanNip,
+            ]);
 
         return redirect()->route('participants.index')
             ->with('success', 'Data peserta berhasil diperbarui!');
     }
 
     /**
-     * Hapus peserta.
+     * Hapus peserta tunggal.
      */
     public function destroy(Participant $participant)
     {
+        if ($participant->photo_path && Storage::disk('public')->exists($participant->photo_path)) {
+            Storage::disk('public')->delete($participant->photo_path);
+        }
+
+        User::where('participant_id', $participant->id)
+            ->orWhere('username', $participant->nis_nip)
+            ->delete();
+
         $participant->delete();
 
         return redirect()->route('participants.index')
             ->with('success', 'Peserta berhasil dihapus!');
+    }
+
+    /**
+     * Hapus peserta secara massal (Bulk Delete).
+     */
+    public function bulkDestroy(Request $request)
+    {
+        $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'integer|exists:participants,id',
+        ]);
+
+        $ids = $request->input('ids');
+        $participants = Participant::whereIn('id', $ids)->get();
+
+        $count = 0;
+        foreach ($participants as $participant) {
+            if ($participant->photo_path && Storage::disk('public')->exists($participant->photo_path)) {
+                Storage::disk('public')->delete($participant->photo_path);
+            }
+
+            User::where('participant_id', $participant->id)
+                ->orWhere('username', $participant->nis_nip)
+                ->delete();
+
+            $participant->delete();
+            $count++;
+        }
+
+        return redirect()->route('participants.index')
+            ->with('success', "{$count} peserta berhasil dihapus!");
     }
 
     /**
@@ -205,7 +326,263 @@ class ParticipantController extends Controller
     }
 
     /**
-     * Import peserta secara massal via Excel/CSV.
+     * Preview impor peserta: memeriksa nama & NIP duplikat serta format NIP.
+     */
+    public function importPreview(Request $request)
+    {
+        $request->validate([
+            'file' => 'required|file|mimes:xlsx,xls,csv|max:5120',
+        ]);
+
+        $file = $request->file('file');
+        $filePath = $file->getRealPath();
+
+        try {
+            $spreadsheet = IOFactory::load($filePath);
+            $sheet = $spreadsheet->getActiveSheet();
+            $rows = $sheet->toArray(null, true, true, true);
+
+            if (empty($rows)) {
+                return response()->json(['error' => 'File Excel/CSV kosong.'], 422);
+            }
+
+            $firstRow = array_shift($rows);
+            $headers = array_map(function ($h) {
+                return strtolower(trim($h ?? ''));
+            }, $firstRow);
+
+            $namaColKey = null;
+            $nisNipColKey = null;
+            $statusColKey = null;
+
+            foreach ($headers as $colKey => $headerVal) {
+                if (in_array($headerVal, ['nama', 'name', 'nama lengkap', 'nama_lengkap'])) {
+                    $namaColKey = $colKey;
+                }
+                if (in_array($headerVal, ['nis/nip', 'nis', 'nip', 'nis_nip', 'nomor induk', 'no induk', 'nip/nis'])) {
+                    $nisNipColKey = $colKey;
+                }
+                if (in_array($headerVal, ['keterangan', 'ket', 'status', 'role', 'jabatan'])) {
+                    $statusColKey = $colKey;
+                }
+            }
+
+            if (!$namaColKey) $namaColKey = 'A';
+            if (!$nisNipColKey) $nisNipColKey = 'B';
+            if (!$statusColKey) $statusColKey = 'C';
+
+            $conflicts = [];
+            $cleanData = [];
+            $seenInExcelNip = [];
+            $seenInExcelName = [];
+            $rowIndex = 1;
+
+            foreach ($rows as $row) {
+                $rowIndex++;
+                $rawNama = trim((string)($row[$namaColKey] ?? ''));
+                $rawNip = trim((string)($row[$nisNipColKey] ?? ''));
+                $rawStatus = isset($row[$statusColKey]) ? trim((string)$row[$statusColKey]) : null;
+
+                if (empty($rawNama) || empty($rawNip)) {
+                    continue;
+                }
+
+                $cleanNip = $this->cleanNisNip($rawNip);
+                $cleanNama = $rawNama;
+                $cleanStatus = $this->normalizeStatus($rawStatus);
+
+                $normNameLower = strtolower(preg_replace('/\s+/', ' ', $cleanNama));
+
+                // Cek database
+                $existingByNip = Participant::where('nis_nip', $cleanNip)->first();
+                $existingByName = Participant::whereRaw('LOWER(TRIM(nama)) = ?', [$normNameLower])->first();
+
+                // Cek duplikasi di dalam file excel itu sendiri
+                $duplicateInFile = isset($seenInExcelNip[$cleanNip]) || isset($seenInExcelName[$normNameLower]);
+
+                if ($existingByNip || $existingByName) {
+                    $target = $existingByNip ?? $existingByName;
+                    $reason = '';
+                    if ($existingByNip && $existingByName && $existingByNip->id === $existingByName->id) {
+                        $reason = 'Nama & NIP sudah terdaftar';
+                    } elseif ($existingByName) {
+                        $reason = "Nama sudah terdaftar (NIP di DB: {$existingByName->nis_nip})";
+                    } else {
+                        $reason = "NIP sudah terdaftar (Nama di DB: {$existingByNip->nama})";
+                    }
+
+                    $conflicts[] = [
+                        'row_index' => $rowIndex,
+                        'existing' => [
+                            'id' => $target->id,
+                            'nama' => $target->nama,
+                            'nis_nip' => $target->nis_nip,
+                            'status' => $target->status ?? '-',
+                        ],
+                        'new' => [
+                            'nama' => $cleanNama,
+                            'nis_nip' => $cleanNip,
+                            'status' => $cleanStatus ?? '-',
+                        ],
+                        'conflict_reason' => $reason,
+                        'default_resolution' => 'update',
+                    ];
+                } elseif ($duplicateInFile) {
+                    $conflicts[] = [
+                        'row_index' => $rowIndex,
+                        'existing' => [
+                            'id' => null,
+                            'nama' => $seenInExcelName[$normNameLower]['nama'] ?? $cleanNama,
+                            'nis_nip' => $seenInExcelNip[$cleanNip]['nis_nip'] ?? $cleanNip,
+                            'status' => $seenInExcelNip[$cleanNip]['status'] ?? '-',
+                        ],
+                        'new' => [
+                            'nama' => $cleanNama,
+                            'nis_nip' => $cleanNip,
+                            'status' => $cleanStatus ?? '-',
+                        ],
+                        'conflict_reason' => 'Duplikat di baris lain dalam file Excel',
+                        'default_resolution' => 'skip',
+                    ];
+                } else {
+                    $cleanData[] = [
+                        'nama' => $cleanNama,
+                        'nis_nip' => $cleanNip,
+                        'status' => $cleanStatus,
+                    ];
+                    $seenInExcelNip[$cleanNip] = ['nama' => $cleanNama, 'nis_nip' => $cleanNip, 'status' => $cleanStatus];
+                    $seenInExcelName[$normNameLower] = ['nama' => $cleanNama, 'nis_nip' => $cleanNip, 'status' => $cleanStatus];
+                }
+            }
+
+            // Jika tidak ada konflik, langsung simpan
+            if (empty($conflicts)) {
+                $savedCount = 0;
+                foreach ($cleanData as $item) {
+                    $p = Participant::create($item);
+                    User::updateOrCreate(
+                        ['username' => $item['nis_nip']],
+                        [
+                            'name' => $item['nama'],
+                            'password' => Hash::make($item['nis_nip']),
+                            'role' => 'participant',
+                            'participant_id' => $p->id,
+                        ]
+                    );
+                    $savedCount++;
+                }
+
+                return response()->json([
+                    'status' => 'success',
+                    'has_conflicts' => false,
+                    'message' => "{$savedCount} data peserta berhasil diimpor.",
+                ]);
+            }
+
+            return response()->json([
+                'status' => 'conflict',
+                'has_conflicts' => true,
+                'conflicts' => $conflicts,
+                'clean_data' => $cleanData,
+                'total_rows' => count($cleanData) + count($conflicts),
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Gagal memproses file Excel: ' . $e->getMessage()], 422);
+        }
+    }
+
+    /**
+     * Konfirmasi impor setelah user memilih update/skip pada data konflik.
+     */
+    public function importConfirm(Request $request)
+    {
+        $cleanData = $request->input('clean_data', []);
+        $resolvedConflicts = $request->input('resolved_conflicts', []);
+
+        $newCount = 0;
+        $updatedCount = 0;
+        $skippedCount = 0;
+
+        // 1. Simpan clean data
+        foreach ($cleanData as $item) {
+            $p = Participant::create([
+                'nama' => $item['nama'],
+                'nis_nip' => $item['nis_nip'],
+                'status' => $item['status'] ?? null,
+            ]);
+            User::updateOrCreate(
+                ['username' => $item['nis_nip']],
+                [
+                    'name' => $item['nama'],
+                    'password' => Hash::make($item['nis_nip']),
+                    'role' => 'participant',
+                    'participant_id' => $p->id,
+                ]
+            );
+            $newCount++;
+        }
+
+        // 2. Proses resolved conflicts
+        foreach ($resolvedConflicts as $item) {
+            $resolution = $item['resolution'] ?? 'skip';
+            $existingId = $item['existing']['id'] ?? null;
+            $newData = $item['new'];
+
+            if ($resolution === 'update') {
+                if ($existingId) {
+                    $participant = Participant::find($existingId);
+                    if ($participant) {
+                        $oldNip = $participant->nis_nip;
+                        $participant->update([
+                            'nama' => $newData['nama'],
+                            'nis_nip' => $newData['nis_nip'],
+                            'status' => $newData['status'] === '-' ? null : $newData['status'],
+                        ]);
+
+                        User::where('participant_id', $participant->id)
+                            ->orWhere('username', $oldNip)
+                            ->update([
+                                'name' => $newData['nama'],
+                                'username' => $newData['nis_nip'],
+                            ]);
+
+                        $updatedCount++;
+                    }
+                } else {
+                    $p = Participant::updateOrCreate(
+                        ['nis_nip' => $newData['nis_nip']],
+                        [
+                            'nama' => $newData['nama'],
+                            'status' => $newData['status'] === '-' ? null : $newData['status'],
+                        ]
+                    );
+                    User::updateOrCreate(
+                        ['username' => $newData['nis_nip']],
+                        [
+                            'name' => $newData['nama'],
+                            'password' => Hash::make($newData['nis_nip']),
+                            'role' => 'participant',
+                            'participant_id' => $p->id,
+                        ]
+                    );
+                    $updatedCount++;
+                }
+            } else {
+                $skippedCount++;
+            }
+        }
+
+        $summary = "Impor selesai! {$newCount} data baru ditambahkan";
+        if ($updatedCount > 0) $summary .= ", {$updatedCount} data diperbarui";
+        if ($skippedCount > 0) $summary .= ", {$skippedCount} data dilewati";
+        $summary .= ".";
+
+        return redirect()->route('participants.index')->with('success', $summary);
+    }
+
+    /**
+     * Import peserta secara massal via Excel/CSV (Direct fallback).
      */
     public function import(Request $request)
     {
@@ -256,29 +633,33 @@ class ParticipantController extends Controller
             $successCount = 0;
 
             foreach ($rows as $row) {
-                $nama = trim($row[$namaColKey] ?? '');
-                $nisNip = trim($row[$nisNipColKey] ?? '');
-                $status = isset($row[$statusColKey]) ? trim($row[$statusColKey]) : null;
+                $rawNama = trim((string)($row[$namaColKey] ?? ''));
+                $rawNip = trim((string)($row[$nisNipColKey] ?? ''));
+                $rawStatus = isset($row[$statusColKey]) ? trim((string)$row[$statusColKey]) : null;
 
-                if (empty($nama) || empty($nisNip)) {
+                if (empty($rawNama) || empty($rawNip)) {
                     continue; // Lewati baris kosong
                 }
 
+                $cleanNip = $this->cleanNisNip($rawNip);
+                $cleanNama = $rawNama;
+                $cleanStatus = $this->normalizeStatus($rawStatus);
+
                 // Update data jika NIP/NIS sudah terdaftar, atau buat baru jika belum
                 $participant = Participant::updateOrCreate(
-                    ['nis_nip' => $nisNip],
+                    ['nis_nip' => $cleanNip],
                     [
-                        'nama' => $nama,
-                        'status' => $status,
+                        'nama' => $cleanNama,
+                        'status' => $cleanStatus,
                     ]
                 );
 
                 // Buat akun user
                 User::updateOrCreate(
-                    ['username' => $nisNip],
+                    ['username' => $cleanNip],
                     [
-                        'name' => $nama,
-                        'password' => Hash::make($nisNip),
+                        'name' => $cleanNama,
+                        'password' => Hash::make($cleanNip),
                         'role' => 'participant',
                         'participant_id' => $participant->id,
                     ]

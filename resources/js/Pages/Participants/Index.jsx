@@ -16,6 +16,8 @@ export default function ParticipantsIndex({ participants }) {
     const [showQr, setShowQr] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
+    const [sortBy, setSortBy] = useState('latest');
+    const [selectedIds, setSelectedIds] = useState([]);
     const [editParticipant, setEditParticipant] = useState(null);
     const [faceRegistrationParticipant, setFaceRegistrationParticipant] = useState(null);
     const [approveFaceParticipant, setApproveFaceParticipant] = useState(null);
@@ -41,8 +43,6 @@ export default function ParticipantsIndex({ participants }) {
         }
     }, [flash]);
 
-
-
     const handleSubmit = (e) => {
         e.preventDefault();
         post(route('participants.store'), {
@@ -55,10 +55,15 @@ export default function ParticipantsIndex({ participants }) {
 
     const handleEditClick = (participant) => {
         setEditParticipant(participant);
+        let statusVal = participant.status || '';
+        const validStatuses = ['PNS', 'PPPK', 'PPPK Paruh Waktu'];
+        const found = validStatuses.find(s => s.toLowerCase() === statusVal.trim().toLowerCase());
+        if (found) statusVal = found;
+
         editForm.setData({
             nama: participant.nama,
             nis_nip: participant.nis_nip,
-            status: participant.status || '',
+            status: statusVal,
         });
     };
 
@@ -81,7 +86,49 @@ export default function ParticipantsIndex({ participants }) {
             cancelText: 'Batal',
         });
         if (confirmed) {
-            router.delete(route('participants.destroy', id));
+            router.delete(route('participants.destroy', id), {
+                onSuccess: () => {
+                    setSelectedIds(prev => prev.filter(item => item !== id));
+                }
+            });
+        }
+    };
+
+    const handleSelectAll = (e) => {
+        if (e.target.checked) {
+            setSelectedIds(filteredParticipants.map((p) => p.id));
+        } else {
+            setSelectedIds([]);
+        }
+    };
+
+    const handleToggleSelect = (id) => {
+        setSelectedIds((prev) =>
+            prev.includes(id) ? prev.filter((itemId) => itemId !== id) : [...prev, id]
+        );
+    };
+
+    const handleBulkDelete = async () => {
+        if (selectedIds.length <= 3) {
+            toast.error('Pilih lebih dari 3 peserta untuk melakukan hapus massal.');
+            return;
+        }
+
+        const confirmed = await confirm({
+            title: `Hapus ${selectedIds.length} Peserta`,
+            message: `Apakah Anda yakin ingin menghapus ${selectedIds.length} peserta yang dipilih? Semua data terkait dan akun peserta akan dihapus secara permanen.`,
+            type: 'danger',
+            confirmText: `Ya, Hapus (${selectedIds.length})`,
+            cancelText: 'Batal',
+        });
+
+        if (confirmed) {
+            router.delete(route('participants.bulk-destroy'), {
+                data: { ids: selectedIds },
+                onSuccess: () => {
+                    setSelectedIds([]);
+                },
+            });
         }
     };
 
@@ -129,13 +176,26 @@ export default function ParticipantsIndex({ participants }) {
         printWindow.document.close();
     };
 
-    const filteredParticipants = participants.filter(
-        (p) => {
+    const normalizeStatus = (str) => (str || '').toString().trim().toLowerCase().replace(/\s+/g, ' ');
+
+    const filteredParticipants = participants
+        .filter((p) => {
             const matchesSearch = p.nama.toLowerCase().includes(searchQuery.toLowerCase()) || p.nis_nip.toLowerCase().includes(searchQuery.toLowerCase());
-            const matchesStatus = statusFilter ? p.status === statusFilter : true;
+            const matchesStatus = statusFilter ? normalizeStatus(p.status) === normalizeStatus(statusFilter) : true;
             return matchesSearch && matchesStatus;
-        }
-    );
+        })
+        .sort((a, b) => {
+            if (sortBy === 'alpha-asc') {
+                return a.nama.localeCompare(b.nama, 'id', { sensitivity: 'base' });
+            } else if (sortBy === 'alpha-desc') {
+                return b.nama.localeCompare(a.nama, 'id', { sensitivity: 'base' });
+            } else if (sortBy === 'oldest') {
+                return a.id - b.id;
+            } else {
+                // 'latest' (Data Terbaru - default)
+                return b.id - a.id;
+            }
+        });
 
     return (
         <AuthenticatedLayout
@@ -173,7 +233,7 @@ export default function ParticipantsIndex({ participants }) {
             {/* Toast is now handled globally via ToastProvider */}
 
             <div className="py-4 px-4 sm:px-6 lg:px-8 flex-1 flex flex-col overflow-hidden justify-between max-h-[580px]">
-                <div className="mx-auto max-w-7xl w-full flex-1 flex flex-col overflow-hidden space-y-4">
+                <div className="mx-auto max-w-7xl w-full flex-1 flex flex-col overflow-hidden space-y-3">
                     
                     {/* Stats Cards (flex-none) */}
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 flex-none" data-aos="fade-up">
@@ -219,7 +279,7 @@ export default function ParticipantsIndex({ participants }) {
                     </div>
 
                     {/* Search and Filter (flex-none) */}
-                    <div className="mb-2 flex-none flex gap-3" data-aos="fade-up" data-aos-delay="100">
+                    <div className="flex-none flex flex-col sm:flex-row gap-3" data-aos="fade-up" data-aos-delay="100">
                         <div className="relative flex-1">
                             <svg xmlns="http://www.w3.org/2000/svg" className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -232,19 +292,87 @@ export default function ParticipantsIndex({ participants }) {
                                 className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-11 pr-4 text-sm text-slate-800 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 shadow-sm font-medium"
                             />
                         </div>
-                        <div className="w-48 sm:w-56">
-                            <select
-                                value={statusFilter}
-                                onChange={(e) => setStatusFilter(e.target.value)}
-                                className="w-full rounded-xl border border-slate-200 bg-white py-2.5 px-4 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 shadow-sm font-medium cursor-pointer"
-                            >
-                                <option value="">Semua Status Pegawai</option>
-                                <option value="PNS">PNS</option>
-                                <option value="PPPK">PPPK</option>
-                                <option value="PPPK Paruh Waktu">PPPK Paruh Waktu</option>
-                            </select>
+                        <div className="flex items-center gap-2">
+                            <div className="w-44 sm:w-48">
+                                <select
+                                    value={sortBy}
+                                    onChange={(e) => setSortBy(e.target.value)}
+                                    className="w-full rounded-xl border border-slate-200 bg-white py-2.5 px-3.5 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 shadow-sm font-medium cursor-pointer"
+                                >
+                                    <option value="latest">Data Terbaru</option>
+                                    <option value="oldest">Data Terlama</option>
+                                    <option value="alpha-asc">Urut Abjad (A - Z)</option>
+                                    <option value="alpha-desc">Urut Abjad (Z - A)</option>
+                                </select>
+                            </div>
+                            <div className="w-44 sm:w-52">
+                                <select
+                                    value={statusFilter}
+                                    onChange={(e) => setStatusFilter(e.target.value)}
+                                    className="w-full rounded-xl border border-slate-200 bg-white py-2.5 px-3.5 text-sm text-slate-800 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 shadow-sm font-medium cursor-pointer"
+                                >
+                                    <option value="">Semua Status Pegawai</option>
+                                    <option value="PNS">PNS</option>
+                                    <option value="PPPK">PPPK</option>
+                                    <option value="PPPK Paruh Waktu">PPPK Paruh Waktu</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
+
+                    {/* Bulk Action Toolbar */}
+                    {selectedIds.length > 0 && (
+                        <div className="flex-none flex flex-wrap items-center justify-between gap-2 rounded-xl bg-indigo-50/80 border border-indigo-200 px-4 py-2 text-xs animate-[fadeIn_0.2s_ease-out]">
+                            <div className="flex items-center gap-2">
+                                <span className="inline-flex items-center justify-center rounded-full bg-indigo-600 px-2 py-0.5 text-xs font-black text-white shadow-sm">
+                                    {selectedIds.length}
+                                </span>
+                                <span className="font-bold text-slate-700">
+                                    Peserta dipilih
+                                </span>
+                                {selectedIds.length <= 3 ? (
+                                    <span className="hidden sm:inline-flex items-center gap-1 rounded-md bg-amber-100/90 border border-amber-200 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-amber-600" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                                        </svg>
+                                        Pilih lebih dari 3 peserta (minimal 4) untuk hapus massal
+                                    </span>
+                                ) : (
+                                    <span className="hidden sm:inline-flex items-center gap-1 rounded-md bg-emerald-100/90 border border-emerald-200 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
+                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5 text-emerald-600" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                        </svg>
+                                        Siap dihapus massal ({selectedIds.length} peserta)
+                                    </span>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setSelectedIds([])}
+                                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm cursor-pointer"
+                                >
+                                    Batal Pilih
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={selectedIds.length <= 3}
+                                    onClick={handleBulkDelete}
+                                    className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-bold transition-all shadow-sm ${
+                                        selectedIds.length > 3
+                                            ? 'bg-red-600 hover:bg-red-700 text-white shadow-red-500/20 active:scale-95 cursor-pointer'
+                                            : 'bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300/60'
+                                    }`}
+                                    title={selectedIds.length <= 3 ? "Pilih lebih dari 3 peserta (minimal 4) untuk mengaktifkan tombol hapus massal" : `Hapus ${selectedIds.length} peserta terpilih`}
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                    Hapus Massal ({selectedIds.length})
+                                </button>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Table Wrapper (flex-1 and overflow-y-auto to lock scroll within screen height) */}
                     <div className="overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-sm flex-1 flex flex-col min-h-0" data-aos="fade-up" data-aos-delay="200">
@@ -252,6 +380,20 @@ export default function ParticipantsIndex({ participants }) {
                             <table className="min-w-full divide-y divide-slate-200 relative">
                                 <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm">
                                     <tr>
+                                        <th className="w-12 px-4 py-3 text-center">
+                                            <input
+                                                type="checkbox"
+                                                checked={filteredParticipants.length > 0 && selectedIds.length === filteredParticipants.length}
+                                                ref={(el) => {
+                                                    if (el) {
+                                                        el.indeterminate = selectedIds.length > 0 && selectedIds.length < filteredParticipants.length;
+                                                    }
+                                                }}
+                                                onChange={handleSelectAll}
+                                                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                                title={selectedIds.length === filteredParticipants.length ? "Batal Pilih Semua" : "Pilih Semua"}
+                                            />
+                                        </th>
                                         <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">No</th>
                                         <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">Nama</th>
                                         <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">NIP</th>
@@ -262,7 +404,7 @@ export default function ParticipantsIndex({ participants }) {
                                 <tbody className="divide-y divide-slate-100 bg-white">
                                     {filteredParticipants.length === 0 ? (
                                         <tr>
-                                            <td colSpan={5} className="px-6 py-10 text-center text-slate-500">
+                                            <td colSpan={6} className="px-6 py-10 text-center text-slate-500">
                                                 <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-10 w-10 text-slate-400 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                                                 </svg>
@@ -271,7 +413,18 @@ export default function ParticipantsIndex({ participants }) {
                                         </tr>
                                     ) : (
                                         filteredParticipants.map((participant, index) => (
-                                            <tr key={participant.id} className="transition-colors hover:bg-slate-50/50">
+                                            <tr 
+                                                key={participant.id} 
+                                                className={`transition-colors ${selectedIds.includes(participant.id) ? 'bg-indigo-50/60' : 'hover:bg-slate-50/50'}`}
+                                            >
+                                                <td className="whitespace-nowrap px-4 py-3.5 text-center">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedIds.includes(participant.id)}
+                                                        onChange={() => handleToggleSelect(participant.id)}
+                                                        className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                                    />
+                                                </td>
                                                 <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-500 font-semibold">{index + 1}</td>
                                                 <td className="whitespace-nowrap px-6 py-3.5">
                                                     <div className="flex items-center gap-3">
@@ -405,6 +558,11 @@ export default function ParticipantsIndex({ participants }) {
                                         required
                                     />
                                     {errors.nama && <p className="mt-1 text-xs text-red-600 font-bold">{errors.nama}</p>}
+                                    {data.nama.trim() && !errors.nama && participants.some(p => p.nama.trim().toLowerCase() === data.nama.trim().toLowerCase()) && (
+                                        <p className="mt-1 text-[11px] font-semibold text-amber-600 flex items-center gap-1">
+                                            <span>⚠</span> Nama ini sudah terdaftar pada NIP: {participants.find(p => p.nama.trim().toLowerCase() === data.nama.trim().toLowerCase())?.nis_nip}
+                                        </p>
+                                    )}
                                 </div>
                                 <div>
                                     <label htmlFor="nis_nip" className="mb-1 block text-sm font-bold text-slate-600">
@@ -420,25 +578,30 @@ export default function ParticipantsIndex({ participants }) {
                                         required
                                     />
                                     {errors.nis_nip && <p className="mt-1 text-xs text-red-600 font-bold">{errors.nis_nip}</p>}
+                                    {data.nis_nip.trim() && !errors.nis_nip && participants.some(p => p.nis_nip === data.nis_nip.trim().replace(/^['"]+/, '').replace(/\.0+$/, '')) && (
+                                        <p className="mt-1 text-[11px] font-semibold text-amber-600 flex items-center gap-1">
+                                            <span>⚠</span> NIP ini sudah terdaftar pada: {participants.find(p => p.nis_nip === data.nis_nip.trim().replace(/^['"]+/, '').replace(/\.0+$/, ''))?.nama}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
-<div>
-    <label htmlFor="status" className="mb-1 block text-sm font-bold text-slate-600">
-        Status Pegawai
-    </label>
-    <select
-        id="status"
-        value={data.status}
-        onChange={(e) => setData('status', e.target.value)}
-        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 font-semibold"
-    >
-        <option value="">-- Pilih Status --</option>
-        <option value="PNS">PNS</option>
-        <option value="PPPK">PPPK</option>
-        <option value="PPPK Paruh Waktu">PPPK Paruh Waktu</option>
-    </select>
-    {errors.status && <p className="mt-1 text-xs text-red-600 font-bold">{errors.status}</p>}
-</div>
+                            <div className="mt-4">
+                                <label htmlFor="status" className="mb-1 block text-sm font-bold text-slate-600">
+                                    Status Pegawai
+                                </label>
+                                <select
+                                    id="status"
+                                    value={data.status}
+                                    onChange={(e) => setData('status', e.target.value)}
+                                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 font-semibold"
+                                >
+                                    <option value="">-- Pilih Status --</option>
+                                    <option value="PNS">PNS</option>
+                                    <option value="PPPK">PPPK</option>
+                                    <option value="PPPK Paruh Waktu">PPPK Paruh Waktu</option>
+                                </select>
+                                {errors.status && <p className="mt-1 text-xs text-red-600 font-bold">{errors.status}</p>}
+                            </div>
 
                             <div className="mt-6 flex justify-end gap-3 border-t border-slate-100 pt-4">
                                 <button
@@ -491,6 +654,11 @@ export default function ParticipantsIndex({ participants }) {
                                         required
                                     />
                                     {editForm.errors.nama && <p className="mt-1 text-xs text-red-600 font-bold">{editForm.errors.nama}</p>}
+                                    {editForm.data.nama.trim() && !editForm.errors.nama && participants.some(p => p.id !== editParticipant.id && p.nama.trim().toLowerCase() === editForm.data.nama.trim().toLowerCase()) && (
+                                        <p className="mt-1 text-[11px] font-semibold text-amber-600 flex items-center gap-1">
+                                            <span>⚠</span> Nama ini sudah digunakan peserta lain (NIP: {participants.find(p => p.id !== editParticipant.id && p.nama.trim().toLowerCase() === editForm.data.nama.trim().toLowerCase())?.nis_nip})
+                                        </p>
+                                    )}
                                 </div>
                                 <div>
                                     <label htmlFor="edit_nis_nip" className="mb-1 block text-sm font-bold text-slate-600">
@@ -506,6 +674,11 @@ export default function ParticipantsIndex({ participants }) {
                                         required
                                     />
                                     {editForm.errors.nis_nip && <p className="mt-1 text-xs text-red-600 font-bold">{editForm.errors.nis_nip}</p>}
+                                    {editForm.data.nis_nip.trim() && !editForm.errors.nis_nip && participants.some(p => p.id !== editParticipant.id && p.nis_nip === editForm.data.nis_nip.trim().replace(/^['"]+/, '').replace(/\.0+$/, '')) && (
+                                        <p className="mt-1 text-[11px] font-semibold text-amber-600 flex items-center gap-1">
+                                            <span>⚠</span> NIP ini sudah digunakan oleh: {participants.find(p => p.id !== editParticipant.id && p.nis_nip === editForm.data.nis_nip.trim().replace(/^['"]+/, '').replace(/\.0+$/, ''))?.nama}
+                                        </p>
+                                    )}
                                 </div>
                                 <div>
                                     <label htmlFor="edit_status" className="mb-1 block text-sm font-bold text-slate-600">
