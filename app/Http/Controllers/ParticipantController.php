@@ -338,6 +338,8 @@ class ParticipantController extends Controller
         $filePath = $file->getRealPath();
 
         try {
+            // Gunakan StringValueBinder agar angka panjang (seperti NIP) tidak diubah menjadi float dan kehilangan presisi
+            \PhpOffice\PhpSpreadsheet\Cell\Cell::setValueBinder(new \PhpOffice\PhpSpreadsheet\Cell\StringValueBinder());
             $spreadsheet = IOFactory::load($filePath);
             $sheet = $spreadsheet->getActiveSheet();
             $rows = $sheet->toArray(null, true, true, true);
@@ -594,6 +596,8 @@ class ParticipantController extends Controller
         $filePath = $file->getRealPath();
 
         try {
+            // Gunakan StringValueBinder agar angka panjang (seperti NIP) tidak diubah menjadi float dan kehilangan presisi
+            \PhpOffice\PhpSpreadsheet\Cell\Cell::setValueBinder(new \PhpOffice\PhpSpreadsheet\Cell\StringValueBinder());
             $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($filePath);
             $sheet = $spreadsheet->getActiveSheet();
             $rows = $sheet->toArray(null, true, true, true); // Dapatkan baris ber-key kolom A, B, C...

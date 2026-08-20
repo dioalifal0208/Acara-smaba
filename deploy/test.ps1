@@ -22,7 +22,7 @@ function Write-Fail { param($msg) Write-Host "  ❌ $msg" -ForegroundColor Red }
 
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Magenta
-Write-Host "   🚀 DEPLOY PRESENSI SMABA" -ForegroundColor Magenta
+Write-Host "   🚀 DEPLOY ACARA SMABA" -ForegroundColor Magenta
 Write-Host "============================================" -ForegroundColor Magenta
 
 # --- 1. BUILD ASSETS ---
@@ -108,39 +108,4 @@ sys.exit(result.returncode)
     Set-Content -Path $pyFile -Value $pyScript
     $sshResult = python $pyFile
 }
-
-# Fallback: gunakan Plink jika tersedia (PuTTY CLI)
-$plinkAvailable = Get-Command plink -ErrorAction SilentlyContinue
-if ($plinkAvailable) {
-    Write-Host "  Menggunakan PuTTY Plink..." -ForegroundColor DarkGray
-    $sshResult = plink -ssh -P $SSH_PORT -l $SSH_USER -pw $SSH_PASS $SSH_HOST `
-        "mkdir -p ~/$REMOTE_DIR && cd ~/$REMOTE_DIR && if [ ! -d .git ]; then git clone https://github.com/dioalifal0208/Acara-smaba.git .; else git pull origin main; fi && composer install --no-dev --optimize-autoloader --no-interaction && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan migrate --force && chmod -R 775 storage bootstrap/cache && cp -r public/. ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/ && sed -i 's|/../vendor|/../../presensi-app/vendor|g' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php && sed -i 's|/../bootstrap|/../../presensi-app/bootstrap|g' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php && echo DEPLOY_SUCCESS" 2>&1
-} else {
-    # Gunakan ssh dengan PasswordAuthentication (membutuhkan input manual)
-    Write-Host ""
-    Write-Host "  ⚠️  Sistem tidak menemukan Plink (PuTTY)." -ForegroundColor Yellow
-    Write-Host "  Masukkan password SSH saat diminta: $SSH_PASS" -ForegroundColor Yellow
-    Write-Host ""
-    $sshResult = ssh -o StrictHostKeyChecking=no -p $SSH_PORT "${SSH_USER}@${SSH_HOST}" `
-        "mkdir -p ~/$REMOTE_DIR && cd ~/$REMOTE_DIR && if [ ! -d .git ]; then git clone https://github.com/dioalifal0208/Acara-smaba.git .; else git pull origin main; fi && composer install --no-dev --optimize-autoloader --no-interaction && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan migrate --force && chmod -R 775 storage bootstrap/cache && cp -r public/. ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/ && sed -i 's|/../vendor|/../../presensi-app/vendor|g' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php && sed -i 's|/../bootstrap|/../../presensi-app/bootstrap|g' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php && echo DEPLOY_SUCCESS" 2>&1
-}
-
-if ($sshResult -match "DEPLOY_SUCCESS") {
-    Write-OK "Hostinger berhasil diperbarui!"
-} else {
-    Write-Host $sshResult -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "  [i]  Jika koneksi SSH membutuhkan input password manual, itu normal." -ForegroundColor Yellow
-}
-
-# Cleanup
-Remove-Item $tmpFile -ErrorAction SilentlyContinue
-
-Write-Host ""
-Write-Host "============================================" -ForegroundColor Magenta
-Write-Host "   ✅ PROSES DEPLOY SELESAI!" -ForegroundColor Green
-Write-Host "   🌐 https://presensi.smanegeri1babatlmg.sch.id" -ForegroundColor Cyan
-Write-Host "============================================" -ForegroundColor Magenta
-Write-Host ""
-
 
