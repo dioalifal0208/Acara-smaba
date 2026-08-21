@@ -24,6 +24,18 @@ class Participant extends Model
         'face_descriptor' => 'array',
     ];
 
+    protected $appends = [
+        'photo_url',
+    ];
+
+    /**
+     * Get photo URL for participant.
+     */
+    public function getPhotoUrlAttribute(): ?string
+    {
+        return $this->photo_path ? asset('storage/' . $this->photo_path) : null;
+    }
+
     /**
      * Auto-generate QR token saat membuat peserta baru.
      */

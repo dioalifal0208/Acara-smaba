@@ -428,17 +428,26 @@ export default function ParticipantsIndex({ participants }) {
                                                 <td className="whitespace-nowrap px-6 py-3.5 text-xs text-slate-500 font-semibold">{index + 1}</td>
                                                 <td className="whitespace-nowrap px-6 py-3.5">
                                                     <div className="flex items-center gap-3">
-                                                        {participant.photo_url ? (
-                                                            <img 
-                                                                src={participant.photo_url} 
-                                                                alt={participant.nama} 
-                                                                className="h-8 w-8 rounded-full object-cover border border-slate-200"
-                                                            />
-                                                        ) : (
-                                                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-50 border border-indigo-100 text-xs font-bold text-indigo-600">
+                                                        <div className="relative h-8 w-8 shrink-0">
+                                                            {participant.photo_url && (
+                                                                <img 
+                                                                    src={participant.photo_url} 
+                                                                    alt={participant.nama} 
+                                                                    className="h-8 w-8 rounded-full object-cover border border-slate-200"
+                                                                    onError={(e) => {
+                                                                        e.currentTarget.style.display = 'none';
+                                                                        if (e.currentTarget.nextElementSibling) {
+                                                                            e.currentTarget.nextElementSibling.style.display = 'flex';
+                                                                        }
+                                                                    }}
+                                                                />
+                                                            )}
+                                                            <div 
+                                                                className={`h-8 w-8 items-center justify-center rounded-full bg-indigo-50 border border-indigo-100 text-xs font-bold text-indigo-600 ${participant.photo_url ? 'hidden' : 'flex'}`}
+                                                            >
                                                                 {participant.nama.charAt(0).toUpperCase()}
                                                             </div>
-                                                        )}
+                                                        </div>
                                                         <div className="flex flex-col">
                                                             <span className="text-sm font-bold text-slate-800">{participant.nama}</span>
                                                             {participant.face_status === 'approved' ? (

@@ -35,7 +35,7 @@ class ParticipantController extends Controller
                     'qr_token' => $participant->qr_token,
                     'has_face' => $participant->face_descriptor !== null,
                     'face_status' => $participant->face_status,
-                    'photo_url' => $participant->photo_path ? asset('storage/' . $participant->photo_path) : null,
+                    'photo_url' => $participant->photo_url,
                     'has_attended' => $participant->attendances_count > 0,
                     'created_at' => $participant->created_at->format('d M Y H:i'),
                 ];

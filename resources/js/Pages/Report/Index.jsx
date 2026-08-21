@@ -867,7 +867,7 @@ export default function ReportIndex({
             <Head title="Laporan Kehadiran" />
 
             <div className="py-4 px-4 sm:px-6 lg:px-8 flex-1 flex flex-col overflow-hidden justify-between max-h-[580px]">
-                <div className="mx-auto max-w-[1400px] w-full flex-1 flex flex-col overflow-hidden space-y-3.5">
+                <div className="mx-auto max-w-7xl w-full flex-1 flex flex-col overflow-hidden space-y-3.5">
                     
                     {/* Stats Cards (flex-none) */}
                     <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4 flex-none" data-aos="fade-up">

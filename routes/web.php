@@ -149,4 +149,15 @@ Route::post('/self-checkin/{token}', [SelfCheckInController::class, 'submitForm'
 
 // Public Face Recognition routes
 Route::post('/api/face/match', [\App\Http\Controllers\FaceRecognitionController::class, 'match'])->name('face.match');
+
+// Fallback & direct handler for public storage files (works even if storage:link is missing/broken on hosting/cPanel)
+Route::get('/storage/{path}', function ($path) {
+    if (!\Illuminate\Support\Facades\Storage::disk('public')->exists($path)) {
+        abort(404);
+    }
+    return \Illuminate\Support\Facades\Storage::disk('public')->response($path, null, [
+        'Cache-Control' => 'public, max-age=31536000',
+    ]);
+})->where('path', '.*')->name('storage.file');
+
 require __DIR__.'/auth.php';

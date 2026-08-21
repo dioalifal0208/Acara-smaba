@@ -112,17 +112,24 @@ export default function ParticipantDashboard({ activeWorkcode, participant }) {
                     >
                         <div className="flex items-center gap-4">
                             <div className="relative shrink-0">
-                                {participant?.photo_url ? (
+                                {participant?.photo_url && (
                                     <img 
                                         src={participant.photo_url} 
                                         alt={participant.nama} 
                                         className="h-16 w-16 rounded-2xl object-cover border-2 border-indigo-100 shadow-md"
+                                        onError={(e) => {
+                                            e.currentTarget.style.display = 'none';
+                                            if (e.currentTarget.nextElementSibling) {
+                                                e.currentTarget.nextElementSibling.style.display = 'flex';
+                                            }
+                                        }}
                                     />
-                                ) : (
-                                    <div className="h-16 w-16 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-white font-black text-2xl shadow-md shadow-indigo-500/20">
-                                        {(participant?.nama || user.name).charAt(0).toUpperCase()}
-                                    </div>
                                 )}
+                                <div 
+                                    className={`h-16 w-16 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 items-center justify-center text-white font-black text-2xl shadow-md shadow-indigo-500/20 ${participant?.photo_url ? 'hidden' : 'flex'}`}
+                                >
+                                    {(participant?.nama || user.name).charAt(0).toUpperCase()}
+                                </div>
                                 {faceStatus === 'approved' && (
                                     <div className="absolute -bottom-1 -right-1 h-5 w-5 bg-emerald-500 border-2 border-white rounded-full flex items-center justify-center text-white" title="Wajah Terverifikasi">
                                         <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">

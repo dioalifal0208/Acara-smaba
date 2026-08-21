@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { useForm } from '@inertiajs/react';
 import { useToast } from './Toast';
 
 export default function ApproveFaceModal({ participant, onClose, onSuccess }) {
     const { toast } = useToast();
     const form = useForm();
+    const [imgError, setImgError] = useState(false);
 
     const handleApprove = (e) => {
         e.preventDefault();
@@ -41,11 +43,19 @@ export default function ApproveFaceModal({ participant, onClose, onSuccess }) {
                 </div>
                 
                 <div className="mb-6 flex flex-col items-center">
-                    {participant.photo_url ? (
-                        <img src={participant.photo_url} alt="Foto Wajah" className="w-48 h-48 object-cover rounded-2xl border-4 border-slate-100 shadow-md" />
+                    {participant.photo_url && !imgError ? (
+                        <img 
+                            src={participant.photo_url} 
+                            alt="Foto Wajah" 
+                            className="w-48 h-48 object-cover rounded-2xl border-4 border-slate-100 shadow-md"
+                            onError={() => setImgError(true)}
+                        />
                     ) : (
-                        <div className="w-48 h-48 rounded-2xl bg-slate-100 border-4 border-slate-200 flex items-center justify-center text-slate-400 font-bold">
-                            Tidak ada foto
+                        <div className="w-48 h-48 rounded-2xl bg-slate-100 border-4 border-slate-200 flex flex-col items-center justify-center text-slate-400 font-bold p-4 text-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-slate-300 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <span className="text-xs">{imgError ? 'Foto gagal dimuat' : 'Tidak ada foto'}</span>
                         </div>
                     )}
                     <p className="text-xs text-slate-500 font-medium mt-4 text-center">Pastikan foto wajah terlihat jelas sebelum memberikan persetujuan.</p>
