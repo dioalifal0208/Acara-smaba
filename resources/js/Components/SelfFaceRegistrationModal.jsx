@@ -172,16 +172,21 @@ export default function SelfFaceRegistrationModal({ participant, onClose }) {
 
         try {
             const video = videoRef.current;
+            const vw = video.videoWidth;
+            const vh = video.videoHeight;
+
+            if (!vw || !vh) throw new Error('Video belum siap, coba lagi.');
+
             const captureCanvas = document.createElement('canvas');
-            captureCanvas.width = video.videoWidth;
-            captureCanvas.height = video.videoHeight;
+            captureCanvas.width = vw;
+            captureCanvas.height = vh;
             const ctx = captureCanvas.getContext('2d');
+
+            // Draw video frame directly without mirror flip
+            // (mirror is only a CSS visual effect for the user)
+            ctx.drawImage(video, 0, 0, vw, vh);
             
-            ctx.translate(captureCanvas.width, 0);
-            ctx.scale(-1, 1);
-            ctx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
-            
-            const photoDataUrl = captureCanvas.toDataURL('image/jpeg', 0.85);
+            const photoDataUrl = captureCanvas.toDataURL('image/jpeg', 0.90);
 
             const payload = {
                 descriptor: Array.from(targetDetection.descriptor),
@@ -309,20 +314,20 @@ export default function SelfFaceRegistrationModal({ participant, onClose }) {
                                         <div className={`w-full h-72 border-[3px] border-dashed rounded-full transition-colors duration-300 ${challengePassed ? 'border-emerald-400 bg-emerald-400/20' : 'border-white/50'}`}></div>
                                     </div>
 
-                                    {/* Challenge Badge */}
+                                    {/* Challenge Badge - subtle overlay */}
                                     {challenge && !challengePassed && !isProcessing && (
-                                        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 w-[90%] animate-[fadeIn_0.2s_ease-out]">
-                                            <div className="bg-indigo-600/90 backdrop-blur-md text-white px-4 py-3 rounded-2xl shadow-xl text-center border border-indigo-400/30">
-                                                <p className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-0.5">Tantangan Anti-Palsu</p>
-                                                <p className="text-base font-extrabold flex items-center justify-center gap-1.5">
-                                                    {challenge.badge}
-                                                </p>
-                                                {challenge.description && (
-                                                    <p className="text-[11px] text-indigo-100/80 mt-0.5 font-medium">{challenge.description}</p>
-                                                )}
-                                            </div>
-                                            <div className="mx-auto mt-2 w-10 h-10 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center border border-white/20 shadow-lg">
-                                                <span className={`text-xs font-black ${timeLeft <= 3 ? 'text-rose-400 animate-pulse' : 'text-white'}`}>{timeLeft}s</span>
+                                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 w-[88%] animate-[fadeIn_0.3s_ease-out]">
+                                            <div className="bg-black/40 backdrop-blur-sm text-white px-3 py-2.5 rounded-xl border border-white/10 flex items-center justify-between gap-3">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <span className="text-base shrink-0">{challenge.badge}</span>
+                                                    <div className="min-w-0">
+                                                        <p className="text-[10px] text-white/50 uppercase tracking-wider font-semibold">Instruksi</p>
+                                                        <p className="text-[11px] font-semibold text-white/90 truncate">{challenge.description || challenge.badge}</p>
+                                                    </div>
+                                                </div>
+                                                <div className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center border ${timeLeft <= 3 ? 'border-rose-400/60 bg-rose-500/20' : 'border-white/20 bg-white/10'}`}>
+                                                    <span className={`text-[10px] font-black ${timeLeft <= 3 ? 'text-rose-300 animate-pulse' : 'text-white/80'}`}>{timeLeft}</span>
+                                                </div>
                                             </div>
                                         </div>
                                     )}

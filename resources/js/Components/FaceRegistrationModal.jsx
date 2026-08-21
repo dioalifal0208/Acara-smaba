@@ -119,17 +119,24 @@ export default function FaceRegistrationModal({ participant, onClose, onSuccess 
             // Take a snapshot
             const video = videoRef.current;
             const captureCanvas = document.createElement('canvas');
-            captureCanvas.width = video.videoWidth;
-            captureCanvas.height = video.videoHeight;
+            const vw = video.videoWidth;
+            const vh = video.videoHeight;
+            
+            if (!vw || !vh) {
+                toast.error('Video belum siap. Coba lagi.');
+                setIsProcessing(false);
+                return;
+            }
+            
+            captureCanvas.width = vw;
+            captureCanvas.height = vh;
             const ctx = captureCanvas.getContext('2d');
             
-            // Draw video to canvas (handle flip because video is scaled x-1)
-            ctx.translate(captureCanvas.width, 0);
-            ctx.scale(-1, 1);
-            ctx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+            // Draw video frame directly (mirror is CSS-only, not needed in captured photo)
+            ctx.drawImage(video, 0, 0, vw, vh);
             
             // Get base64 jpeg
-            const photoDataUrl = captureCanvas.toDataURL('image/jpeg', 0.8);
+            const photoDataUrl = captureCanvas.toDataURL('image/jpeg', 0.90);
 
             const descriptor = Array.from(detectedFace.descriptor);
             
