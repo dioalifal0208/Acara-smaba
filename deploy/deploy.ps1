@@ -76,7 +76,7 @@ php artisan config:cache &&
 php artisan route:cache &&
 php artisan view:cache &&
 php artisan migrate --force &&
-chmod -R 775 storage bootstrap/cache && cp -r public/. ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/ && sed -i 's|/../vendor|/../../presensi-app/vendor|g' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php && sed -i 's|/../bootstrap|/../../presensi-app/bootstrap|g' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php &&
+chmod -R 775 storage bootstrap/cache && cp -r public/. ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/ && ln -sfn ~/domains/smanegeri1babatlmg.sch.id/presensi-app/storage/app/public ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/storage && sed -i 's|/../vendor|/../../presensi-app/vendor|g' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php && sed -i 's|/../bootstrap|/../../presensi-app/bootstrap|g' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php &&
 echo DEPLOY_SUCCESS
 "@
 
@@ -97,7 +97,7 @@ result = subprocess.run(
     ['ssh', '-o', 'StrictHostKeyChecking=no', '-o', 'PasswordAuthentication=yes',
      '-o', 'BatchMode=no', '-p', '$SSH_PORT',
      '$SSH_USER@$SSH_HOST',
-     'mkdir -p ~/$REMOTE_DIR && cd ~/$REMOTE_DIR && if [ ! -d .git ]; then git clone https://github.com/dioalifal0208/Acara-smaba.git .; else git pull origin main; fi && composer install --no-dev --optimize-autoloader --no-interaction && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan migrate --force && chmod -R 775 storage bootstrap/cache && cp -r public/. ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/ && sed -i \'s|/../vendor|/../../presensi-app/vendor|g\' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php && sed -i \'s|/../bootstrap|/../../presensi-app/bootstrap|g\' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php && echo DEPLOY_SUCCESS'],
+     'mkdir -p ~/$REMOTE_DIR && cd ~/$REMOTE_DIR && if [ ! -d .git ]; then git clone https://github.com/dioalifal0208/Acara-smaba.git .; else git pull origin main; fi && composer install --no-dev --optimize-autoloader --no-interaction && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan migrate --force && chmod -R 775 storage bootstrap/cache && cp -r public/. ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/ && ln -sfn ~/domains/smanegeri1babatlmg.sch.id/presensi-app/storage/app/public ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/storage && sed -i \'s|/../vendor|/../../presensi-app/vendor|g\' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php && sed -i \'s|/../bootstrap|/../../presensi-app/bootstrap|g\' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php && echo DEPLOY_SUCCESS'],
     capture_output=True, text=True
 )
 print(result.stdout)
@@ -114,7 +114,7 @@ $plinkAvailable = Get-Command plink -ErrorAction SilentlyContinue
 if ($plinkAvailable) {
     Write-Host "  Menggunakan PuTTY Plink..." -ForegroundColor DarkGray
     $sshResult = plink -ssh -P $SSH_PORT -l $SSH_USER -pw $SSH_PASS $SSH_HOST `
-        "mkdir -p ~/$REMOTE_DIR && cd ~/$REMOTE_DIR && if [ ! -d .git ]; then git clone https://github.com/dioalifal0208/Acara-smaba.git .; else git pull origin main; fi && composer install --no-dev --optimize-autoloader --no-interaction && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan migrate --force && chmod -R 775 storage bootstrap/cache && cp -r public/. ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/ && sed -i 's|/../vendor|/../../presensi-app/vendor|g' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php && sed -i 's|/../bootstrap|/../../presensi-app/bootstrap|g' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php && echo DEPLOY_SUCCESS" 2>&1
+        "mkdir -p ~/$REMOTE_DIR && cd ~/$REMOTE_DIR && if [ ! -d .git ]; then git clone https://github.com/dioalifal0208/Acara-smaba.git .; else git pull origin main; fi && composer install --no-dev --optimize-autoloader --no-interaction && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan migrate --force && chmod -R 775 storage bootstrap/cache && cp -r public/. ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/ && ln -sfn ~/domains/smanegeri1babatlmg.sch.id/presensi-app/storage/app/public ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/storage && sed -i 's|/../vendor|/../../presensi-app/vendor|g' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php && sed -i 's|/../bootstrap|/../../presensi-app/bootstrap|g' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php && echo DEPLOY_SUCCESS" 2>&1
 } else {
     # Gunakan ssh dengan PasswordAuthentication (membutuhkan input manual)
     Write-Host ""
@@ -122,7 +122,7 @@ if ($plinkAvailable) {
     Write-Host "  Masukkan password SSH saat diminta: $SSH_PASS" -ForegroundColor Yellow
     Write-Host ""
     $sshResult = ssh -o StrictHostKeyChecking=no -p $SSH_PORT "${SSH_USER}@${SSH_HOST}" `
-        "mkdir -p ~/$REMOTE_DIR && cd ~/$REMOTE_DIR && if [ ! -d .git ]; then git clone https://github.com/dioalifal0208/Acara-smaba.git .; else git pull origin main; fi && composer install --no-dev --optimize-autoloader --no-interaction && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan migrate --force && chmod -R 775 storage bootstrap/cache && cp -r public/. ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/ && sed -i 's|/../vendor|/../../presensi-app/vendor|g' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php && sed -i 's|/../bootstrap|/../../presensi-app/bootstrap|g' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php && echo DEPLOY_SUCCESS" 2>&1
+        "mkdir -p ~/$REMOTE_DIR && cd ~/$REMOTE_DIR && if [ ! -d .git ]; then git clone https://github.com/dioalifal0208/Acara-smaba.git .; else git pull origin main; fi && composer install --no-dev --optimize-autoloader --no-interaction && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan migrate --force && chmod -R 775 storage bootstrap/cache && cp -r public/. ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/ && ln -sfn ~/domains/smanegeri1babatlmg.sch.id/presensi-app/storage/app/public ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/storage && sed -i 's|/../vendor|/../../presensi-app/vendor|g' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php && sed -i 's|/../bootstrap|/../../presensi-app/bootstrap|g' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php && echo DEPLOY_SUCCESS" 2>&1
 }
 
 if ($sshResult -match "DEPLOY_SUCCESS") {
