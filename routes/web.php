@@ -100,6 +100,12 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::get('/report/individual/{workcode}/{participant}', [AttendanceController::class, 'getIndividualRecap'])->name('report.individual');
     Route::get('/workcodes/{workcode}/export', [AttendanceController::class, 'exportAttendance'])->name('workcodes.export');
     Route::get('/workcodes/{workcode}/qr-signature', [AttendanceController::class, 'qrSignature'])->name('workcodes.qr-signature');
+
+    // Manual Attendance Management (Admin)
+    Route::post('/admin/attendances', [AttendanceController::class, 'manualStore'])->name('admin.attendances.store');
+    Route::put('/admin/attendances/{attendance}', [AttendanceController::class, 'manualUpdate'])->name('admin.attendances.update');
+    Route::delete('/admin/attendances/{attendance}', [AttendanceController::class, 'manualDestroy'])->name('admin.attendances.destroy');
+
     // Scanner routes (Admin only)
     Route::get('/scanner', [AttendanceController::class, 'scanner'])->name('scanner');
     Route::post('/scan', [AttendanceController::class, 'scan'])->name('scan');

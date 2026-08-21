@@ -429,7 +429,11 @@ class AttendanceController extends Controller
                         'nis_nip' => $attendance->participant->nis_nip ?? '-',
                         'status_pegawai' => $attendance->participant->status ?? '-',
                         'status' => $attendance->status,
+                        'tanggal' => ($attendance->waktu_hadir ?? $attendance->created_at)->format('Y-m-d'),
+                        'jam_masuk' => $attendance->waktu_hadir ? $attendance->waktu_hadir->format('H:i') : '',
+                        'jam_pulang' => $attendance->waktu_pulang ? $attendance->waktu_pulang->format('H:i') : '',
                         'waktu_hadir' => $attendance->waktu_hadir ? $attendance->waktu_hadir->format('d M Y H:i:s') : '-',
+                        'waktu_pulang' => $attendance->waktu_pulang ? $attendance->waktu_pulang->format('d M Y H:i:s') : '-',
                     ];
                 });
             }
@@ -444,11 +448,15 @@ class AttendanceController extends Controller
         }
 
         $totalNotAttended = $totalParticipants - $totalAttended;
+        $allParticipants = Participant::select('id', 'nama', 'nis_nip', 'status')
+            ->orderBy('nama', 'asc')
+            ->get();
 
         return Inertia::render('Report/Index', [
             'workcodes' => $workcodes,
             'selectedWorkcodeId' => $selectedWorkcodeId ? (int) $selectedWorkcodeId : null,
             'selectedWorkcode' => $selectedWorkcode,
+            'participants' => $allParticipants,
             'stats' => [
                 'total' => $totalParticipants,
                 'hadir' => $totalHadir,
@@ -463,7 +471,7 @@ class AttendanceController extends Controller
     }
 
     /**
-     * Dapatkan detail presensi harian untuk 1 partisipan (untuk Cetak Rekap Individu).
+     * Dapatkan detail presensi harian untuk 1 partisipan (untuk Cetak Rekap Individu & Kelola Log).
      */
     public function getIndividualRecap($workcodeId, $participantId)
     {
@@ -473,12 +481,20 @@ class AttendanceController extends Controller
         $attendances = Attendance::where('workcode_id', $workcodeId)
             ->where('participant_id', $participantId)
             ->orderBy('waktu_hadir', 'asc')
+            ->orderBy('created_at', 'asc')
             ->get()
             ->map(function ($att) {
+                $refDate = $att->waktu_hadir ?? $att->created_at;
                 return [
+                    'id' => $att->id,
+                    'tanggal' => $refDate ? $refDate->format('Y-m-d') : null,
+                    'tanggal_formatted' => $refDate ? $refDate->translatedFormat('d M Y') : '-',
+                    'jam_masuk' => $att->waktu_hadir ? $att->waktu_hadir->format('H:i') : '',
+                    'jam_pulang' => $att->waktu_pulang ? $att->waktu_pulang->format('H:i') : '',
                     'waktu_hadir' => $att->waktu_hadir ? $att->waktu_hadir->format('d M Y H:i:s') : '-',
                     'waktu_pulang' => $att->waktu_pulang ? $att->waktu_pulang->format('d M Y H:i:s') : '-',
                     'status' => $att->status,
+                    'leave_request_id' => $att->leave_request_id,
                 ];
             });
 
@@ -487,6 +503,127 @@ class AttendanceController extends Controller
             'participant' => $participant,
             'attendances' => $attendances
         ]);
+    }
+
+    /**
+     * Tambah log presensi secara manual oleh Admin.
+     */
+    public function manualStore(Request $request)
+    {
+        $request->validate([
+            'workcode_id' => 'required|exists:workcodes,id',
+            'participant_id' => 'required|exists:participants,id',
+            'tanggal' => 'required|date',
+            'jam_masuk' => 'nullable|string',
+            'jam_pulang' => 'nullable|string',
+            'status' => 'required|in:hadir,izin,sakit,alpha,lupa_absen',
+        ]);
+
+        $tanggal = $request->tanggal;
+        $waktuHadir = $request->filled('jam_masuk')
+            ? \Carbon\Carbon::parse($tanggal . ' ' . $request->jam_masuk)
+            : ($request->status === 'hadir' ? \Carbon\Carbon::parse($tanggal . ' 07:00:00') : null);
+
+        $waktuPulang = $request->filled('jam_pulang')
+            ? \Carbon\Carbon::parse($tanggal . ' ' . $request->jam_pulang)
+            : null;
+
+        $createdAt = $waktuHadir ?? \Carbon\Carbon::parse($tanggal . ' 07:00:00');
+
+        $attendance = Attendance::where('workcode_id', $request->workcode_id)
+            ->where('participant_id', $request->participant_id)
+            ->where(function ($q) use ($tanggal) {
+                $q->whereDate('created_at', $tanggal)
+                  ->orWhereDate('waktu_hadir', $tanggal)
+                  ->orWhereDate('waktu_pulang', $tanggal);
+            })
+            ->first();
+
+        if ($attendance) {
+            $attendance->update([
+                'waktu_hadir' => $waktuHadir,
+                'waktu_pulang' => $waktuPulang,
+                'status' => $request->status,
+                'created_at' => $createdAt,
+            ]);
+        } else {
+            Attendance::create([
+                'workcode_id' => $request->workcode_id,
+                'participant_id' => $request->participant_id,
+                'waktu_hadir' => $waktuHadir,
+                'waktu_pulang' => $waktuPulang,
+                'status' => $request->status,
+                'created_at' => $createdAt,
+            ]);
+        }
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Data presensi berhasil disimpan.',
+                'attendance' => $attendance,
+            ]);
+        }
+
+        return redirect()->back()->with('success', 'Data presensi berhasil disimpan.');
+    }
+
+    /**
+     * Update log presensi secara manual oleh Admin.
+     */
+    public function manualUpdate(Request $request, Attendance $attendance)
+    {
+        $request->validate([
+            'tanggal' => 'required|date',
+            'jam_masuk' => 'nullable|string',
+            'jam_pulang' => 'nullable|string',
+            'status' => 'required|in:hadir,izin,sakit,alpha,lupa_absen',
+        ]);
+
+        $tanggal = $request->tanggal;
+        $waktuHadir = $request->filled('jam_masuk')
+            ? \Carbon\Carbon::parse($tanggal . ' ' . $request->jam_masuk)
+            : ($request->status === 'hadir' ? ($attendance->waktu_hadir ?? \Carbon\Carbon::parse($tanggal . ' 07:00:00')) : null);
+
+        $waktuPulang = $request->filled('jam_pulang')
+            ? \Carbon\Carbon::parse($tanggal . ' ' . $request->jam_pulang)
+            : null;
+
+        $createdAt = $waktuHadir ?? \Carbon\Carbon::parse($tanggal . ' 07:00:00');
+
+        $attendance->update([
+            'waktu_hadir' => $waktuHadir,
+            'waktu_pulang' => $waktuPulang,
+            'status' => $request->status,
+            'created_at' => $createdAt,
+        ]);
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Data presensi berhasil diperbarui.',
+                'attendance' => $attendance,
+            ]);
+        }
+
+        return redirect()->back()->with('success', 'Data presensi berhasil diperbarui.');
+    }
+
+    /**
+     * Hapus log presensi oleh Admin (misal reset Alpha / Izin).
+     */
+    public function manualDestroy(Request $request, Attendance $attendance)
+    {
+        $attendance->delete();
+
+        if ($request->wantsJson() || $request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Data presensi berhasil dihapus.',
+            ]);
+        }
+
+        return redirect()->back()->with('success', 'Data presensi berhasil dihapus.');
     }
 
     /**
