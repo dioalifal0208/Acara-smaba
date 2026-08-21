@@ -5,12 +5,13 @@ import LoginModal from '@/Components/LoginModal';
 import AOS from 'aos';
 import 'aos/dist/aos.css';
 
-export default function Welcome({ auth, stats: initialStats, canResetPassword = true }) {
+export default function Welcome({ auth, stats: initialStats, recentScans: initialRecentScans = [], canResetPassword = true }) {
     const { user } = auth;
     const isAdmin = user && user.isAdmin;
 
     const [stats, setStats] = useState(initialStats || { total: 0, hadir: 0, belum: 0 });
     const attendancePercentage = stats.total > 0 ? Math.round((stats.hadir / stats.total) * 100) : 0;
+    const [recentScans, setRecentScans] = useState(initialRecentScans);
     const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
     useEffect(() => {
@@ -332,544 +333,511 @@ export default function Welcome({ auth, stats: initialStats, canResetPassword = 
         return <span className="inline-flex rounded bg-rose-50 px-1.5 py-0.5 text-[9px] font-bold text-rose-600 border border-rose-200">Gagal</span>;
     };
 
+
     return (
         <>
             <Head title="E-Presensi SMA Negeri 1 Babat" />
 
-            <div className="relative min-h-screen flex flex-col overflow-hidden bg-slate-50 text-slate-800 font-sans">
-                
-                {/* --- PREMIUM BACKGROUND ELEMENTS --- */}
-                <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                    {/* Top left deep green glow */}
-                    <div className="absolute -top-[20%] -left-[10%] w-[60%] h-[60%] rounded-full bg-gradient-to-br from-smaba-600/20 to-emerald-400/10 blur-[120px]"></div>
-                    {/* Bottom right subtle glow */}
-                    <div className="absolute -bottom-[20%] -right-[10%] w-[60%] h-[60%] rounded-full bg-gradient-to-tl from-smaba-500/20 to-teal-300/10 blur-[120px]"></div>
-                    {/* Grid Pattern overlay */}
-                    <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMSIgY3k9IjEiIHI9IjEiIGZpbGw9InJnYmEoMCwgMCwgMCwgMC4wNSkiLz48L3N2Zz4=')] opacity-50 [mask-image:linear-gradient(to_bottom,white,transparent)]"></div>
+            {/* ═══════════════════════════════════════════════════
+                ROOT SHELL — warm green-tinted off-white background
+            ═══════════════════════════════════════════════════ */}
+            <div className="h-screen overflow-hidden flex flex-col" style={{ backgroundColor: '#f6faf6', fontFamily: "'Figtree', sans-serif" }}>
+
+                {/* ── SUBTLE BACKGROUND TEXTURE ── */}
+                <div className="fixed inset-0 pointer-events-none" aria-hidden="true">
+                    {/* Faint radial gradient — top center only, not heavy blobs */}
+                    <div style={{
+                        position: 'absolute', inset: 0,
+                        background: 'radial-gradient(ellipse 80% 50% at 50% -10%, rgba(47,147,56,0.07) 0%, transparent 70%)'
+                    }} />
+                    {/* Subtle dot grid — top portion only */}
+                    <div style={{
+                        position: 'absolute', inset: 0,
+                        backgroundImage: 'radial-gradient(circle, rgba(47,147,56,0.12) 1px, transparent 1px)',
+                        backgroundSize: '28px 28px',
+                        maskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, transparent 35%)',
+                        WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.4) 0%, transparent 35%)',
+                    }} />
                 </div>
 
-                {/* --- MODERN GLASS NAVBAR --- */}
-                <nav className="relative z-50 w-full px-6 py-5" data-aos="fade-down">
-                    <div className="mx-auto max-w-7xl">
-                        <div className="flex items-center justify-between rounded-3xl bg-white/70 backdrop-blur-xl border border-white/80 shadow-[0_8px_30px_rgb(0,0,0,0.04)] px-6 py-3">
-                            <div className="flex items-center gap-4">
-                                <div className="h-12 w-12 rounded-xl bg-white shadow-sm border border-slate-100 flex items-center justify-center overflow-hidden">
-                                    <img
-                                        src="/images/logo.png"
-                                        alt="Logo SMA Negeri 1 Babat"
-                                        className="h-9 w-9 object-contain"
-                                    />
-                                </div>
-                                <div>
-                                    <h1 className="font-black text-xl tracking-tight text-slate-900 leading-none">E-Presensi</h1>
-                                    <p className="text-[11px] font-bold text-smaba-600 tracking-widest uppercase mt-1">SMA Negeri 1 Babat</p>
-                                </div>
+                {/* ═══════════════════════════════════════════════════
+                    NAVBAR — sticky, minimal, integrated with page
+                ═══════════════════════════════════════════════════ */}
+                <header className="relative z-50 sticky top-0" style={{ borderBottom: '1px solid rgba(0,0,0,0.07)', backgroundColor: 'rgba(246,250,246,0.95)', backdropFilter: 'blur(12px)' }}>
+                    <div className="max-w-6xl mx-auto px-6 h-[64px] flex items-center justify-between">
+                        {/* Brand Mark */}
+                        <div className="flex items-center gap-3">
+                            <div className="h-9 w-9 rounded-lg flex items-center justify-center" style={{ background: '#f0faf0', border: '1px solid #c3efc6' }}>
+                                <img src="/images/logo.png" alt="Logo SMABA" className="h-6 w-6 object-contain" />
                             </div>
-
-                            <div className="flex items-center gap-3">
-                                {user ? (
-                                    <>
-                                        {isAdmin && (
-                                            <Link
-                                                href={route('dashboard')}
-                                                className="text-sm font-bold text-slate-600 hover:text-smaba-600 transition-colors mr-3"
-                                            >
-                                                Dashboard Admin
-                                            </Link>
-                                        )}
-                                        <Link
-                                            href={route('logout')}
-                                            method="post"
-                                            as="button"
-                                            className="rounded-2xl bg-white border border-slate-200 px-5 py-2.5 text-sm font-bold text-slate-700 transition-all hover:bg-slate-50 hover:border-slate-300 hover:shadow-sm"
-                                        >
-                                            Keluar
-                                        </Link>
-                                    </>
-                                ) : (
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsLoginModalOpen(true)}
-                                        className="group relative rounded-2xl bg-slate-900 px-6 py-2.5 text-sm font-bold text-white transition-all hover:bg-slate-800 shadow-lg shadow-slate-900/20 active:scale-95 overflow-hidden"
-                                    >
-                                        <div className="absolute inset-0 bg-gradient-to-r from-smaba-500/20 to-emerald-500/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                                        <span className="relative flex items-center gap-2">
-                                            Login
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                                            </svg>
-                                        </span>
-                                    </button>
-                                )}
+                            <div>
+                                <span className="block text-[15px] font-black tracking-tight" style={{ color: '#1a3d1e', lineHeight: 1 }}>E-Presensi</span>
+                                <span className="block text-[9px] font-bold tracking-[0.18em] uppercase mt-[3px]" style={{ color: '#2f9338' }}>SMA Negeri 1 Babat</span>
                             </div>
                         </div>
-                    </div>
-                </nav>
 
-                {/* --- MAIN CONTENT AREA --- */}
-                <main className="relative z-10 flex-1 flex items-center justify-center py-8 px-6">
-                    <div className="w-full max-w-7xl mx-auto h-full flex flex-col justify-center">
-                        
-                        {/* ── Scenario 1: GUEST / GURU (Tampilan Pencarian QR Code) ── */}
-                        {(!user || !isAdmin) && (
-                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-20 items-center">
-                                
-                                {/* ── Left Column: Premium Typography & Copywriting ── */}
-                                <div className="lg:col-span-7 space-y-8 text-center lg:text-left" data-aos="fade-right">
-                                    <div className="inline-flex items-center gap-3 rounded-full bg-white px-4 py-2 text-xs font-bold text-smaba-700 border border-slate-100 shadow-sm shadow-smaba-500/5">
-                                        <span className="flex h-2.5 w-2.5 relative">
-                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-smaba-400 opacity-75"></span>
-                                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-smaba-500"></span>
-                                        </span>
-                                        Layanan Administrasi Digital Terpadu
-                                    </div>
-                                    
-                                    <h2 className="text-5xl font-black tracking-tight text-slate-900 sm:text-7xl leading-[1.05]">
-                                        Sistem Presensi <br />
-                                        <span className="relative inline-block mt-2">
-                                            <span className="relative z-10 text-transparent bg-clip-text bg-gradient-to-r from-smaba-600 via-emerald-500 to-teal-500">
-                                                Cerdas &amp; Terintegrasi
+                        {/* Nav Actions */}
+                        <nav className="flex items-center gap-3">
+                            {user ? (
+                                <>
+                                    {isAdmin && (
+                                        <Link href={route('dashboard')} className="text-sm font-semibold transition-colors" style={{ color: '#4d7a52' }}>
+                                            Dashboard
+                                        </Link>
+                                    )}
+                                    <Link href={route('logout')} method="post" as="button" className="h-9 px-4 rounded-lg text-sm font-semibold transition-all" style={{ border: '1px solid rgba(0,0,0,0.12)', color: '#374151', background: 'white' }}>
+                                        Keluar
+                                    </Link>
+                                </>
+                            ) : (
+                                <button
+                                    type="button"
+                                    id="btn-login-nav"
+                                    onClick={() => setIsLoginModalOpen(true)}
+                                    className="h-9 px-5 rounded-lg text-sm font-bold text-white transition-all hover:opacity-90 active:scale-95"
+                                    style={{ background: '#2f9338', boxShadow: '0 1px 8px rgba(47,147,56,0.25)' }}
+                                >
+                                    Masuk →
+                                </button>
+                            )}
+                        </nav>
+                    </div>
+                </header>
+
+                {/* ═══════════════════════════════════════════════════
+                    MAIN CONTENT
+                ═══════════════════════════════════════════════════ */}
+                <main className="relative z-10 flex-1 flex flex-col">
+
+                    {/* ── GUEST / NON-ADMIN: Hero + Search Card ── */}
+                    {(!user || !isAdmin) && (
+                        <div className="flex-1 flex items-center">
+                            <div className="max-w-6xl mx-auto w-full px-6 py-4 lg:py-6">
+
+                                {/* ── GOLDEN RATIO GRID: 61.8% / 38.2% ── */}
+                                <div className="grid grid-cols-1 lg:grid-cols-[1fr_0.618fr] gap-10 lg:gap-16 items-center">
+
+                                    {/* ─── LEFT COLUMN: Hero Copy (61.8%) ─── */}
+                                    <div className="space-y-8 order-2 lg:order-1" data-aos="fade-right">
+
+                                        {/* Eyebrow tag */}
+                                        <div className="inline-flex items-center gap-2.5">
+                                            <span className="relative flex h-2 w-2">
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75" style={{ background: '#4db855' }}></span>
+                                                <span className="relative inline-flex rounded-full h-2 w-2" style={{ background: '#2f9338' }}></span>
                                             </span>
-                                        </span>
-                                    </h2>
-                                    
-                                    <p className="text-base text-slate-600 max-w-2xl font-medium leading-relaxed mx-auto lg:mx-0">
-                                        Selamat datang di portal <strong className="font-bold text-slate-800">E-Presensi SMA Negeri 1 Babat</strong>. 
-                                        Dapatkan akses cepat ke QR Code identitas Anda untuk keperluan absensi kegiatan sekolah. Masukkan Nama Lengkap atau NIP Anda untuk mencetak atau mengunduh kode presensi pribadi.
-                                    </p>
-                                    
-                                    <div className="flex flex-wrap items-center gap-6 pt-2 justify-center lg:justify-start">
-                                        <div className="flex flex-col gap-2">
-                                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm border border-slate-100 text-smaba-600">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                                </svg>
-                                            </div>
-                                            <span className="text-xs font-bold text-slate-700">1. Cari Data</span>
+                                            <span className="text-[11px] font-bold tracking-[0.16em] uppercase" style={{ color: '#2f9338' }}>
+                                                Layanan Administrasi Digital
+                                            </span>
                                         </div>
-                                        <div className="w-8 h-[2px] bg-slate-200 rounded-full hidden sm:block"></div>
-                                        <div className="flex flex-col gap-2">
-                                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm border border-slate-100 text-emerald-500">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                                </svg>
-                                            </div>
-                                            <span className="text-xs font-bold text-slate-700">2. Unduh QR</span>
+
+                                        {/* Main headline */}
+                                        <div>
+                                            <h1 className="font-black tracking-tight leading-[1.06]" style={{ fontSize: 'clamp(36px, 5vw, 60px)', color: '#0f2612' }}>
+                                                Sistem Presensi<br/>
+                                                <span style={{ color: '#2f9338' }}>Cerdas</span> &amp; Terintegrasi<br/>
+                                                <span style={{ fontSize: '0.7em', fontWeight: 800, color: '#374151', letterSpacing: '-0.01em' }}>SMA Negeri 1 Babat</span>
+                                            </h1>
                                         </div>
-                                        <div className="w-8 h-[2px] bg-slate-200 rounded-full hidden sm:block"></div>
-                                        <div className="flex flex-col gap-2">
-                                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white shadow-sm border border-slate-100 text-teal-500">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                                                </svg>
+
+                                        {/* Description */}
+                                        <p className="text-base leading-relaxed" style={{ color: '#4b5563', maxWidth: '420px', fontWeight: 500 }}>
+                                            Pantau statistik kehadiran acara secara langsung. Sistem presensi cerdas ini mendukung identifikasi cepat dan akurat menggunakan pemindaian wajah mandiri.
+                                        </p>
+
+                                        {/* Step indicators */}
+                                        <div className="flex flex-wrap items-center gap-3 pt-1">
+                                            {[
+                                                { n: '01', label: 'Siapkan Diri' },
+                                                { n: '02', label: 'Hampiri Kiosk Layar' },
+                                                { n: '03', label: 'Verifikasi Wajah' },
+                                            ].map((s, i) => (
+                                                <div key={i} className="flex items-center gap-2.5 rounded-xl px-4 py-2.5 transition-all"
+                                                    style={{ background: 'white', border: '1px solid rgba(0,0,0,0.08)', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+                                                    <span className="text-[10px] font-black tabular-nums" style={{ color: '#2f9338' }}>{s.n}</span>
+                                                    <span className="w-px h-3.5" style={{ background: '#e5e7eb' }}></span>
+                                                    <span className="text-[13px] font-semibold" style={{ color: '#374151' }}>{s.label}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* Decorative divider */}
+                                        <div className="flex items-center gap-4 pt-4">
+                                            <div className="h-px flex-1" style={{ maxWidth: '200px', background: 'linear-gradient(to right, #c3efc6, transparent)' }}></div>
+                                            <span className="text-[11px] font-bold tracking-wider uppercase" style={{ color: '#9ca3af' }}>E-Presensi SMABA</span>
+                                        </div>
+                                    </div>
+
+                                    {/* ─── RIGHT COLUMN: Live Dashboard (38.2%) ─── */}
+                                    <div className="order-1 lg:order-2" data-aos="fade-left" data-aos-delay="150">
+                                        <div className="rounded-2xl overflow-hidden flex flex-col" style={{ background: 'white', boxShadow: '0 4px 32px rgba(0,0,0,0.09)', border: '1px solid rgba(0,0,0,0.07)' }}>
+                                            
+                                            {/* Card Header — smaba green band */}
+                                            <div className="px-5 py-4 shrink-0 flex items-center justify-between" style={{ background: 'linear-gradient(135deg, #26742e 0%, #2f9338 60%, #38a843 100%)' }}>
+                                                <div>
+                                                    <h2 className="text-base font-black text-white">Live Dashboard</h2>
+                                                    <p className="text-[12px] font-medium mt-0.5" style={{ color: 'rgba(255,255,255,0.75)' }}>
+                                                        Statistik kehadiran hari ini
+                                                    </p>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full" style={{ background: 'rgba(255,255,255,0.2)' }}>
+                                                    <span className="h-1.5 w-1.5 rounded-full bg-white animate-pulse"></span>
+                                                    <span className="text-[9px] font-bold text-white uppercase tracking-wider">Live</span>
+                                                </div>
                                             </div>
-                                            <span className="text-xs font-bold text-slate-700">3. Scan di Lokasi</span>
+
+                                            {/* Card Body */}
+                                            <div className="p-5 space-y-5">
+                                                
+                                                {/* Circular Progress & Quick Stats */}
+                                                <div className="flex items-center gap-4">
+                                                    <div className="relative h-16 w-16 shrink-0 flex items-center justify-center">
+                                                        <svg className="h-full w-full transform -rotate-90" viewBox="0 0 36 36">
+                                                            <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#f0faf0" strokeWidth="3" />
+                                                            <path d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" fill="none" stroke="#2f9338" strokeWidth="3" strokeDasharray={`${attendancePercentage}, 100`} className="transition-all duration-1000 ease-out" />
+                                                        </svg>
+                                                        <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                                            <span className="text-sm font-black" style={{ color: '#1a3d1e' }}>{attendancePercentage}%</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex-1 grid grid-cols-2 gap-2">
+                                                        <div className="p-2.5 rounded-xl text-center" style={{ background: '#f9fafb', border: '1px solid #f3f4f6' }}>
+                                                            <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: '#6b7280' }}>Total</p>
+                                                            <p className="text-lg font-black mt-0.5" style={{ color: '#111827' }}>{stats.total}</p>
+                                                        </div>
+                                                        <div className="p-2.5 rounded-xl text-center" style={{ background: '#f0faf0', border: '1px solid #c3efc6' }}>
+                                                            <p className="text-[9px] font-bold uppercase tracking-wider" style={{ color: '#2f9338' }}>Hadir</p>
+                                                            <p className="text-lg font-black mt-0.5" style={{ color: '#1a3d1e' }}>{stats.hadir}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Recent Activity List */}
+                                                <div>
+                                                    <div className="flex items-center gap-2 mb-3">
+                                                        <div className="h-px flex-1" style={{ background: '#e5e7eb' }}></div>
+                                                        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#9ca3af' }}>Aktivitas Terkini</p>
+                                                        <div className="h-px flex-1" style={{ background: '#e5e7eb' }}></div>
+                                                    </div>
+                                                    
+                                                    <div className="space-y-2">
+                                                        {recentScans.length > 0 ? recentScans.map((scan, i) => (
+                                                            <div key={scan.id || i} className="flex items-center justify-between p-2.5 rounded-xl transition-all hover:bg-gray-50" style={{ background: 'white', border: '1px solid #f3f4f6' }}>
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className="h-8 w-8 rounded-full flex items-center justify-center text-xs font-black" style={{ background: '#f0faf0', color: '#2f9338' }}>
+                                                                        {scan.nama.charAt(0).toUpperCase()}
+                                                                    </div>
+                                                                    <div>
+                                                                        <p className="text-xs font-bold" style={{ color: '#1f2937' }}>{scan.nama}</p>
+                                                                        <p className="text-[10px] font-medium" style={{ color: '#2f9338' }}>Berhasil hadir</p>
+                                                                    </div>
+                                                                </div>
+                                                                <span className="text-[10px] font-bold" style={{ color: '#9ca3af' }}>{scan.waktu}</span>
+                                                            </div>
+                                                        )) : (
+                                                            <div className="text-center py-4">
+                                                                <p className="text-xs font-medium" style={{ color: '#9ca3af' }}>Belum ada data presensi.</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                            </div>
+                                        </div>
+
+                                        {/* Below-card login prompt */}
+                                        {!user && (
+                                            <p className="mt-4 text-center text-[12px] font-medium" style={{ color: '#9ca3af' }}>
+                                                Admin sekolah?{' '}
+                                                <button
+                                                    id="btn-login-card-prompt"
+                                                    onClick={() => setIsLoginModalOpen(true)}
+                                                    className="font-bold transition-colors hover:underline"
+                                                    style={{ color: '#2f9338' }}
+                                                >
+                                                    Masuk di sini
+                                                </button>
+                                            </p>
+                                        )}
+                                    </div>
+                                    {/* ─── END RIGHT COLUMN ─── */}
+
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── ADMIN: QR Scanner Dashboard ── */}
+                    {user && isAdmin && (
+                        <div className="flex-1 max-w-6xl mx-auto w-full px-6 py-4 flex flex-col gap-4">
+
+                            {/* ── Top bar: Page title + stats ── */}
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4" data-aos="fade-down">
+                                <div>
+                                    <div className="inline-flex items-center gap-2 mb-1">
+                                        <span className="h-1.5 w-1.5 rounded-full bg-smaba-500 animate-pulse"></span>
+                                        <span className="text-[10px] font-bold tracking-widest uppercase" style={{ color: '#2f9338' }}>Dashboard Admin</span>
+                                    </div>
+                                    <h2 className="text-2xl font-black tracking-tight" style={{ color: '#0f2612' }}>Kamera Presensi</h2>
+                                    <p className="text-sm font-medium mt-0.5" style={{ color: '#6b7280' }}>Arahkan QR Code peserta ke kamera untuk memvalidasi kehadiran</p>
+                                </div>
+
+                                {/* Compact Stats */}
+                                <div className="flex items-stretch gap-3">
+                                    <div className="px-5 py-3 rounded-xl text-center" style={{ background: 'white', border: '1px solid rgba(0,0,0,0.07)', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+                                        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#9ca3af' }}>Total</p>
+                                        <p className="text-2xl font-black mt-0.5" style={{ color: '#111827' }}>{stats.total}</p>
+                                    </div>
+                                    <div className="px-5 py-3 rounded-xl text-center" style={{ background: 'linear-gradient(135deg, #26742e, #2f9338)', boxShadow: '0 2px 8px rgba(47,147,56,0.2)' }}>
+                                        <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: 'rgba(255,255,255,0.7)' }}>Hadir</p>
+                                        <p className="text-2xl font-black mt-0.5 text-white">{stats.hadir}</p>
+                                    </div>
+                                    <div className="px-5 py-3 rounded-xl flex flex-col justify-center" style={{ background: 'white', border: '1px solid rgba(0,0,0,0.07)', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', minWidth: '90px' }}>
+                                        <div className="flex items-end justify-between mb-1.5">
+                                            <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#9ca3af' }}>Progress</p>
+                                            <p className="text-sm font-black" style={{ color: '#2f9338' }}>{attendancePercentage}%</p>
+                                        </div>
+                                        <div className="h-2 w-full rounded-full overflow-hidden" style={{ background: '#f0faf0' }}>
+                                            <div
+                                                className="h-full rounded-full transition-all duration-700"
+                                                style={{ width: `${attendancePercentage}%`, background: 'linear-gradient(to right, #4db855, #2f9338)' }}
+                                            />
                                         </div>
                                     </div>
                                 </div>
+                            </div>
 
-                                {/* ── Right Column: Interactive Search Card ── */}
-                                <div className="lg:col-span-5 relative" data-aos="fade-left" data-aos-delay="200">
-                                    {/* Decorative elements behind card */}
-                                    <div className="absolute -inset-4 bg-gradient-to-r from-smaba-400 to-emerald-400 rounded-[40px] blur-2xl opacity-20"></div>
-                                    
-                                    <div className="bg-white rounded-[32px] p-8 shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] relative z-20 border border-slate-100/80">
-                                        <div className="mb-8">
-                                            <h3 className="text-xl font-black text-slate-900 mb-2">Akses QR Code</h3>
-                                            <p className="text-sm text-slate-500 font-medium">Temukan kartu identitas digital Anda</p>
-                                        </div>
+                            {/* ── Scanner + History: Golden Ratio 62%/38% ── */}
+                            <div className="grid grid-cols-1 lg:grid-cols-[1fr_0.618fr] gap-5 flex-1 min-h-0" style={{ maxHeight: '520px' }}>
 
-                                        <form onSubmit={handleLookup} className="space-y-4">
-                                            <div className="relative group" ref={suggestionsRef}>
-                                                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 ml-1">Nama Lengkap / NIP</label>
-                                                <div className="relative">
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Ketik nama untuk mencari..."
-                                                        value={searchQuery}
-                                                        onChange={(e) => handleInputChange(e.target.value)}
-                                                        onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
-                                                        className="w-full rounded-2xl border-2 border-slate-100 bg-slate-50/50 py-4 pl-5 pr-14 text-sm text-slate-900 placeholder-slate-400 focus:border-smaba-500 focus:bg-white focus:outline-none focus:ring-4 focus:ring-smaba-500/10 font-semibold transition-all"
-                                                        required
-                                                        autoComplete="off"
-                                                    />
-                                                    <button
-                                                        type="submit"
-                                                        disabled={isSearching}
-                                                        className="absolute right-2 top-1/2 -translate-y-1/2 h-10 w-10 flex items-center justify-center rounded-xl bg-gradient-to-br from-smaba-500 to-smaba-600 text-white transition-all hover:shadow-lg hover:shadow-smaba-500/30 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:hover:scale-100"
-                                                    >
-                                                        {isSearching ? (
-                                                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></div>
-                                                        ) : (
-                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                                            </svg>
-                                                        )}
-                                                    </button>
+                                {/* ─── LEFT: Scanner (61.8%) ─── */}
+                                <div className="rounded-2xl overflow-hidden flex flex-col" data-aos="fade-right"
+                                    style={{ background: 'white', border: '1px solid rgba(0,0,0,0.07)', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
+
+                                    {/* Scanner header */}
+                                    <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+                                        <h3 className="text-sm font-bold flex items-center gap-2" style={{ color: '#374151' }}>
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" style={{ color: '#2f9338' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                            </svg>
+                                            Pratinjau Kamera
+                                        </h3>
+                                        <div className="flex items-center gap-2">
+                                            {isScanning && (
+                                                <div className="flex items-center gap-1.5 px-3 py-1 rounded-md" style={{ background: '#fef2f2' }}>
+                                                    <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse"></span>
+                                                    <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#dc2626' }}>LIVE</span>
                                                 </div>
+                                            )}
+                                            {isScanning && (
+                                                <button onClick={stopScanner} className="text-[11px] font-semibold px-3 py-1 rounded-md transition-colors" style={{ color: '#6b7280', background: '#f9fafb', border: '1px solid #e5e7eb' }}>
+                                                    Hentikan
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
 
-                                                {/* Recommendations Floating Dropdown */}
-                                                {showSuggestions && (
-                                                    <div className="absolute left-0 right-0 mt-3 z-50 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-2xl shadow-slate-900/10 max-h-60 overflow-y-auto divide-y divide-slate-50 animate-[fadeIn_0.15s_ease-out]">
-                                                        {suggestions.map((p) => (
-                                                            <div
-                                                                key={p.id}
-                                                                onClick={() => handleSelectSuggestion(p)}
-                                                                className="px-5 py-3 text-left transition-colors hover:bg-slate-50 cursor-pointer group/item"
-                                                            >
-                                                                <p className="text-sm font-bold text-slate-800 group-hover/item:text-smaba-700 transition-colors">{p.nama}</p>
-                                                                <p className="text-[11px] text-slate-500 font-semibold mt-0.5 tracking-wide">{p.nis_nip}</p>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
+                                    {/* Scanner viewport */}
+                                    <div className="flex-1 relative overflow-hidden" style={{ background: '#0f172a', minHeight: '280px' }}>
+                                        {isScanning && <div id="qr-reader" className="w-full h-full object-cover" />}
+
+                                        {isScanning && !isCameraLoading && (
+                                            <div className="scanner-search-overlay" aria-hidden="true">
+                                                <div className="scanner-search-box">
+                                                    <span className="scanner-search-corner scanner-search-corner-tl"></span>
+                                                    <span className="scanner-search-corner scanner-search-corner-tr"></span>
+                                                    <span className="scanner-search-corner scanner-search-corner-bl"></span>
+                                                    <span className="scanner-search-corner scanner-search-corner-br"></span>
+                                                    <span className="scanner-search-line"></span>
+                                                </div>
                                             </div>
-                                        </form>
+                                        )}
 
-                                        {lookupError && (
-                                            <div className="mt-5 rounded-2xl bg-rose-50 border border-rose-100 p-4 flex items-start gap-3 animate-[fadeIn_0.2s_ease-out]">
-                                                <div className="bg-rose-100 rounded-full p-1 mt-0.5">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-rose-600" viewBox="0 0 20 20" fill="currentColor">
-                                                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                        {isScanning && isCameraLoading && (
+                                            <div className="absolute inset-0 flex flex-col items-center justify-center" style={{ background: 'rgba(15,23,42,0.85)', backdropFilter: 'blur(4px)' }}>
+                                                <div className="h-9 w-9 rounded-full border-3 border-t-smaba-500 border-slate-700 animate-spin mb-3" style={{ border: '3px solid #1e293b', borderTopColor: '#2f9338' }}></div>
+                                                <p className="text-xs font-bold text-white tracking-widest uppercase">Inisialisasi Kamera</p>
+                                            </div>
+                                        )}
+
+                                        {!isScanning && (
+                                            <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
+                                                <div className="h-16 w-16 rounded-2xl flex items-center justify-center mb-5" style={{ background: '#1e293b' }}>
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" style={{ color: '#475569' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
                                                     </svg>
                                                 </div>
-                                                <p className="text-xs text-rose-800 font-semibold leading-relaxed">
-                                                    {lookupError}
-                                                </p>
-                                            </div>
-                                        )}
-                                        
-                                        {/* Tampilan Kartu Hasil QR */}
-                                        {lookupResult && (
-                                            <div className="mt-6 pt-6 border-t border-slate-100 relative animate-[slideIn_0.4s_ease-out]">
-                                                <div className="flex flex-col items-center bg-slate-50/50 rounded-3xl p-6 border border-slate-100/80">
-                                                    <div className="mb-4 flex flex-col items-center text-center">
-                                                        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-smaba-100 to-emerald-100 text-smaba-700 font-black text-xl mb-3 shadow-sm border border-white">
-                                                            {lookupResult.nama.charAt(0).toUpperCase()}
-                                                        </div>
-                                                        <h4 className="text-base font-black text-slate-900 leading-tight">{lookupResult.nama}</h4>
-                                                        <p className="text-xs text-slate-500 font-bold mt-1 tracking-wide bg-white px-2 py-0.5 rounded-md shadow-sm border border-slate-100">{lookupResult.nis_nip}</p>
-                                                    </div>
-
-                                                    <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-200 mb-6">
-                                                        <img
-                                                            src={route('participants.qr', lookupResult.id)}
-                                                            alt={`QR Code - ${lookupResult.nama}`}
-                                                            className="h-44 w-44"
-                                                        />
-                                                    </div>
-
-                                                    <div className="flex gap-3 w-full">
-                                                        <a
-                                                            href={route('participants.download.svg', lookupResult.id)}
-                                                            className="flex flex-1 items-center justify-center gap-2 rounded-2xl border-2 border-slate-200 bg-white px-4 py-3 text-xs font-bold text-slate-700 transition-all hover:bg-slate-50 hover:border-slate-300"
-                                                        >
-                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                                            </svg>
-                                                            Simpan
-                                                        </a>
-                                                        <button
-                                                            onClick={() => handlePrint(lookupResult)}
-                                                            className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-smaba-600 to-emerald-600 px-4 py-3 text-xs font-bold text-white transition-all hover:from-smaba-700 hover:to-emerald-700 shadow-lg shadow-smaba-500/25 active:scale-95"
-                                                        >
-                                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                                                            </svg>
-                                                            Cetak
-                                                        </button>
-                                                    </div>
-                                                </div>
+                                                <p className="text-sm font-bold text-white mb-1">Kamera Dinonaktifkan</p>
+                                                <p className="text-xs mb-6" style={{ color: '#64748b' }}>Klik tombol di bawah untuk memulai pemindaian QR</p>
+                                                <button
+                                                    id="btn-mulai-scan"
+                                                    onClick={startScanner}
+                                                    className="px-6 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90 active:scale-95"
+                                                    style={{ background: '#2f9338', boxShadow: '0 2px 12px rgba(47,147,56,0.3)' }}
+                                                >
+                                                    Mulai Pemindaian
+                                                </button>
                                             </div>
                                         )}
                                     </div>
+
+                                    {/* Error message */}
+                                    {error && (
+                                        <div className="px-5 py-3" style={{ background: '#fef2f2', borderTop: '1px solid #fecaca' }}>
+                                            <p className="text-xs font-semibold" style={{ color: '#dc2626' }}>{error}</p>
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
-                        )}
 
-                        {/* ── Scenario 2: ADMIN (Tampilan QR Scanner utama) ── */}
-                        {user && isAdmin && (
-                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-full max-h-[600px]">
-                                
-                                {/* ── Left: Scanner Dashboard ── */}
-                                <div className="lg:col-span-8 flex flex-col space-y-6">
-                                    <div className="flex items-end justify-between bg-white rounded-[24px] p-6 shadow-sm border border-slate-100 relative overflow-hidden" data-aos="fade-down">
-                                        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-smaba-50 to-transparent rounded-bl-full"></div>
-                                        <div className="relative z-10">
-                                            <div className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-3 py-1 text-[10px] font-bold text-white uppercase tracking-wider mb-2">
-                                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>
-                                                Dashboard Admin
-                                            </div>
-                                            <h2 className="text-3xl font-black text-slate-900 tracking-tight">Kamera Presensi</h2>
-                                            <p className="text-sm text-slate-500 font-medium mt-1">Arahkan QR Code peserta ke kamera untuk memvalidasi kehadiran.</p>
-                                        </div>
+                                {/* ─── RIGHT: Scan History (38.2%) ─── */}
+                                <div className="rounded-2xl flex flex-col overflow-hidden" data-aos="fade-left" data-aos-delay="100"
+                                    style={{ background: 'white', border: '1px solid rgba(0,0,0,0.07)', boxShadow: '0 2px 12px rgba(0,0,0,0.06)' }}>
+
+                                    {/* History header */}
+                                    <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: '1px solid rgba(0,0,0,0.06)', background: '#fafafa' }}>
+                                        <h3 className="text-sm font-black flex items-center gap-2" style={{ color: '#111827' }}>
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" style={{ color: '#2f9338' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            Aktivitas Real-time
+                                        </h3>
+                                        {scanHistory.length > 0 && (
+                                            <button
+                                                onClick={() => setScanHistory([])}
+                                                className="text-[10px] font-bold uppercase tracking-wider transition-colors"
+                                                style={{ color: '#9ca3af' }}
+                                                onMouseEnter={e => e.target.style.color = '#ef4444'}
+                                                onMouseLeave={e => e.target.style.color = '#9ca3af'}
+                                            >
+                                                Bersihkan
+                                            </button>
+                                        )}
                                     </div>
 
-                                    {/* Stats Cards */}
-                                    <div className="grid grid-cols-3 gap-4" data-aos="fade-up" data-aos-delay="100">
-                                        <div className="bg-white rounded-[24px] p-5 shadow-sm border border-slate-100 flex flex-col justify-center">
-                                            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Data</p>
-                                            <p className="text-3xl font-black text-slate-800 mt-1">{stats.total}</p>
-                                        </div>
-                                        <div className="bg-gradient-to-br from-smaba-600 to-emerald-600 rounded-[24px] p-5 shadow-md shadow-smaba-500/20 text-white flex flex-col justify-center">
-                                            <p className="text-[11px] font-bold text-emerald-100 uppercase tracking-wider">Telah Hadir</p>
-                                            <p className="text-3xl font-black mt-1">{stats.hadir}</p>
-                                        </div>
-                                        <div className="bg-white rounded-[24px] p-5 shadow-sm border border-slate-100 flex flex-col justify-center">
-                                            <div className="flex items-end justify-between mb-2">
-                                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Progress</p>
-                                                <p className="text-base font-black text-smaba-600 leading-none">{attendancePercentage}%</p>
+                                    {/* History list */}
+                                    <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                                        {scanHistory.length === 0 ? (
+                                            <div className="flex flex-col items-center justify-center h-full text-center py-12">
+                                                <div className="h-14 w-14 rounded-full flex items-center justify-center mb-4" style={{ background: '#f9fafb' }}>
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" style={{ color: '#d1d5db' }} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                                    </svg>
+                                                </div>
+                                                <p className="text-sm font-bold" style={{ color: '#6b7280' }}>Belum ada aktivitas</p>
+                                                <p className="text-xs mt-1" style={{ color: '#9ca3af' }}>Log scan akan muncul di sini</p>
                                             </div>
-                                            <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
+                                        ) : (
+                                            scanHistory.map((item, index) => (
                                                 <div
-                                                    className="h-full rounded-full bg-gradient-to-r from-smaba-400 to-emerald-500 transition-all duration-1000 ease-out"
-                                                    style={{ width: `${attendancePercentage}%` }}
-                                                />
-                                            </div>
-                                        </div>
+                                                    key={item.id}
+                                                    className="flex items-start gap-3 p-3.5 rounded-xl transition-all"
+                                                    style={{
+                                                        background: index === 0 ? 'white' : 'white',
+                                                        border: `1px solid ${index === 0 ? 'rgba(47,147,56,0.2)' : 'rgba(0,0,0,0.06)'}`,
+                                                        boxShadow: index === 0 ? '0 2px 8px rgba(47,147,56,0.08)' : 'none',
+                                                        transform: index === 0 ? 'scale(1.01)' : 'scale(1)',
+                                                    }}
+                                                >
+                                                    <div className="h-9 w-9 shrink-0 flex items-center justify-center rounded-xl text-sm font-black text-white shadow-sm"
+                                                        style={{
+                                                            background: item.status === 'success' ? '#2f9338'
+                                                                : item.status === 'already' ? '#d97706'
+                                                                : '#ef4444'
+                                                        }}>
+                                                        {item.nama?.charAt(0)?.toUpperCase() || '?'}
+                                                    </div>
+                                                    <div className="min-w-0 flex-1 pt-0.5">
+                                                        <p className="truncate text-sm font-bold" style={{ color: '#111827' }}>{item.nama}</p>
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            <span className="text-[10px] font-semibold" style={{ color: '#9ca3af' }}>{item.nis_nip}</span>
+                                                            {getStatusBadge(item.status)}
+                                                        </div>
+                                                    </div>
+                                                    <span className="shrink-0 text-[10px] font-semibold" style={{ color: '#9ca3af' }}>{item.timestamp}</span>
+                                                </div>
+                                            ))
+                                        )}
                                     </div>
 
-                                    {/* Scanner Camera Box */}
-                                    <div className="bg-white rounded-[32px] p-6 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 flex-1 flex flex-col relative overflow-hidden" data-aos="zoom-in" data-aos-delay="200">
-                                        
-                                        <div className="flex items-center justify-between mb-4">
-                                            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-smaba-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                                </svg>
-                                                Pratinjau Kamera
-                                            </h3>
-                                            {isScanning && (
-                                                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-rose-50 text-rose-600">
-                                                    <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse"></span>
-                                                    <span className="text-[11px] font-bold uppercase tracking-wider">Live</span>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <div className="relative flex-1 rounded-[24px] bg-slate-900 overflow-hidden shadow-inner flex items-center justify-center min-h-[250px]">
-                                            {isScanning && (
-                                                <div id="qr-reader" className="w-full h-full object-cover" />
-                                            )}
-
-                                            {isScanning && !isCameraLoading && (
-                                                <div className="scanner-search-overlay" aria-hidden="true">
-                                                    <div className="scanner-search-box">
-                                                        <span className="scanner-search-corner scanner-search-corner-tl"></span>
-                                                        <span className="scanner-search-corner scanner-search-corner-tr"></span>
-                                                        <span className="scanner-search-corner scanner-search-corner-bl"></span>
-                                                        <span className="scanner-search-corner scanner-search-corner-br"></span>
-                                                        <span className="scanner-search-line"></span>
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {isScanning && isCameraLoading && (
-                                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/80 backdrop-blur-sm z-10">
-                                                    <div className="h-10 w-10 animate-spin rounded-full border-4 border-slate-700 border-t-smaba-500 mb-4"></div>
-                                                    <p className="text-xs font-bold text-white tracking-widest uppercase">Inisialisasi Kamera</p>
-                                                </div>
-                                            )}
-
-                                            {!isScanning && (
-                                                <div className="flex flex-col items-center justify-center text-center p-8">
-                                                    <div className="h-16 w-16 rounded-full bg-slate-800 flex items-center justify-center mb-4 text-slate-500">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                                                        </svg>
-                                                    </div>
-                                                    <p className="text-sm font-bold text-slate-300 mb-1">Kamera Dinonaktifkan</p>
-                                                    <p className="text-xs text-slate-500 mb-6">Sistem menunggu untuk mengaktifkan pemindai QR Code</p>
-                                                    <button
-                                                        onClick={startScanner}
-                                                        className="rounded-xl bg-smaba-600 px-6 py-3 text-sm font-bold text-white hover:bg-smaba-700 transition-all shadow-lg active:scale-95"
-                                                    >
-                                                        Mulai Pemindaian
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        {error && (
-                                            <div className="mt-4 p-3 rounded-xl bg-rose-50 border border-rose-100 text-center">
-                                                <p className="text-xs font-bold text-rose-600">{error}</p>
-                                            </div>
-                                        )}
-
-                                        {isScanning && (
-                                            <div className="mt-4 flex justify-end">
-                                                <button
-                                                    onClick={stopScanner}
-                                                    className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-800 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors"
-                                                >
-                                                    Hentikan Kamera
-                                                </button>
-                                            </div>
-                                        )}
+                                    {/* Scan count footer */}
+                                    <div className="px-5 py-3 flex items-center justify-between" style={{ borderTop: '1px solid rgba(0,0,0,0.06)', background: '#fafafa' }}>
+                                        <span className="text-[11px] font-semibold" style={{ color: '#9ca3af' }}>
+                                            Total scan: <strong style={{ color: '#374151' }}>{scanCount}</strong>
+                                        </span>
+                                        <Link href={route('dashboard')} className="text-[11px] font-bold transition-colors" style={{ color: '#2f9338' }}>
+                                            Buka Dashboard →
+                                        </Link>
                                     </div>
                                 </div>
 
-                                {/* ── Right: Live Scan History ── */}
-                                <div className="lg:col-span-4 h-full">
-                                    <div className="bg-white rounded-[32px] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 h-full flex flex-col overflow-hidden">
-                                        <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                                            <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-smaba-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                </svg>
-                                                Aktivitas Real-time
-                                            </h3>
-                                            {scanHistory.length > 0 && (
-                                                <button
-                                                    onClick={() => setScanHistory([])}
-                                                    className="text-[10px] font-bold uppercase tracking-wider text-slate-400 hover:text-rose-500 transition-colors"
-                                                >
-                                                    Bersihkan
-                                                </button>
-                                            )}
-                                        </div>
-
-                                        <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-slate-50/30">
-                                            {scanHistory.length === 0 ? (
-                                                <div className="flex flex-col items-center justify-center h-full text-center text-slate-500">
-                                                    <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center mb-4">
-                                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                                                        </svg>
-                                                    </div>
-                                                    <p className="text-sm font-bold text-slate-700">Belum ada aktivitas</p>
-                                                    <p className="text-xs mt-1 text-slate-400">Log scan peserta akan muncul di sini</p>
-                                                </div>
-                                            ) : (
-                                                scanHistory.map((item, index) => (
-                                                    <div
-                                                        key={item.id}
-                                                        className={`flex items-start gap-3 p-4 rounded-2xl transition-all ${index === 0 ? 'bg-white shadow-md border border-slate-100 scale-[1.02] relative z-10' : 'bg-white/50 hover:bg-white border border-transparent'}`}
-                                                    >
-                                                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-black shadow-sm ${
-                                                            item.status === 'success' ? 'bg-gradient-to-br from-emerald-400 to-emerald-500 text-white' :
-                                                            item.status === 'already' ? 'bg-gradient-to-br from-amber-400 to-amber-500 text-white' :
-                                                            'bg-gradient-to-br from-rose-400 to-rose-500 text-white'
-                                                        }`}>
-                                                            {item.nama?.charAt(0)?.toUpperCase() || '?'}
-                                                        </div>
-                                                        <div className="min-w-0 flex-1 pt-0.5">
-                                                            <p className="truncate text-sm font-bold text-slate-800 leading-none">{item.nama}</p>
-                                                            <div className="flex items-center gap-2 mt-2">
-                                                                <span className="text-[10px] text-slate-500 font-semibold">{item.nis_nip}</span>
-                                                                {getStatusBadge(item.status)}
-                                                            </div>
-                                                        </div>
-                                                        <span className="shrink-0 text-[10px] text-slate-400 font-bold">{item.timestamp}</span>
-                                                    </div>
-                                                ))
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
                             </div>
-                        )}
+                        </div>
+                    )}
 
-                    </div>
                 </main>
 
-                {/* --- FOOTER --- */}
-                <footer className="relative z-10 py-6 text-center mt-auto border-t border-slate-200/60 bg-white/40 backdrop-blur-sm">
-                    <p className="text-xs font-bold text-slate-500">
-                        &copy; {new Date().getFullYear()} E-Presensi SMA Negeri 1 Babat. 
-                        <span className="font-medium ml-1 text-slate-400">Dikelola oleh Tim IT Sekolah.</span>
-                    </p>
+                {/* ═══════════════════════════════════════════════════
+                    FOOTER — minimal, integrated
+                ═══════════════════════════════════════════════════ */}
+                <footer className="relative z-10" style={{ borderTop: '1px solid rgba(0,0,0,0.07)', background: 'rgba(246,250,246,0.9)' }}>
+                    <div className="max-w-6xl mx-auto px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-2">
+                        <p className="text-[12px] font-semibold" style={{ color: '#9ca3af' }}>
+                            © {new Date().getFullYear()} E-Presensi SMA Negeri 1 Babat
+                        </p>
+                        <p className="text-[12px] font-medium" style={{ color: '#d1d5db' }}>
+                            Dikelola oleh Tim IT Sekolah
+                        </p>
+                    </div>
                 </footer>
+
             </div>
 
-            {/* --- INLINE STYLES FOR ANIMATIONS --- */}
+            {/* ── ANIMATIONS ── */}
             <style>{`
                 @keyframes fadeIn {
                     from { opacity: 0; transform: translateY(-4px); }
                     to { opacity: 1; transform: translateY(0); }
                 }
                 @keyframes slideIn {
-                    from { opacity: 0; transform: translateY(10px) scale(0.98); }
+                    from { opacity: 0; transform: translateY(8px) scale(0.99); }
                     to { opacity: 1; transform: translateY(0) scale(1); }
                 }
+
+                /* ── QR Scanner overlay ── */
                 .scanner-search-overlay {
-                    position: absolute;
-                    inset: 0;
-                    pointer-events: none;
-                    overflow: hidden;
-                    background: radial-gradient(circle at center, transparent 0 35%, rgba(15, 23, 42, 0.4) 36% 100%);
+                    position: absolute; inset: 0; pointer-events: none; overflow: hidden;
+                    background: radial-gradient(circle at center, transparent 0 33%, rgba(15,23,42,0.5) 34% 100%);
                 }
                 .scanner-search-box {
-                    position: absolute;
-                    left: 50%;
-                    top: 50%;
-                    width: clamp(160px, 50%, 260px);
-                    aspect-ratio: 1 / 1;
-                    border: 2px solid rgba(16, 185, 129, 0.8);
-                    border-radius: 32px;
-                    box-shadow: 0 0 0 999px rgba(15, 23, 42, 0.5), 0 0 40px rgba(16, 185, 129, 0.3);
+                    position: absolute; left: 50%; top: 50%;
+                    width: clamp(140px, 45%, 220px); aspect-ratio: 1/1;
+                    border: 2px solid rgba(47,147,56,0.85);
+                    border-radius: 20px;
+                    box-shadow: 0 0 0 999px rgba(15,23,42,0.45), 0 0 30px rgba(47,147,56,0.25);
                     transform: translate(-50%, -50%);
-                    animation: qr-search-box 6s ease-in-out infinite;
                 }
                 .scanner-search-line {
-                    position: absolute;
-                    left: 10%;
-                    right: 10%;
-                    top: 15%;
-                    height: 4px;
-                    border-radius: 999px;
-                    background: linear-gradient(90deg, transparent, #34d399, #10b981, transparent);
-                    box-shadow: 0 0 20px rgba(52, 211, 153, 0.8);
-                    animation: qr-search-line 2s ease-in-out infinite;
+                    position: absolute; left: 8%; right: 8%; top: 10%; height: 3px; border-radius: 999px;
+                    background: linear-gradient(90deg, transparent, #4db855, #2f9338, transparent);
+                    box-shadow: 0 0 14px rgba(77,184,85,0.7);
+                    animation: qr-scan-line 2s ease-in-out infinite;
                 }
                 .scanner-search-corner {
-                    position: absolute;
-                    width: 32px;
-                    height: 32px;
-                    border-color: #ffffff;
-                    filter: drop-shadow(0 0 10px rgba(16, 185, 129, 0.6));
+                    position: absolute; width: 24px; height: 24px;
+                    border-color: white;
+                    filter: drop-shadow(0 0 6px rgba(47,147,56,0.5));
                 }
-                .scanner-search-corner-tl {
-                    left: -2px;
-                    top: -2px;
-                    border-left: 5px solid;
-                    border-top: 5px solid;
-                    border-top-left-radius: 32px;
-                }
-                .scanner-search-corner-tr {
-                    right: -2px;
-                    top: -2px;
-                    border-right: 5px solid;
-                    border-top: 5px solid;
-                    border-top-right-radius: 32px;
-                }
-                .scanner-search-corner-bl {
-                    left: -2px;
-                    bottom: -2px;
-                    border-left: 5px solid;
-                    border-bottom: 5px solid;
-                    border-bottom-left-radius: 32px;
-                }
-                .scanner-search-corner-br {
-                    right: -2px;
-                    bottom: -2px;
-                    border-right: 5px solid;
-                    border-bottom: 5px solid;
-                    border-bottom-right-radius: 32px;
-                }
-                @keyframes qr-search-box {
-                    0%, 100% { transform: translate(-50%, -50%); }
-                    25% { transform: translate(-60%, -55%); }
-                    50% { transform: translate(-40%, -45%); }
-                    75% { transform: translate(-45%, -55%); }
-                }
-                @keyframes qr-search-line {
-                    0%, 100% { top: 15%; opacity: 0.2; }
-                    50% { top: 85%; opacity: 1; }
+                .scanner-search-corner-tl { left: -2px; top: -2px; border-left: 4px solid; border-top: 4px solid; border-top-left-radius: 20px; }
+                .scanner-search-corner-tr { right: -2px; top: -2px; border-right: 4px solid; border-top: 4px solid; border-top-right-radius: 20px; }
+                .scanner-search-corner-bl { left: -2px; bottom: -2px; border-left: 4px solid; border-bottom: 4px solid; border-bottom-left-radius: 20px; }
+                .scanner-search-corner-br { right: -2px; bottom: -2px; border-right: 4px solid; border-bottom: 4px solid; border-bottom-right-radius: 20px; }
+                @keyframes qr-scan-line {
+                    0%, 100% { top: 10%; opacity: 0.2; }
+                    50% { top: 82%; opacity: 1; }
                 }
             `}</style>
 
-            {/* Login Popup Modal */}
+            {/* Login Modal */}
             <LoginModal
                 isOpen={isLoginModalOpen}
                 onClose={() => setIsLoginModalOpen(false)}

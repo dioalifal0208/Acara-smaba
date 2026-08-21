@@ -11,24 +11,42 @@ use Inertia\Inertia;
 
 Route::get('/', function () {
     $user = auth()->user();
-    $initialStats = null;
+    
+    // Live Stats untuk Guest & Admin
+    $totalParticipants = \App\Models\Participant::count();
+    $totalAttended = \App\Models\Attendance::distinct('participant_id')->count('participant_id');
+    $stats = [
+        'total' => $totalParticipants,
+        'hadir' => $totalAttended,
+        'belum' => $totalParticipants - $totalAttended,
+    ];
 
-    if ($user && $user->isAdmin()) {
-        // Ambil data stats awal untuk scanner di halaman depan
-        $totalParticipants = \App\Models\Participant::count();
-        $totalAttended = \App\Models\Attendance::distinct('participant_id')->count('participant_id');
-        $initialStats = [
-            'total' => $totalParticipants,
-            'hadir' => $totalAttended,
-            'belum' => $totalParticipants - $totalAttended,
-        ];
-    }
+    // Ambil 5 aktivitas presensi terbaru (disensor namanya untuk privasi)
+    $recentScans = \App\Models\Attendance::with('participant')
+        ->orderBy('created_at', 'desc')
+        ->take(5)
+        ->get()
+        ->map(function ($attendance) {
+            $name = $attendance->participant->nama ?? 'Unknown';
+            // Sensor: "Dio Alif" menjadi "Dio A."
+            $parts = explode(' ', $name);
+            $maskedName = $parts[0];
+            if (count($parts) > 1) {
+                $maskedName .= ' ' . substr($parts[count($parts)-1], 0, 1) . '.';
+            }
+            return [
+                'id' => $attendance->id,
+                'nama' => $maskedName,
+                'waktu' => $attendance->created_at->format('H:i'),
+            ];
+        });
 
     return Inertia::render('Welcome', [
         'canLogin' => Route::has('login'),
         'laravelVersion' => Application::VERSION,
         'phpVersion' => PHP_VERSION,
-        'initialStats' => $initialStats,
+        'initialStats' => $stats,
+        'recentScans' => $recentScans,
     ]);
 });
 
