@@ -8,6 +8,8 @@ import { getRandomChallenge } from '@/Utils/liveness';
 export default function SelfFaceRegistrationModal({ participant, onClose }) {
     const videoRef = useRef();
     const canvasRef = useRef();
+    // Store best captured frame continuously - solves black image issue
+    const lastGoodFrameRef = useRef(null);
     
     const [isModelsLoaded, setIsModelsLoaded] = useState(false);
     const [isStreamActive, setIsStreamActive] = useState(false);
@@ -19,7 +21,7 @@ export default function SelfFaceRegistrationModal({ participant, onClose }) {
     // Liveness challenge states
     const [challenge, setChallenge] = useState(null);
     const [challengePassed, setChallengePassed] = useState(false);
-    const [timeLeft, setTimeLeft] = useState(15); // 15 seconds
+    const [timeLeft, setTimeLeft] = useState(20); // 20 seconds
 
     // Load Models
     useEffect(() => {
@@ -74,7 +76,7 @@ export default function SelfFaceRegistrationModal({ participant, onClose }) {
         if (isStreamActive && !challenge && !challengePassed) {
             const initialChallenge = getRandomChallenge();
             setChallenge(initialChallenge);
-            setTimeLeft(15);
+            setTimeLeft(20);
         }
     }, [isStreamActive, challenge, challengePassed]);
 
@@ -92,33 +94,95 @@ export default function SelfFaceRegistrationModal({ participant, onClose }) {
         }
     }, [challenge, timeLeft, challengePassed, isStreamActive]);
 
-    // Video Detection Loop
+    // Helper: capture a frame from video to lastGoodFrameRef
+    const captureFrame = useCallback((video) => {
+        try {
+            const vw = video.videoWidth;
+            const vh = video.videoHeight;
+            if (!vw || !vh || video.readyState < 2) return;
+            const fc = document.createElement('canvas');
+            fc.width = vw;
+            fc.height = vh;
+            const ctx = fc.getContext('2d');
+            ctx.drawImage(video, 0, 0, vw, vh);
+            const dataUrl = fc.toDataURL('image/jpeg', 0.92);
+            // Only store if it's a valid non-trivial image (>5KB means not black)
+            if (dataUrl && dataUrl.length > 5000) {
+                lastGoodFrameRef.current = dataUrl;
+            }
+        } catch (e) { /* ignore */ }
+    }, []);
+
+    // EAR (Eye Aspect Ratio) helper for blink detection
+    const calcEAR = (pts) => {
+        const v1 = Math.hypot(pts[1].x - pts[5].x, pts[1].y - pts[5].y);
+        const v2 = Math.hypot(pts[2].x - pts[4].x, pts[2].y - pts[4].y);
+        const h  = Math.hypot(pts[0].x - pts[3].x, pts[0].y - pts[3].y);
+        return h > 0 ? (v1 + v2) / (2 * h) : 0.3;
+    };
+
+    // Video Detection Loop - uses closure variables for blink state
     const handleVideoPlay = () => {
+        // Blink state machine (closure vars persist across interval ticks)
+        let eyeWasClosed = false;
+        let frameTick = 0;
+        let isTriggering = false; // prevent double-trigger
+
+        const triggerSuccess = (detection) => {
+            if (isTriggering) return;
+            isTriggering = true;
+            setChallengePassed(true);
+            setStatus("✅ Verifikasi liveness lolos! Menyimpan profil wajah...");
+            setTimeout(async () => {
+                try {
+                    if (videoRef.current && !videoRef.current.paused) {
+                        const cleanDetection = await faceapi
+                            .detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.5 }))
+                            .withFaceLandmarks()
+                            .withFaceDescriptor();
+                        processRegistration(cleanDetection || detection);
+                    } else {
+                        processRegistration(detection);
+                    }
+                } catch (err) {
+                    processRegistration(detection);
+                }
+            }, 300);
+        };
+
         const interval = setInterval(async () => {
-            if (!videoRef.current || !canvasRef.current || !isStreamActive || isProcessing || challengePassed) return;
+            if (!videoRef.current || !canvasRef.current || !isStreamActive || isProcessing) return;
 
             const video = videoRef.current;
             const canvas = canvasRef.current;
-            
+
             if (video.paused || video.ended) return;
 
             const displaySize = { width: video.videoWidth, height: video.videoHeight };
             if (displaySize.width === 0) return;
 
+            // ── Capture best frame every ~600ms (every 3 ticks) ──────────────
+            frameTick++;
+            if (frameTick % 3 === 0) {
+                captureFrame(video);
+            }
+
+            if (challengePassed || isTriggering) return;
+
             faceapi.matchDimensions(canvas, displaySize);
 
             try {
-                const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.5 }))
+                const detection = await faceapi
+                    .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.5 }))
                     .withFaceLandmarks()
                     .withFaceExpressions()
                     .withFaceDescriptor();
 
                 if (detection) {
                     const resizedDetection = faceapi.resizeResults(detection, displaySize);
-                    
+
                     const ctx = canvas.getContext('2d');
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    
                     faceapi.draw.drawDetections(canvas, resizedDetection);
                     faceapi.draw.drawFaceLandmarks(canvas, resizedDetection);
 
@@ -127,26 +191,25 @@ export default function SelfFaceRegistrationModal({ participant, onClose }) {
                     if (challenge && !challengePassed) {
                         setStatus(challenge.instruction);
 
-                        // Validate current challenge
-                        if (challenge.validate(resizedDetection, displaySize)) {
-                            setChallengePassed(true);
-                            setStatus("✅ Verifikasi liveness lolos! Menyimpan profil wajah...");
-                            
-                            // Delay slightly (350ms) to ensure a high quality frontal frame is captured
-                            setTimeout(async () => {
-                                try {
-                                    if (videoRef.current && !videoRef.current.paused) {
-                                        const cleanDetection = await faceapi.detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.5 }))
-                                            .withFaceLandmarks()
-                                            .withFaceDescriptor();
-                                        processRegistration(cleanDetection || detection);
-                                    } else {
-                                        processRegistration(detection);
-                                    }
-                                } catch (err) {
-                                    processRegistration(detection);
-                                }
-                            }, 350);
+                        // ── Special: blink detection with state machine ────────
+                        if (challenge.id === 'blink') {
+                            const p = detection.landmarks.positions;
+                            const leftEAR  = calcEAR([p[36], p[37], p[38], p[39], p[40], p[41]]);
+                            const rightEAR = calcEAR([p[42], p[43], p[44], p[45], p[46], p[47]]);
+                            const minEAR = Math.min(leftEAR, rightEAR);
+
+                            // State: open → closed (EAR drops) → open again = BLINK
+                            if (!eyeWasClosed && minEAR < 0.22) {
+                                eyeWasClosed = true; // eyes just closed
+                            } else if (eyeWasClosed && minEAR > 0.26) {
+                                // Eyes opened again after closing = valid blink!
+                                triggerSuccess(detection);
+                            }
+                        } else {
+                            // Other challenges: use their validate function
+                            if (challenge.validate(resizedDetection, displaySize)) {
+                                triggerSuccess(detection);
+                            }
                         }
                     }
                 } else {
@@ -154,9 +217,10 @@ export default function SelfFaceRegistrationModal({ participant, onClose }) {
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                     setStatus("Posisikan wajah Anda di dalam lingkaran...");
                     setDetectedFace(null);
+                    eyeWasClosed = false; // reset blink state when face lost
                 }
             } catch (e) {
-                // ignore
+                // ignore detection errors
             }
         }, 200);
 
@@ -171,39 +235,44 @@ export default function SelfFaceRegistrationModal({ participant, onClose }) {
         setStatus("Verifikasi berhasil! Mengunggah data wajah...");
 
         try {
-            const video = videoRef.current;
-            const vw = video.videoWidth;
-            const vh = video.videoHeight;
+            // ── Use the continuously-stored frame (reliable, non-black) ──────
+            let photoDataUrl = lastGoodFrameRef.current;
 
-            if (!vw || !vh) throw new Error('Video belum siap, coba lagi.');
+            // Fallback: try live capture if stored frame unavailable
+            if (!photoDataUrl || photoDataUrl.length < 5000) {
+                const video = videoRef.current;
+                const vw = video?.videoWidth;
+                const vh = video?.videoHeight;
+                if (vw && vh && video.readyState >= 2) {
+                    const captureCanvas = document.createElement('canvas');
+                    captureCanvas.width = vw;
+                    captureCanvas.height = vh;
+                    captureCanvas.getContext('2d').drawImage(video, 0, 0, vw, vh);
+                    const liveCapture = captureCanvas.toDataURL('image/jpeg', 0.92);
+                    if (liveCapture && liveCapture.length > 5000) {
+                        photoDataUrl = liveCapture;
+                    }
+                }
+            }
 
-            const captureCanvas = document.createElement('canvas');
-            captureCanvas.width = vw;
-            captureCanvas.height = vh;
-            const ctx = captureCanvas.getContext('2d');
-
-            // Draw video frame directly without mirror flip
-            // (mirror is only a CSS visual effect for the user)
-            ctx.drawImage(video, 0, 0, vw, vh);
-            
-            const photoDataUrl = captureCanvas.toDataURL('image/jpeg', 0.90);
+            if (!photoDataUrl || photoDataUrl.length < 5000) {
+                throw new Error('Gagal mengambil foto wajah. Coba lagi.');
+            }
 
             const payload = {
                 descriptor: Array.from(targetDetection.descriptor),
                 photo: photoDataUrl
             };
 
-            // Stop video before sending request
-            if (videoRef.current && videoRef.current.srcObject) {
+            // Stop video stream before upload
+            if (videoRef.current?.srcObject) {
                 videoRef.current.srcObject.getTracks().forEach(t => t.stop());
             }
 
-            const res = await axios.post(`/api/participants/${participant.id}/face/self`, payload);
-            
+            await axios.post(`/api/participants/${participant.id}/face/self`, payload);
+
             playAudio('success');
-            onClose(true); // Indicate success
-            
-            // Reload the page data to reflect face_status changes
+            onClose(true);
             router.reload({ only: ['participant'] });
 
         } catch (error) {
@@ -239,8 +308,7 @@ export default function SelfFaceRegistrationModal({ participant, onClose }) {
     }, []);
 
     const handleClose = () => {
-        // Stop stream before closing
-        if (videoRef.current && videoRef.current.srcObject) {
+        if (videoRef.current?.srcObject) {
             videoRef.current.srcObject.getTracks().forEach(t => t.stop());
         }
         onClose(false);
@@ -272,13 +340,14 @@ export default function SelfFaceRegistrationModal({ participant, onClose }) {
                                 </svg>
                             </div>
                             <p className="text-sm font-bold text-white mb-4">{errorMsg}</p>
-                            <button 
+                            <button
                                 onClick={() => {
                                     setErrorMsg(null);
                                     setChallenge(getRandomChallenge(challenge?.id));
                                     setChallengePassed(false);
-                                    setTimeLeft(15);
-                                }} 
+                                    setTimeLeft(20);
+                                    lastGoodFrameRef.current = null;
+                                }}
                                 className="rounded-xl bg-white/20 px-6 py-2.5 text-sm font-bold text-white hover:bg-white/30 backdrop-blur-sm mb-2 w-full"
                             >
                                 Coba Lagi
@@ -296,25 +365,25 @@ export default function SelfFaceRegistrationModal({ participant, onClose }) {
                                 </div>
                             ) : (
                                 <>
-                                    <video 
-                                        ref={videoRef} 
-                                        autoPlay 
-                                        muted 
+                                    <video
+                                        ref={videoRef}
+                                        autoPlay
+                                        muted
                                         playsInline
                                         onPlay={handleVideoPlay}
                                         className="absolute inset-0 w-full h-full object-cover transform scale-x-[-1]"
                                     />
-                                    <canvas 
-                                        ref={canvasRef} 
+                                    <canvas
+                                        ref={canvasRef}
                                         className="absolute inset-0 w-full h-full object-cover transform scale-x-[-1]"
                                     />
-                                    
+
                                     {/* Overlay Frame */}
                                     <div className="absolute inset-0 pointer-events-none flex items-center justify-center p-6">
                                         <div className={`w-full h-72 border-[3px] border-dashed rounded-full transition-colors duration-300 ${challengePassed ? 'border-emerald-400 bg-emerald-400/20' : 'border-white/50'}`}></div>
                                     </div>
 
-                                    {/* Challenge Badge - subtle overlay */}
+                                    {/* Challenge Badge - subtle, bottom overlay */}
                                     {challenge && !challengePassed && !isProcessing && (
                                         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 w-[88%] animate-[fadeIn_0.3s_ease-out]">
                                             <div className="bg-black/40 backdrop-blur-sm text-white px-3 py-2.5 rounded-xl border border-white/10 flex items-center justify-between gap-3">
@@ -325,8 +394,8 @@ export default function SelfFaceRegistrationModal({ participant, onClose }) {
                                                         <p className="text-[11px] font-semibold text-white/90 truncate">{challenge.description || challenge.badge}</p>
                                                     </div>
                                                 </div>
-                                                <div className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center border ${timeLeft <= 3 ? 'border-rose-400/60 bg-rose-500/20' : 'border-white/20 bg-white/10'}`}>
-                                                    <span className={`text-[10px] font-black ${timeLeft <= 3 ? 'text-rose-300 animate-pulse' : 'text-white/80'}`}>{timeLeft}</span>
+                                                <div className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center border ${timeLeft <= 5 ? 'border-rose-400/60 bg-rose-500/20' : 'border-white/20 bg-white/10'}`}>
+                                                    <span className={`text-[10px] font-black ${timeLeft <= 5 ? 'text-rose-300 animate-pulse' : 'text-white/80'}`}>{timeLeft}</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -358,4 +427,3 @@ export default function SelfFaceRegistrationModal({ participant, onClose }) {
 
     return createPortal(modalContent, document.body);
 }
-

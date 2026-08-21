@@ -7,6 +7,8 @@ export default function FaceRegistrationModal({ participant, onClose, onSuccess 
     const { toast } = useToast();
     const videoRef = useRef();
     const canvasRef = useRef();
+    // Continuously store best frame to avoid black image capture
+    const lastGoodFrameRef = useRef(null);
     
     const [isModelsLoaded, setIsModelsLoaded] = useState(false);
     const [isStreamActive, setIsStreamActive] = useState(false);
@@ -62,6 +64,7 @@ export default function FaceRegistrationModal({ participant, onClose, onSuccess 
 
     // Handle Video Play (Detection Loop)
     const handleVideoPlay = () => {
+        let frameTick = 0;
         const interval = setInterval(async () => {
             if (!videoRef.current || !canvasRef.current || !isStreamActive) return;
 
@@ -72,6 +75,25 @@ export default function FaceRegistrationModal({ participant, onClose, onSuccess 
 
             const displaySize = { width: video.videoWidth, height: video.videoHeight };
             if (displaySize.width === 0) return;
+
+            // Continuously capture best frame every ~600ms
+            frameTick++;
+            if (frameTick % 3 === 0) {
+                try {
+                    const vw = video.videoWidth;
+                    const vh = video.videoHeight;
+                    if (vw && vh && video.readyState >= 2) {
+                        const fc = document.createElement('canvas');
+                        fc.width = vw;
+                        fc.height = vh;
+                        fc.getContext('2d').drawImage(video, 0, 0, vw, vh);
+                        const dataUrl = fc.toDataURL('image/jpeg', 0.92);
+                        if (dataUrl && dataUrl.length > 5000) {
+                            lastGoodFrameRef.current = dataUrl;
+                        }
+                    }
+                } catch (e) { /* ignore */ }
+            }
 
             faceapi.matchDimensions(canvas, displaySize);
 
@@ -116,27 +138,29 @@ export default function FaceRegistrationModal({ participant, onClose, onSuccess 
 
         setIsProcessing(true);
         try {
-            // Take a snapshot
-            const video = videoRef.current;
-            const captureCanvas = document.createElement('canvas');
-            const vw = video.videoWidth;
-            const vh = video.videoHeight;
-            
-            if (!vw || !vh) {
-                toast.error('Video belum siap. Coba lagi.');
-                setIsProcessing(false);
-                return;
+            // Use stored frame for reliable capture (avoids black image)
+            let photoDataUrl = lastGoodFrameRef.current;
+
+            // Fallback to live capture
+            if (!photoDataUrl || photoDataUrl.length < 5000) {
+                const video = videoRef.current;
+                const vw = video?.videoWidth;
+                const vh = video?.videoHeight;
+                if (vw && vh && video.readyState >= 2) {
+                    const captureCanvas = document.createElement('canvas');
+                    captureCanvas.width = vw;
+                    captureCanvas.height = vh;
+                    captureCanvas.getContext('2d').drawImage(video, 0, 0, vw, vh);
+                    const liveCapture = captureCanvas.toDataURL('image/jpeg', 0.92);
+                    if (liveCapture && liveCapture.length > 5000) {
+                        photoDataUrl = liveCapture;
+                    }
+                }
             }
-            
-            captureCanvas.width = vw;
-            captureCanvas.height = vh;
-            const ctx = captureCanvas.getContext('2d');
-            
-            // Draw video frame directly (mirror is CSS-only, not needed in captured photo)
-            ctx.drawImage(video, 0, 0, vw, vh);
-            
-            // Get base64 jpeg
-            const photoDataUrl = captureCanvas.toDataURL('image/jpeg', 0.90);
+
+            if (!photoDataUrl || photoDataUrl.length < 5000) {
+                throw new Error('Gagal mengambil foto. Coba lagi.');
+            }
 
             const descriptor = Array.from(detectedFace.descriptor);
             
