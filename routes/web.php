@@ -128,6 +128,10 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::get('/scanner', [AttendanceController::class, 'scanner'])->name('scanner');
     Route::post('/scan', [AttendanceController::class, 'scan'])->name('scan');
     Route::post('/api/scan', [AttendanceController::class, 'apiScan'])->name('api.scan');
+    
+    // Settings routes
+    Route::get('/admin/settings', [\App\Http\Controllers\SettingController::class, 'edit'])->name('admin.settings');
+    Route::post('/admin/settings', [\App\Http\Controllers\SettingController::class, 'update'])->name('admin.settings.update');
 });
 
 Route::middleware(['auth', 'verified', 'role:participant'])->group(function () {
@@ -177,5 +181,8 @@ Route::get('/storage/{path}', function ($path) {
         'Cache-Control' => 'public, max-age=31536000',
     ]);
 })->where('path', '.*')->name('storage.file');
+
+// Verification route
+Route::get('/verify-signature/{workcode}', [\App\Http\Controllers\VerificationController::class, 'verify'])->name('signature.verify');
 
 require __DIR__.'/auth.php';

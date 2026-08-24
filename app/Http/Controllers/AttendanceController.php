@@ -467,6 +467,8 @@ class AttendanceController extends Controller
                 'belum' => $totalNotAttended,
             ],
             'attendances' => $attendances,
+            'kepalaSekolahNama' => \App\Models\Setting::get('kepala_sekolah_nama', 'Muhtarom, S.Pd., M.Si.'),
+            'kepalaSekolahNip' => \App\Models\Setting::get('kepala_sekolah_nip', '197205172006041015'),
         ]);
     }
 
@@ -844,19 +846,22 @@ class AttendanceController extends Controller
      */
     public function qrSignature(Workcode $workcode)
     {
-        $verificationData = "DOKUMEN RESMI REKAP PRESENSI\n"
-            . "SMA NEGERI 1 BABAT\n"
-            . "Workcode: " . $workcode->nama_workcode . "\n"
-            . "Tanggal: " . $workcode->created_at->format('d/m/Y') . "\n"
-            . "Diverifikasi & Ditandatangani secara Digital oleh:\n"
-            . "Kepala Sekolah: Muhtarom, S.Pd., M.Si.";
+        $verificationUrl = route('signature.verify', $workcode->id);
 
         $svg = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')
             ->size(160)
-            ->errorCorrection('M')
+            ->errorCorrection('H')
             ->margin(1)
             ->color(15, 23, 42)
-            ->generate($verificationData);
+            ->generate($verificationUrl);
+
+        $logoSize = 40;
+        $center = (160 - $logoSize) / 2;
+        $logoBase64 = base64_encode(file_get_contents(public_path('images/logo.png')));
+        $logoSvg = '<image x="' . $center . '" y="' . $center . '" width="' . $logoSize . '" height="' . $logoSize . '" xlink:href="data:image/png;base64,' . $logoBase64 . '" href="data:image/png;base64,' . $logoBase64 . '" />';
+        
+        $svg = str_replace('<svg ', '<svg xmlns:xlink="http://www.w3.org/1999/xlink" ', $svg);
+        $svg = str_replace('</svg>', $logoSvg . '</svg>', $svg);
 
         return response($svg, 200, [
             'Content-Type' => 'image/svg+xml',

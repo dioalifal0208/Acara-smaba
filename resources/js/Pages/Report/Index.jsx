@@ -19,6 +19,8 @@ export default function ReportIndex({
     stats,
     attendances = [],
     participants = [],
+    kepalaSekolahNama = 'Muhtarom, S.Pd., M.Si.',
+    kepalaSekolahNip = '197205172006041015',
 }) {
     const { flash } = usePage().props;
     const { toast } = useToast();
@@ -412,8 +414,8 @@ export default function ReportIndex({
                         <div class="ttd-qr-wrap" style="display: flex; justify-content: center; margin: 10px 0;">
                             <img src="${window.location.origin}/workcodes/${selectedWorkcode.id}/qr-signature" style="width: 80px; height: 80px;" alt="QR TTD" />
                         </div>
-                        <p style="font-weight: bold; text-decoration: underline; font-size: 13px;">Muhtarom, S.Pd., M.Si.</p>
-                        <p style="font-size: 11px; color: #475569; font-family: Arial, sans-serif;">NIP. 197205172006041015</p>
+                        <p style="font-weight: bold; text-decoration: underline; font-size: 13px;">${kepalaSekolahNama}</p>
+                        <p style="font-size: 11px; color: #475569; font-family: Arial, sans-serif;">NIP. ${kepalaSekolahNip}</p>
                     </div>
                 </div>
 
@@ -763,8 +765,8 @@ export default function ReportIndex({
                             <div class="ttd-qr-wrap" style="display: flex; justify-content: center; margin: 10px 0;">
                                 <img src="${window.location.origin}/workcodes/${selectedWorkcode.id}/qr-signature" style="width: 80px; height: 80px;" alt="QR TTD" />
                             </div>
-                            <p style="font-weight: bold; text-decoration: underline; font-size: 13px;">Muhtarom, S.Pd., M.Si.</p>
-                            <p style="font-size: 11px; color: #475569; font-family: Arial, sans-serif;">NIP. 197205172006041015</p>
+                            <p style="font-weight: bold; text-decoration: underline; font-size: 13px;">${kepalaSekolahNama}</p>
+                            <p style="font-size: 11px; color: #475569; font-family: Arial, sans-serif;">NIP. ${kepalaSekolahNip}</p>
                         </div>
                     </div>
 
