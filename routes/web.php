@@ -169,6 +169,9 @@ Route::get('/api/participants/search', [ParticipantController::class, 'search'])
 Route::get('/self-checkin/{token}', [SelfCheckInController::class, 'showForm'])->name('self-checkin.show');
 Route::post('/self-checkin/{token}', [SelfCheckInController::class, 'submitForm'])->name('self-checkin.submit');
 
+// Public Holidays API
+Route::get('/api/holidays', [\App\Http\Controllers\HolidayController::class, 'index'])->name('api.holidays');
+
 // Public Face Recognition routes
 Route::post('/api/face/match', [\App\Http\Controllers\FaceRecognitionController::class, 'match'])->name('face.match');
 

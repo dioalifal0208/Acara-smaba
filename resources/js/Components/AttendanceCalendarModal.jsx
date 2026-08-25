@@ -34,9 +34,23 @@ export default function AttendanceCalendarModal({
     const [currentYear, setCurrentYear] = useState(today.getFullYear());
     const [currentMonth, setCurrentMonth] = useState(today.getMonth()); // 0 - 11
 
-    // Attendance Data
+    // Attendance & Holidays Data
     const [attendances, setAttendances] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
+    const [holidays, setHolidays] = useState({});
+
+    // Fetch holidays once when component mounts
+    useEffect(() => {
+        const fetchHolidays = async () => {
+            try {
+                const res = await axios.get('/api/holidays');
+                setHolidays(res.data || {});
+            } catch (err) {
+                console.error('Gagal memuat data hari libur:', err);
+            }
+        };
+        fetchHolidays();
+    }, []);
 
     // Day Action Modal
     const [selectedDateModal, setSelectedDateModal] = useState(null); // { dateStr, dateFormatted, existingAttendance }
@@ -157,6 +171,8 @@ export default function AttendanceCalendarModal({
             const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
             const dayOfWeek = dateObj.getDay();
             const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+            const isHoliday = !!holidays[dateStr];
+            const holidayName = holidays[dateStr] || null;
             const isToday =
                 today.getFullYear() === currentYear &&
                 today.getMonth() === currentMonth &&
@@ -167,6 +183,8 @@ export default function AttendanceCalendarModal({
                 dateStr,
                 isCurrentMonth: true,
                 isWeekend,
+                isHoliday,
+                holidayName,
                 isToday,
                 dayOfWeek,
                 attendance: attendancesByDate[dateStr] || null,
@@ -190,11 +208,11 @@ export default function AttendanceCalendarModal({
         }
 
         return days;
-    }, [currentYear, currentMonth, attendancesByDate]);
+    }, [currentYear, currentMonth, attendancesByDate, holidays]);
 
     // Monthly stats for current visible month
     const monthlyStats = useMemo(() => {
-        let hadir = 0, izin = 0, sakit = 0, alpha = 0, lupaAbsen = 0;
+        let hadir = 0, izin = 0, sakit = 0, alpha = 0, lupaAbsen = 0, libur = 0;
         const prefix = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
 
         attendances.forEach((att) => {
@@ -204,10 +222,11 @@ export default function AttendanceCalendarModal({
                 else if (att.status === 'sakit') sakit++;
                 else if (att.status === 'alpha') alpha++;
                 else if (att.status === 'lupa_absen') lupaAbsen++;
+                else if (att.status === 'libur') libur++;
             }
         });
 
-        return { hadir, izin, sakit, alpha, lupaAbsen };
+        return { hadir, izin, sakit, alpha, lupaAbsen, libur };
     }, [attendances, currentYear, currentMonth]);
 
     // Click on a Day Box
@@ -512,22 +531,30 @@ export default function AttendanceCalendarModal({
                                     >
                                         {/* Day Number Header */}
                                         <div className="flex items-center justify-between">
-                                            <span
-                                                className={`text-xs font-bold leading-none ${
-                                                    !isCurrent
-                                                        ? 'text-slate-300'
-                                                        : day.isToday
-                                                        ? 'flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-white font-black text-[10px]'
-                                                        : day.isWeekend
-                                                        ? 'text-red-500'
-                                                        : 'text-slate-700'
-                                                }`}
-                                            >
-                                                {day.dayNumber}
-                                            </span>
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                <span
+                                                    title={day.holidayName || ''}
+                                                    className={`text-xs font-bold leading-none shrink-0 ${
+                                                        !isCurrent
+                                                            ? 'text-slate-300'
+                                                            : day.isToday
+                                                            ? 'flex h-5 w-5 items-center justify-center rounded-full bg-indigo-600 text-white font-black text-[10px]'
+                                                            : (day.isWeekend || day.isHoliday)
+                                                            ? 'text-red-500'
+                                                            : 'text-slate-700'
+                                                    }`}
+                                                >
+                                                    {day.dayNumber}
+                                                </span>
+                                                {isCurrent && day.isHoliday && (
+                                                    <span className="text-[8px] font-bold text-red-600 bg-red-50 border border-red-100 px-1 rounded truncate max-w-[45px] sm:max-w-[70px]" title={day.holidayName}>
+                                                        {day.holidayName}
+                                                    </span>
+                                                )}
+                                            </div>
 
                                             {isCurrent && !att && (
-                                                <span className="text-[10px] text-slate-300 group-hover:text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity font-bold">
+                                                <span className="text-[10px] text-slate-300 group-hover:text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity font-bold shrink-0">
                                                     +
                                                 </span>
                                             )}
@@ -576,6 +603,13 @@ export default function AttendanceCalendarModal({
                                                         </span>
                                                     </div>
                                                 )}
+                                                {att.status === 'libur' && (
+                                                    <div className="rounded-md bg-rose-50 border border-rose-200 px-1 py-0.5 text-center">
+                                                        <span className="text-[9px] font-black text-rose-700 block leading-tight">
+                                                            ★ LIBUR
+                                                        </span>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
 
@@ -611,6 +645,9 @@ export default function AttendanceCalendarModal({
                         </span>
                         <span className="inline-flex items-center gap-1.5 font-bold text-slate-700">
                             <span className="h-2 w-2 rounded-full bg-slate-400"></span> Lupa Absen: {monthlyStats.lupaAbsen}
+                        </span>
+                        <span className="inline-flex items-center gap-1.5 font-bold text-rose-700">
+                            <span className="h-2 w-2 rounded-full bg-rose-500"></span> Libur: {monthlyStats.libur}
                         </span>
                     </div>
 
@@ -685,6 +722,7 @@ export default function AttendanceCalendarModal({
                                         { key: 'sakit', label: 'Sakit', icon: '+', activeBg: 'bg-blue-600 text-white border-blue-600 shadow-blue-200 shadow-md' },
                                         { key: 'lupa_absen', label: 'Lupa Absen', icon: '?', activeBg: 'bg-slate-700 text-white border-slate-700 shadow-slate-200 shadow-md' },
                                         { key: 'alpha', label: 'Alpha', icon: '✗', activeBg: 'bg-red-600 text-white border-red-600 shadow-red-200 shadow-md' },
+                                        { key: 'libur', label: 'Libur', icon: '★', activeBg: 'bg-rose-600 text-white border-rose-600 shadow-rose-200 shadow-md' },
                                     ].map((s) => {
                                         const isSelected = dayFormData.status === s.key;
                                         return (
@@ -708,7 +746,7 @@ export default function AttendanceCalendarModal({
                             </div>
 
                             {/* Time Fields (When Hadir or Lupa Absen) */}
-                            {dayFormData.status !== 'alpha' && (
+                            {!['alpha', 'libur'].includes(dayFormData.status) && (
                                 <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2.5">
                                     <div className="flex items-center justify-between">
                                         <span className="text-[11px] font-extrabold text-slate-600 uppercase tracking-wider">

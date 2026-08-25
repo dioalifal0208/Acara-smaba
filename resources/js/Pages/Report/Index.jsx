@@ -456,6 +456,11 @@ export default function ReportIndex({
                 let jamDatang = a.jam_masuk || (a.waktu_hadir !== '-' ? a.waktu_hadir : '-');
                 let jamPulang = a.jam_pulang || (a.waktu_pulang !== '-' ? a.waktu_pulang : '-');
 
+                if (a.status === 'libur') {
+                    jamDatang = '-';
+                    jamPulang = '-';
+                }
+
                 let statusBadge = (a.status || 'hadir').toUpperCase();
                 let statusColor = '#0f172a';
 
@@ -1080,7 +1085,7 @@ export default function ReportIndex({
                                                     </>
                                                 ) : (
                                                     <>
-                                                        <td className="px-4 py-2.5 text-xs text-slate-700 font-mono font-semibold">{attendance.waktu_hadir}</td>
+                                                        <td className="px-4 py-2.5 text-xs text-slate-700 font-mono font-semibold">{attendance.status === 'libur' ? '-' : attendance.waktu_hadir}</td>
                                                         <td className="px-3 py-2.5 text-center">
                                                             {renderStatusBadge(attendance.status)}
                                                         </td>
@@ -1304,10 +1309,10 @@ export default function ReportIndex({
                                                     {att.tanggal_formatted || att.tanggal || '-'}
                                                 </td>
                                                 <td className="px-4 py-2.5 text-center font-mono font-medium text-slate-700">
-                                                    {att.jam_masuk ? `${att.jam_masuk} WIB` : (att.waktu_hadir !== '-' ? att.waktu_hadir : '-')}
+                                                    {att.status === 'libur' ? '-' : (att.jam_masuk ? `${att.jam_masuk} WIB` : (att.waktu_hadir !== '-' ? att.waktu_hadir : '-'))}
                                                 </td>
                                                 <td className="px-4 py-2.5 text-center font-mono font-medium text-slate-700">
-                                                    {att.jam_pulang ? `${att.jam_pulang} WIB` : (att.waktu_pulang !== '-' ? att.waktu_pulang : '-')}
+                                                    {att.status === 'libur' ? '-' : (att.jam_pulang ? `${att.jam_pulang} WIB` : (att.waktu_pulang !== '-' ? att.waktu_pulang : '-'))}
                                                 </td>
                                                 <td className="px-4 py-2.5 text-center">
                                                     {renderStatusBadge(att.status)}

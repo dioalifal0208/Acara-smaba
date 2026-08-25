@@ -518,7 +518,7 @@ class AttendanceController extends Controller
             'tanggal' => 'required|date',
             'jam_masuk' => 'nullable|string',
             'jam_pulang' => 'nullable|string',
-            'status' => 'required|in:hadir,izin,sakit,alpha,lupa_absen',
+            'status' => 'required|in:hadir,izin,sakit,alpha,lupa_absen,libur',
         ]);
 
         $tanggal = $request->tanggal;
@@ -579,7 +579,7 @@ class AttendanceController extends Controller
             'tanggal' => 'required|date',
             'jam_masuk' => 'nullable|string',
             'jam_pulang' => 'nullable|string',
-            'status' => 'required|in:hadir,izin,sakit,alpha,lupa_absen',
+            'status' => 'required|in:hadir,izin,sakit,alpha,lupa_absen,libur',
         ]);
 
         $tanggal = $request->tanggal;
@@ -848,20 +848,32 @@ class AttendanceController extends Controller
     {
         $verificationUrl = route('signature.verify', $workcode->id);
 
+        $size = 160;
         $svg = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')
-            ->size(160)
-            ->errorCorrection('H')
-            ->margin(1)
-            ->color(15, 23, 42)
+            ->size($size)
+            ->errorCorrection('M')
+            ->margin(2)
+            ->style('round')
+            ->eye('circle')
+            ->color(0, 0, 0)
             ->generate($verificationUrl);
 
-        $logoSize = 40;
-        $center = (160 - $logoSize) / 2;
+        $logoSize = 36;
+        $logoPos = ($size - $logoSize) / 2;
+        $circleRadius = ($logoSize / 2) + 4;
+        $circleCenter = $size / 2;
+
         $logoBase64 = base64_encode(file_get_contents(public_path('images/logo.png')));
-        $logoSvg = '<image x="' . $center . '" y="' . $center . '" width="' . $logoSize . '" height="' . $logoSize . '" xlink:href="data:image/png;base64,' . $logoBase64 . '" href="data:image/png;base64,' . $logoBase64 . '" />';
         
-        $svg = str_replace('<svg ', '<svg xmlns:xlink="http://www.w3.org/1999/xlink" ', $svg);
-        $svg = str_replace('</svg>', $logoSvg . '</svg>', $svg);
+        $centerLogoSvg = <<<SVG
+        <g id="center-school-logo">
+            <circle cx="{$circleCenter}" cy="{$circleCenter}" r="{$circleRadius}" fill="#ffffff" />
+            <image href="data:image/png;base64,{$logoBase64}" x="{$logoPos}" y="{$logoPos}" width="{$logoSize}" height="{$logoSize}" preserveAspectRatio="xMidYMid meet"/>
+        </g>
+        </svg>
+        SVG;
+
+        $svg = str_replace('</svg>', $centerLogoSvg, $svg);
 
         return response($svg, 200, [
             'Content-Type' => 'image/svg+xml',
