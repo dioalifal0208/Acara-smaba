@@ -111,11 +111,13 @@ export default function WorkcodesIndex({ workcodes }) {
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [previewMapWorkcode, setPreviewMapWorkcode] = useState(null);
     const [mapPosition, setMapPosition] = useState({ lat: -7.1086, lng: 112.1715 }); // default to SMAN 1 Babat approx area
+    const [editingWorkcode, setEditingWorkcode] = useState(null);
 
-    const { data, setData, post, processing, errors, reset } = useForm({
+    const { data, setData, post, put, processing, errors, reset } = useForm({
         nama_workcode: '',
         deskripsi: '',
         kategori: 'workcode',
+        tanggal: '',
         hari_aktif: [1,2,3,4,5],
         jam_datang_mulai: '06:00',
         jam_datang_selesai: '07:00',
@@ -150,12 +152,46 @@ export default function WorkcodesIndex({ workcodes }) {
             data.longitude = mapPosition.lng;
         }
         e.preventDefault();
-        post(route('workcodes.store'), {
-            onSuccess: () => {
-                reset();
-                setShowCreateModal(false);
-            },
+        
+        if (editingWorkcode) {
+            put(route('workcodes.update', editingWorkcode.id), {
+                onSuccess: () => {
+                    reset();
+                    setEditingWorkcode(null);
+                    setShowCreateModal(false);
+                },
+            });
+        } else {
+            post(route('workcodes.store'), {
+                onSuccess: () => {
+                    reset();
+                    setShowCreateModal(false);
+                },
+            });
+        }
+    };
+
+    const handleEdit = (workcode) => {
+        setEditingWorkcode(workcode);
+        setData({
+            nama_workcode: workcode.nama_workcode,
+            deskripsi: workcode.deskripsi || '',
+            kategori: workcode.kategori || 'workcode',
+            tanggal: workcode.tanggal || '',
+            hari_aktif: workcode.hari_aktif || [1,2,3,4,5],
+            jam_datang_mulai: workcode.jam_datang_mulai || '06:00',
+            jam_datang_selesai: workcode.jam_datang_selesai || '07:00',
+            jam_pulang_mulai: workcode.jam_pulang_mulai || '15:30',
+            jam_pulang_selesai: workcode.jam_pulang_selesai || '22:00',
+            latitude: workcode.latitude || '',
+            longitude: workcode.longitude || '',
+            radius_meters: workcode.radius_meters || 100,
+            set_active: false,
         });
+        if (workcode.latitude && workcode.longitude) {
+            setMapPosition({ lat: parseFloat(workcode.latitude), lng: parseFloat(workcode.longitude) });
+        }
+        setShowCreateModal(true);
     };
 
     const handleActivate = (id, nama) => {
@@ -304,10 +340,19 @@ export default function WorkcodesIndex({ workcodes }) {
                                                             Kegiatan
                                                         </span>
                                                     )}
+                                                    {workcode.tanggal && (
+                                                        <span className="inline-flex items-center rounded-full bg-indigo-50 border border-indigo-200 px-2 py-0.5 text-[10px] font-bold text-indigo-700">
+                                                            {new Date(workcode.tanggal).toLocaleDateString('id-ID', {
+                                                                day: 'numeric',
+                                                                month: 'short',
+                                                                year: 'numeric',
+                                                            })}
+                                                        </span>
+                                                    )}
                                                 </div>
 
                                                 <span className="text-[10px] text-slate-400 font-semibold shrink-0">
-                                                    {new Date(workcode.created_at).toLocaleDateString('id-ID', {
+                                                    Dibuat: {new Date(workcode.created_at).toLocaleDateString('id-ID', {
                                                         day: 'numeric',
                                                         month: 'short',
                                                         year: 'numeric',
@@ -399,6 +444,16 @@ export default function WorkcodesIndex({ workcodes }) {
                                                 )}
 
                                                 <button
+                                                    onClick={() => handleEdit(workcode)}
+                                                    className="rounded-lg p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition"
+                                                    title="Edit Workcode"
+                                                >
+                                                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                    </svg>
+                                                </button>
+
+                                                <button
                                                     onClick={() => handleDelete(workcode.id, workcode.nama_workcode)}
                                                     className="rounded-lg p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 transition"
                                                     title="Hapus Workcode"
@@ -432,7 +487,7 @@ export default function WorkcodesIndex({ workcodes }) {
                                     </svg>
                                 </div>
                                 <div>
-                                    <h3 className="text-sm font-extrabold text-slate-800">Buat Workcode Baru</h3>
+                                    <h3 className="text-sm font-extrabold text-slate-800">{editingWorkcode ? 'Edit Workcode' : 'Buat Workcode Baru'}</h3>
                                     <p className="text-[11px] text-slate-500 font-medium">Konfigurasi jadwal waktu & batasan radius presensi</p>
                                 </div>
                             </div>
@@ -451,7 +506,7 @@ export default function WorkcodesIndex({ workcodes }) {
                         <div className="p-5 sm:p-6">
                             <form id="create-workcode-form" onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
                                 {/* Left Column (7 cols) */}
-                                <div className="lg:col-span-7 flex flex-col justify-between space-y-3">
+                                <div className="lg:col-span-7 flex flex-col gap-4">
                                     {/* Nama Workcode */}
                                     <div>
                                         <label className="block text-[10px] font-extrabold text-slate-700 uppercase tracking-wider mb-1">
@@ -468,21 +523,20 @@ export default function WorkcodesIndex({ workcodes }) {
                                         {errors.nama_workcode && <p className="mt-1 text-[10px] text-red-600 font-bold">{errors.nama_workcode}</p>}
                                     </div>
 
-                                    {/* Deskripsi Singkat */}
+                                    {/* Tanggal Terjadwal */}
                                     <div>
                                         <label className="block text-[10px] font-extrabold text-slate-700 uppercase tracking-wider mb-1">
-                                            Deskripsi (Opsional)
+                                            Tanggal Terjadwal <span className="text-slate-400 font-normal">(Opsional)</span>
                                         </label>
                                         <input
-                                            type="text"
-                                            placeholder="Keterangan singkat mengenai workcode ini..."
-                                            value={data.deskripsi}
-                                            onChange={(e) => setData('deskripsi', e.target.value)}
+                                            type="date"
+                                            value={data.tanggal}
+                                            onChange={(e) => setData('tanggal', e.target.value)}
                                             className="w-full rounded-xl border border-slate-200 px-3.5 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 font-medium shadow-2xs transition-all"
                                         />
                                     </div>
 
-                                    {/* Segmented Kategori Switch */}
+                                    {/* Kategori Presensi */}
                                     <div>
                                         <label className="block text-[10px] font-extrabold text-slate-700 uppercase tracking-wider mb-1">
                                             Kategori Presensi <span className="text-red-500">*</span>
@@ -515,10 +569,10 @@ export default function WorkcodesIndex({ workcodes }) {
                                         </div>
                                     </div>
 
-                                    {/* Seamless Configuration Box (Fixed identical height for both tabs) */}
-                                    <div className="h-[138px]">
+                                    {/* Seamless Configuration Box */}
+                                    <div className="flex flex-col h-[148px]">
                                         {data.kategori === 'workcode' ? (
-                                            <div className="rounded-xl border border-indigo-200/80 bg-indigo-50/40 p-2.5 h-full flex flex-col justify-between animate-[fadeIn_0.15s_ease-out]">
+                                            <div className="rounded-xl border border-indigo-200/80 bg-indigo-50/40 p-3 flex-1 flex flex-col justify-center gap-3 animate-[fadeIn_0.15s_ease-out]">
                                                 <div className="flex items-center justify-between">
                                                     <span className="text-[10px] font-extrabold text-indigo-900 uppercase tracking-wider flex items-center gap-1.5">
                                                         <span>📌</span> Mode Presensi Sekali
@@ -548,10 +602,10 @@ export default function WorkcodesIndex({ workcodes }) {
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div className="rounded-xl border border-blue-200/80 bg-blue-50/50 p-2.5 h-full flex flex-col justify-between animate-[fadeIn_0.15s_ease-out]">
+                                            <div className="rounded-xl border border-blue-200/80 bg-blue-50/50 p-3 flex-1 flex flex-col gap-3 animate-[fadeIn_0.15s_ease-out]">
                                                 {/* Hari Aktif Buttons */}
                                                 <div>
-                                                    <div className="flex items-center justify-between mb-1">
+                                                    <div className="flex items-center justify-between mb-2">
                                                         <span className="text-[10px] font-extrabold text-blue-900 uppercase tracking-wider">Hari Kerja Aktif</span>
                                                         <span className="text-[10px] text-blue-600 font-bold bg-blue-100/70 px-2 py-0.5 rounded-md">{data.hari_aktif.length} hari aktif</span>
                                                     </div>
@@ -639,24 +693,41 @@ export default function WorkcodesIndex({ workcodes }) {
                                     </div>
 
                                     {/* Activate Checkbox */}
-                                    <label className="flex items-center gap-2 cursor-pointer pt-0.5 select-none">
-                                        <input
-                                            type="checkbox"
-                                            checked={data.set_active}
-                                            onChange={(e) => setData('set_active', e.target.checked)}
-                                            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                                        />
-                                        <span className="text-xs font-bold text-slate-700">Langsung jadikan Workcode Aktif</span>
-                                    </label>
+                                    {!editingWorkcode && (
+                                        <label className="flex items-center gap-2 cursor-pointer pt-0.5 select-none">
+                                            <input
+                                                type="checkbox"
+                                                checked={data.set_active}
+                                                onChange={(e) => setData('set_active', e.target.checked)}
+                                                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                            />
+                                            <span className="text-xs font-bold text-slate-700">Langsung jadikan Workcode Aktif</span>
+                                        </label>
+                                    )}
                                 </div>
 
                                 {/* Right Column: Map (5 cols) */}
                                 <div className="lg:col-span-5 flex flex-col justify-between bg-slate-50/80 p-3 rounded-2xl border border-slate-200 gap-2">
                                     <div className="flex items-center justify-between">
-                                        <span className="flex items-center gap-1.5 text-[10px] font-extrabold text-slate-700 uppercase tracking-wider">
-                                            <svg className="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
-                                            Titik Presensi (Radius 100m)
-                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="flex items-center gap-1.5 text-[10px] font-extrabold text-slate-700 uppercase tracking-wider">
+                                                <svg className="w-3.5 h-3.5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path></svg>
+                                                Titik & Radius
+                                            </span>
+                                            <div className="flex items-center bg-white rounded-md border border-slate-200 shadow-2xs overflow-hidden">
+                                                <input 
+                                                    type="number" 
+                                                    min="10" 
+                                                    max="5000"
+                                                    value={data.radius_meters}
+                                                    onChange={(e) => setData('radius_meters', parseInt(e.target.value) || 10)}
+                                                    className="w-14 h-6 border-none px-1 py-0 text-[10px] font-bold text-center text-slate-800 focus:ring-0 focus:outline-none"
+                                                />
+                                                <span className="px-1.5 text-[10px] font-bold text-slate-400 bg-slate-50 border-l border-slate-200 h-6 flex items-center">
+                                                    m
+                                                </span>
+                                            </div>
+                                        </div>
                                         {mapPosition ? (
                                             <span className="text-[10px] font-extrabold text-indigo-600 font-mono bg-indigo-50 px-1.5 py-0.5 rounded-md border border-indigo-100">
                                                 {mapPosition.lat.toFixed(4)}, {mapPosition.lng.toFixed(4)}
@@ -673,7 +744,7 @@ export default function WorkcodesIndex({ workcodes }) {
                                                     attribution='&copy; OpenStreetMap contributors'
                                                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                                                 />
-                                                <LocationMarker position={mapPosition} setPosition={setMapPosition} radius={100} />
+                                                <LocationMarker position={mapPosition} setPosition={setMapPosition} radius={data.radius_meters || 100} />
                                             </MapContainer>
                                         </MapErrorBoundary>
                                     </div>
@@ -686,11 +757,11 @@ export default function WorkcodesIndex({ workcodes }) {
                         </div>
 
                         {/* Footer */}
-                        <div className="flex shrink-0 items-center justify-end gap-2.5 border-t border-slate-100 bg-slate-50/90 px-6 py-2.5">
+                        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-slate-100 bg-slate-50/90 px-6 py-3.5">
                             <button
                                 type="button"
                                 onClick={() => setShowCreateModal(false)}
-                                className="rounded-xl border border-slate-200 bg-white px-4 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50 transition shadow-2xs"
+                                className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50 transition shadow-sm"
                             >
                                 Batal
                             </button>
@@ -698,7 +769,7 @@ export default function WorkcodesIndex({ workcodes }) {
                                 type="submit"
                                 form="create-workcode-form"
                                 disabled={processing}
-                                className="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-5 py-1.5 text-xs font-bold text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-700 disabled:opacity-50 transition"
+                                className="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-bold text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-700 disabled:opacity-50 transition"
                             >
                                 {processing ? 'Menyimpan...' : 'Simpan & Aktifkan'}
                             </button>

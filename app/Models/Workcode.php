@@ -13,6 +13,7 @@ class Workcode extends Model
         'nama_workcode',
         'deskripsi',
         'kategori',
+        'tanggal',
         'hari_aktif',
         'jam_datang_mulai',
         'jam_datang_selesai',

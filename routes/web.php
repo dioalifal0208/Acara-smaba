@@ -86,6 +86,7 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     // Event management routes
     Route::get('/workcodes', [WorkcodeController::class, 'index'])->name('workcodes.index');
     Route::post('/workcodes', [WorkcodeController::class, 'store'])->name('workcodes.store');
+    Route::put('/workcodes/{workcode}', [WorkcodeController::class, 'update'])->name('workcodes.update');
     Route::post('/workcodes/{workcode}/activate', [WorkcodeController::class, 'activate'])->name('workcodes.activate');
     Route::post('/workcodes/{workcode}/deactivate', [WorkcodeController::class, 'deactivate'])->name('workcodes.deactivate');
     Route::delete('/workcodes/{workcode}', [WorkcodeController::class, 'destroy'])->name('workcodes.destroy');

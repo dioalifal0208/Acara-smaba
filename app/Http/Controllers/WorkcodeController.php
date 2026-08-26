@@ -32,6 +32,7 @@ class WorkcodeController extends Controller
             'nama_workcode' => 'required|string|max:255',
             'deskripsi' => 'nullable|string|max:1000',
             'kategori' => 'required|in:workcode,harian',
+            'tanggal' => 'nullable|date',
             'hari_aktif' => 'nullable|array',
             'jam_datang_mulai' => 'nullable|date_format:H:i',
             'jam_datang_selesai' => 'nullable|date_format:H:i',
@@ -53,6 +54,7 @@ class WorkcodeController extends Controller
             'nama_workcode' => $validated['nama_workcode'],
             'deskripsi' => $validated['deskripsi'] ?? null,
             'kategori' => $validated['kategori'] ?? 'workcode',
+            'tanggal' => $validated['tanggal'] ?? null,
             'hari_aktif' => $validated['hari_aktif'] ?? null,
             'jam_datang_mulai' => $validated['jam_datang_mulai'] ?? null,
             'jam_datang_selesai' => $validated['jam_datang_selesai'] ?? null,
@@ -101,5 +103,43 @@ class WorkcodeController extends Controller
         $workcode->delete();
 
         return redirect()->back()->with('success', "Workcode '{$nama}' berhasil dihapus.");
+    }
+
+    /**
+     * Update workcode.
+     */
+    public function update(Request $request, Workcode $workcode)
+    {
+        $validated = $request->validate([
+            'nama_workcode' => 'required|string|max:255',
+            'deskripsi' => 'nullable|string|max:1000',
+            'kategori' => 'required|in:workcode,harian',
+            'tanggal' => 'nullable|date',
+            'hari_aktif' => 'nullable|array',
+            'jam_datang_mulai' => 'nullable|date_format:H:i',
+            'jam_datang_selesai' => 'nullable|date_format:H:i',
+            'jam_pulang_mulai' => 'nullable|date_format:H:i',
+            'jam_pulang_selesai' => 'nullable|date_format:H:i',
+            'latitude' => 'nullable|numeric',
+            'longitude' => 'nullable|numeric',
+            'radius_meters' => 'nullable|integer|min:1',
+        ]);
+
+        $workcode->update([
+            'nama_workcode' => $validated['nama_workcode'],
+            'deskripsi' => $validated['deskripsi'] ?? null,
+            'kategori' => $validated['kategori'] ?? 'workcode',
+            'tanggal' => $validated['tanggal'] ?? null,
+            'hari_aktif' => $validated['hari_aktif'] ?? null,
+            'jam_datang_mulai' => $validated['jam_datang_mulai'] ?? null,
+            'jam_datang_selesai' => $validated['jam_datang_selesai'] ?? null,
+            'jam_pulang_mulai' => $validated['jam_pulang_mulai'] ?? null,
+            'jam_pulang_selesai' => $validated['jam_pulang_selesai'] ?? null,
+            'latitude' => $validated['latitude'] ?? null,
+            'longitude' => $validated['longitude'] ?? null,
+            'radius_meters' => $validated['radius_meters'] ?? 50,
+        ]);
+
+        return redirect()->back()->with('success', "Workcode '{$workcode->nama_workcode}' berhasil diperbarui.");
     }
 }
