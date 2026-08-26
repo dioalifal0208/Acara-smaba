@@ -162,6 +162,7 @@ class SelfCheckInController extends Controller
         // Cek apakah device ini sudah pernah presensi di workcode aktif ini
         $deviceAttendance = Attendance::where('workcode_id', $activeWorkcode->id)
             ->where('device_hash', $deviceHash)
+            ->whereDate('created_at', now()->toDateString())
             ->with('participant')
             ->first();
 
@@ -253,6 +254,7 @@ class SelfCheckInController extends Controller
         // Cek apakah sudah absen pada workcode aktif ini
         $alreadyAttended = Attendance::where('workcode_id', $activeWorkcode->id)
             ->where('participant_id', $participant->id)
+            ->whereDate('created_at', now()->toDateString())
             ->exists();
 
         if ($alreadyAttended) {

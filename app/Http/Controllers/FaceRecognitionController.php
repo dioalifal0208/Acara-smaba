@@ -347,6 +347,7 @@ class FaceRecognitionController extends Controller
         // === Cek apakah sudah absen ===
         $alreadyAttended = Attendance::where('workcode_id', $activeWorkcode->id)
             ->where('participant_id', $bestMatch->id)
+            ->whereDate('created_at', now()->toDateString())
             ->exists();
 
         if ($alreadyAttended) {
@@ -372,6 +373,7 @@ class FaceRecognitionController extends Controller
         if (!$isAdmin) {
             $deviceAttendance = Attendance::where('workcode_id', $activeWorkcode->id)
                 ->where('device_hash', $deviceHash)
+                ->whereDate('created_at', now()->toDateString())
                 ->with('participant')
                 ->first();
 
