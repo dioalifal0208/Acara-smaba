@@ -255,8 +255,8 @@ export default function FaceScannerModal({ activeWorkcode, participant, onClose,
     // ── Render ──
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 p-4 backdrop-blur-sm" onClick={handleClose}>
-            <div className="w-full max-w-sm w-full rounded-3xl bg-white overflow-hidden shadow-2xl relative" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/80 p-4 sm:p-6 backdrop-blur-sm" onClick={handleClose}>
+            <div className="w-full max-w-sm rounded-3xl bg-white overflow-hidden shadow-2xl relative max-h-[95vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
                 {/* Header */}
                 <div className="bg-white px-5 py-4 border-b border-slate-100 text-center relative z-10 flex items-center justify-between">
                     <div className="w-8"></div>
@@ -297,7 +297,7 @@ export default function FaceScannerModal({ activeWorkcode, participant, onClose,
                         </button>
                     </div>
                 ) : (
-                    <div className="relative bg-black w-full aspect-[3/4] flex flex-col items-center justify-center">
+                    <div className="relative bg-black w-full aspect-[3/4] shrink min-h-0 flex flex-col items-center justify-center">
                         {errorMsg ? (
                             <div className="px-6 text-center z-10">
                                 <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-red-500/20">

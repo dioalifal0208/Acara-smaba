@@ -35,11 +35,11 @@ export default function AuthenticatedLayout({ header, children }) {
                 )}
 
                 {/* Page Content */}
-                <main className="relative z-10 flex-1 overflow-hidden flex flex-col">{children}</main>
+                <main className="relative flex-1 overflow-hidden flex flex-col">{children}</main>
             </div>
 
             {/* Footer */}
-            <footer className="relative z-10 border-t border-slate-200 bg-white py-3.5 text-center text-xs text-slate-500 font-medium flex-none">
+            <footer className="relative border-t border-slate-200 bg-white py-3.5 text-center text-xs text-slate-500 font-medium flex-none">
                 <p>&copy; {new Date().getFullYear()} E-Presensi SMABA. Hak Cipta Dilindungi.</p>
             </footer>
         </div>

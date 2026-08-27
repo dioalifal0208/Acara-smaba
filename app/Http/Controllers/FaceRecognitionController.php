@@ -263,7 +263,8 @@ class FaceRecognitionController extends Controller
                 $serverTimeSec = now()->timestamp;
                 $timeDiff = abs($serverTimeSec - $deviceTimeSec);
 
-                if ($timeDiff > 120) {
+                // Kita longgarkan batasan waktu menjadi 1 jam karena jam di HP peserta sering tidak sinkron
+                if ($timeDiff > 3600) {
                     return response()->json([
                         'status' => 'error',
                         'message' => 'Waktu perangkat tidak sinkron dengan server.',
