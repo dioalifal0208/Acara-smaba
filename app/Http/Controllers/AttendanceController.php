@@ -130,10 +130,18 @@ class AttendanceController extends Controller
             }
 
             $currentTime = now()->format('H:i:s');
-            $jamDatangMulai = $activeWorkcode->jam_datang_mulai ?? '06:00:00';
-            $jamDatangSelesai = $activeWorkcode->jam_datang_selesai ?? '07:00:00';
-            $jamPulangMulai = $activeWorkcode->jam_pulang_mulai ?? '15:30:00';
-            $jamPulangSelesai = $activeWorkcode->jam_pulang_selesai ?? '22:00:00';
+            
+            $jadwal = $activeWorkcode->jadwal_per_hari[$currentDay] ?? null;
+            
+            $formatTime = function($time, $default) {
+                $time = $time ?: $default;
+                return strlen($time) == 5 ? $time . ':00' : $time;
+            };
+
+            $jamDatangMulai = $formatTime($jadwal['jam_datang_mulai'] ?? $activeWorkcode->jam_datang_mulai, '06:00:00');
+            $jamDatangSelesai = $formatTime($jadwal['jam_datang_selesai'] ?? $activeWorkcode->jam_datang_selesai, '07:00:00');
+            $jamPulangMulai = $formatTime($jadwal['jam_pulang_mulai'] ?? $activeWorkcode->jam_pulang_mulai, '15:30:00');
+            $jamPulangSelesai = $formatTime($jadwal['jam_pulang_selesai'] ?? $activeWorkcode->jam_pulang_selesai, '22:00:00');
 
             // Cek apakah sekarang sebelum jam datang mulai
             if ($currentTime < $jamDatangMulai) {
@@ -389,18 +397,22 @@ class AttendanceController extends Controller
             if ($selectedWorkcode && $selectedWorkcode->kategori === 'harian') {
                 $allParticipants = Participant::all();
                 $grouped = $attendancesRaw->groupBy('participant_id');
-                $jamDatangSelesai = $selectedWorkcode->jam_datang_selesai;
-                
-                $attendances = $allParticipants->map(function ($participant) use ($grouped, $jamDatangSelesai) {
+                $attendances = $allParticipants->map(function ($participant) use ($grouped, $selectedWorkcode) {
                     $participantAttendances = $grouped->get($participant->id) ?? collect();
                     
                     $totalMenitTerlambat = 0;
-                    if ($jamDatangSelesai) {
-                        foreach ($participantAttendances as $att) {
-                            if ($att->waktu_hadir) {
+                    
+                    foreach ($participantAttendances as $att) {
+                        if ($att->waktu_hadir) {
+                            $dayOfWeek = $att->waktu_hadir->dayOfWeekIso;
+                            $jadwal = $selectedWorkcode->jadwal_per_hari[$dayOfWeek] ?? null;
+                            $targetJam = $jadwal['jam_datang_selesai'] ?? $selectedWorkcode->jam_datang_selesai;
+                            
+                            if ($targetJam) {
+                                $targetJamFormatted = strlen($targetJam) == 5 ? $targetJam . ':00' : $targetJam;
                                 $waktuHadirTime = $att->waktu_hadir->format('H:i:s');
-                                if ($waktuHadirTime > $jamDatangSelesai) {
-                                    $target = \Carbon\Carbon::parse($att->waktu_hadir->format('Y-m-d') . ' ' . $jamDatangSelesai);
+                                if ($waktuHadirTime > $targetJamFormatted) {
+                                    $target = \Carbon\Carbon::parse($att->waktu_hadir->format('Y-m-d') . ' ' . $targetJamFormatted);
                                     $diff = (int) max(1, round($target->diffInMinutes($att->waktu_hadir)));
                                     $totalMenitTerlambat += $diff;
                                 }

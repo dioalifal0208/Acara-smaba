@@ -42,9 +42,19 @@ class WorkcodeController extends Controller
             'longitude' => 'nullable|numeric',
             'radius_meters' => 'nullable|integer|min:1',
             'set_active' => 'boolean',
+            'jadwal_per_hari' => 'nullable|array',
         ]);
 
+        $isFutureDate = false;
+        if (($validated['kategori'] ?? 'workcode') === 'workcode' && !empty($validated['tanggal'])) {
+            $isFutureDate = \Carbon\Carbon::parse($validated['tanggal'])->startOfDay()->isFuture();
+        }
+
         $setActive = $request->boolean('set_active') || Workcode::count() === 0;
+        
+        if ($isFutureDate) {
+            $setActive = false;
+        }
 
         if ($setActive) {
             Workcode::query()->update(['is_active' => false]);
@@ -64,6 +74,7 @@ class WorkcodeController extends Controller
             'longitude' => $validated['longitude'] ?? null,
             'radius_meters' => $validated['radius_meters'] ?? 50,
             'is_active' => $setActive,
+            'jadwal_per_hari' => $validated['jadwal_per_hari'] ?? null,
         ]);
 
         $message = $setActive
@@ -123,6 +134,7 @@ class WorkcodeController extends Controller
             'latitude' => 'nullable|numeric',
             'longitude' => 'nullable|numeric',
             'radius_meters' => 'nullable|integer|min:1',
+            'jadwal_per_hari' => 'nullable|array',
         ]);
 
         $workcode->update([
@@ -138,6 +150,7 @@ class WorkcodeController extends Controller
             'latitude' => $validated['latitude'] ?? null,
             'longitude' => $validated['longitude'] ?? null,
             'radius_meters' => $validated['radius_meters'] ?? 50,
+            'jadwal_per_hari' => $validated['jadwal_per_hari'] ?? null,
         ]);
 
         return redirect()->back()->with('success', "Workcode '{$workcode->nama_workcode}' berhasil diperbarui.");

@@ -12,14 +12,4 @@ Artisan::command('inspire', function () {
 Schedule::command('attendance:calculate-alpha')->everyFiveMinutes()->withoutOverlapping();
 
 // Aktivasi otomatis workcode yang dijadwalkan pada hari ini
-Schedule::call(function () {
-    $today = now()->toDateString();
-    $scheduledWorkcode = \App\Models\Workcode::where('tanggal', $today)
-        ->orderBy('created_at', 'desc')
-        ->first();
-    
-    if ($scheduledWorkcode) {
-        \App\Models\Workcode::query()->update(['is_active' => false]);
-        $scheduledWorkcode->update(['is_active' => true]);
-    }
-})->dailyAt('00:00')->name('workcodes-activate-today')->withoutOverlapping();
+Schedule::command('workcode:auto-activate')->dailyAt('00:01')->withoutOverlapping();

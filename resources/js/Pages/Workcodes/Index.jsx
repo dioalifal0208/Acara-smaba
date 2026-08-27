@@ -123,11 +123,30 @@ export default function WorkcodesIndex({ workcodes }) {
         jam_datang_selesai: '07:00',
         jam_pulang_mulai: '15:30',
         jam_pulang_selesai: '22:00',
+        jadwal_per_hari: {
+            1: { jam_datang_mulai: '06:00', jam_datang_selesai: '07:00', jam_pulang_mulai: '15:30', jam_pulang_selesai: '22:00' },
+            2: { jam_datang_mulai: '06:00', jam_datang_selesai: '07:00', jam_pulang_mulai: '15:30', jam_pulang_selesai: '22:00' },
+            3: { jam_datang_mulai: '06:00', jam_datang_selesai: '07:00', jam_pulang_mulai: '15:30', jam_pulang_selesai: '22:00' },
+            4: { jam_datang_mulai: '06:00', jam_datang_selesai: '07:00', jam_pulang_mulai: '15:30', jam_pulang_selesai: '22:00' },
+            5: { jam_datang_mulai: '06:00', jam_datang_selesai: '07:00', jam_pulang_mulai: '16:00', jam_pulang_selesai: '22:00' },
+            6: { jam_datang_mulai: '06:00', jam_datang_selesai: '07:00', jam_pulang_mulai: '15:30', jam_pulang_selesai: '22:00' },
+            7: { jam_datang_mulai: '06:00', jam_datang_selesai: '07:00', jam_pulang_mulai: '15:30', jam_pulang_selesai: '22:00' },
+        },
         latitude: '',
         longitude: '',
         radius_meters: 100,
         set_active: true,
     });
+
+    const updateJadwalPerHari = (hari, field, value) => {
+        setData('jadwal_per_hari', {
+            ...data.jadwal_per_hari,
+            [hari]: {
+                ...data.jadwal_per_hari[hari],
+                [field]: value
+            }
+        });
+    };
 
     const handleToggleDay = (day) => {
         const days = [...data.hari_aktif];
@@ -150,6 +169,10 @@ export default function WorkcodesIndex({ workcodes }) {
         if (mapPosition) {
             data.latitude = mapPosition.lat;
             data.longitude = mapPosition.lng;
+        }
+        
+        if (data.kategori === 'workcode' && data.tanggal && new Date(data.tanggal) > new Date(new Date().setHours(0,0,0,0))) {
+            data.set_active = false;
         }
         e.preventDefault();
         
@@ -183,6 +206,15 @@ export default function WorkcodesIndex({ workcodes }) {
             jam_datang_selesai: workcode.jam_datang_selesai || '07:00',
             jam_pulang_mulai: workcode.jam_pulang_mulai || '15:30',
             jam_pulang_selesai: workcode.jam_pulang_selesai || '22:00',
+            jadwal_per_hari: workcode.jadwal_per_hari || {
+                1: { jam_datang_mulai: '06:00', jam_datang_selesai: '07:00', jam_pulang_mulai: '15:30', jam_pulang_selesai: '22:00' },
+                2: { jam_datang_mulai: '06:00', jam_datang_selesai: '07:00', jam_pulang_mulai: '15:30', jam_pulang_selesai: '22:00' },
+                3: { jam_datang_mulai: '06:00', jam_datang_selesai: '07:00', jam_pulang_mulai: '15:30', jam_pulang_selesai: '22:00' },
+                4: { jam_datang_mulai: '06:00', jam_datang_selesai: '07:00', jam_pulang_mulai: '15:30', jam_pulang_selesai: '22:00' },
+                5: { jam_datang_mulai: '06:00', jam_datang_selesai: '07:00', jam_pulang_mulai: '15:30', jam_pulang_selesai: '22:00' },
+                6: { jam_datang_mulai: '06:00', jam_datang_selesai: '07:00', jam_pulang_mulai: '15:30', jam_pulang_selesai: '22:00' },
+                7: { jam_datang_mulai: '06:00', jam_datang_selesai: '07:00', jam_pulang_mulai: '15:30', jam_pulang_selesai: '22:00' },
+            },
             latitude: workcode.latitude || '',
             longitude: workcode.longitude || '',
             radius_meters: workcode.radius_meters || 100,
@@ -370,13 +402,47 @@ export default function WorkcodesIndex({ workcodes }) {
 
                                             {workcode.kategori === 'harian' && (
                                                 <div className="mt-2.5 flex flex-col gap-1 rounded-lg bg-blue-50/60 border border-blue-100 p-2 text-[11px] text-blue-900 font-medium">
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-slate-500 text-[10px]">Datang:</span>
-                                                        <span className="font-bold font-mono">{workcode.jam_datang_mulai?.substring(0,5) || '06:00'} - {workcode.jam_datang_selesai?.substring(0,5) || '07:00'}</span>
-                                                    </div>
-                                                    <div className="flex items-center justify-between">
-                                                        <span className="text-slate-500 text-[10px]">Pulang:</span>
-                                                        <span className="font-bold font-mono">{workcode.jam_pulang_mulai?.substring(0,5) || '15:30'} - {workcode.jam_pulang_selesai?.substring(0,5) || '22:00'}</span>
+                                                    <div className="flex items-start gap-1.5">
+                                                        <span className="text-blue-500 mt-0.5">📅</span>
+                                                        <div className="flex-1 w-full">
+                                                            <div className="flex items-center justify-between mb-1">
+                                                                <span className="font-bold block text-blue-800">Jadwal Per-Hari Aktif</span>
+                                                                <span className="text-slate-500 text-[10px]">{workcode.hari_aktif?.length || 0} hari kerja</span>
+                                                            </div>
+                                                            {(() => {
+                                                                const dayOfWeek = new Date().getDay(); // 0 is Sunday, 1 is Monday
+                                                                const isoDay = dayOfWeek === 0 ? 7 : dayOfWeek;
+                                                                const todayName = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'][isoDay - 1];
+                                                                
+                                                                if (workcode.hari_aktif?.includes(isoDay)) {
+                                                                    const jadwal = workcode.jadwal_per_hari?.[isoDay] || {
+                                                                        jam_datang_mulai: workcode.jam_datang_mulai,
+                                                                        jam_datang_selesai: workcode.jam_datang_selesai,
+                                                                        jam_pulang_mulai: workcode.jam_pulang_mulai,
+                                                                        jam_pulang_selesai: workcode.jam_pulang_selesai,
+                                                                    };
+                                                                    return (
+                                                                        <div className="flex flex-col gap-0.5 mt-1 border-t border-blue-100/50 pt-1">
+                                                                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Hari Ini ({todayName}):</span>
+                                                                            <div className="flex items-center justify-between">
+                                                                                <span className="text-emerald-700 font-semibold text-[10px]">🟢 Datang:</span>
+                                                                                <span className="font-bold font-mono">{jadwal.jam_datang_mulai?.substring(0,5) || '06:00'} - {jadwal.jam_datang_selesai?.substring(0,5) || '07:00'}</span>
+                                                                            </div>
+                                                                            <div className="flex items-center justify-between">
+                                                                                <span className="text-amber-700 font-semibold text-[10px]">🟠 Pulang:</span>
+                                                                                <span className="font-bold font-mono">{jadwal.jam_pulang_mulai?.substring(0,5) || '15:30'} - {jadwal.jam_pulang_selesai?.substring(0,5) || '22:00'}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                } else {
+                                                                    return (
+                                                                        <div className="mt-1 border-t border-blue-100/50 pt-1 text-slate-500 text-[10px]">
+                                                                            Hari Ini ({todayName}): <span className="font-bold text-red-500">Tidak ada jadwal (Libur)</span>
+                                                                        </div>
+                                                                    );
+                                                                }
+                                                            })()}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             )}
@@ -524,17 +590,19 @@ export default function WorkcodesIndex({ workcodes }) {
                                     </div>
 
                                     {/* Tanggal Terjadwal */}
-                                    <div>
-                                        <label className="block text-[10px] font-extrabold text-slate-700 uppercase tracking-wider mb-1">
-                                            Tanggal Terjadwal <span className="text-slate-400 font-normal">(Opsional)</span>
-                                        </label>
-                                        <input
-                                            type="date"
-                                            value={data.tanggal}
-                                            onChange={(e) => setData('tanggal', e.target.value)}
-                                            className="w-full rounded-xl border border-slate-200 px-3.5 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 font-medium shadow-2xs transition-all"
-                                        />
-                                    </div>
+                                    {data.kategori === 'workcode' && (
+                                        <div className="animate-[fadeIn_0.15s_ease-out]">
+                                            <label className="block text-[10px] font-extrabold text-slate-700 uppercase tracking-wider mb-1">
+                                                Tanggal Terjadwal <span className="text-slate-400 font-normal">(Opsional)</span>
+                                            </label>
+                                            <input
+                                                type="date"
+                                                value={data.tanggal}
+                                                onChange={(e) => setData('tanggal', e.target.value)}
+                                                className="w-full rounded-xl border border-slate-200 px-3.5 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 font-medium shadow-2xs transition-all"
+                                            />
+                                        </div>
+                                    )}
 
                                     {/* Kategori Presensi */}
                                     <div>
@@ -570,7 +638,7 @@ export default function WorkcodesIndex({ workcodes }) {
                                     </div>
 
                                     {/* Seamless Configuration Box */}
-                                    <div className="flex flex-col h-[148px]">
+                                    <div className="flex flex-col min-h-[148px]">
                                         {data.kategori === 'workcode' ? (
                                             <div className="rounded-xl border border-indigo-200/80 bg-indigo-50/40 p-3 flex-1 flex flex-col justify-center gap-3 animate-[fadeIn_0.15s_ease-out]">
                                                 <div className="flex items-center justify-between">
@@ -638,62 +706,71 @@ export default function WorkcodesIndex({ workcodes }) {
                                                     </div>
                                                 </div>
 
-                                                {/* Jam Datang & Pulang In 2 Small Columns */}
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    {/* Datang */}
-                                                    <div className="bg-white rounded-lg p-1.5 border border-blue-100 shadow-2xs">
-                                                        <span className="block text-[10px] font-bold text-emerald-700 uppercase tracking-wider mb-0.5">
-                                                            🟢 Jam Datang
-                                                        </span>
-                                                        <div className="flex items-center gap-1">
-                                                            <input
-                                                                type="time"
-                                                                value={data.jam_datang_mulai}
-                                                                onChange={(e) => setData('jam_datang_mulai', e.target.value)}
-                                                                className="w-full min-w-0 rounded border border-slate-200 px-1 py-0.5 text-[11px] font-bold font-mono text-slate-800 focus:border-blue-500 shadow-2xs"
-                                                                required={data.kategori === 'harian'}
-                                                            />
-                                                            <span className="text-[10px] font-bold text-slate-400">-</span>
-                                                            <input
-                                                                type="time"
-                                                                value={data.jam_datang_selesai}
-                                                                onChange={(e) => setData('jam_datang_selesai', e.target.value)}
-                                                                className="w-full min-w-0 rounded border border-slate-200 px-1 py-0.5 text-[11px] font-bold font-mono text-slate-800 focus:border-blue-500 shadow-2xs"
-                                                                required={data.kategori === 'harian'}
-                                                            />
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Pulang */}
-                                                    <div className="bg-white rounded-lg p-1.5 border border-blue-100 shadow-2xs">
-                                                        <span className="block text-[10px] font-bold text-amber-700 uppercase tracking-wider mb-0.5">
-                                                            🟠 Jam Pulang
-                                                        </span>
-                                                        <div className="flex items-center gap-1">
-                                                            <input
-                                                                type="time"
-                                                                value={data.jam_pulang_mulai}
-                                                                onChange={(e) => setData('jam_pulang_mulai', e.target.value)}
-                                                                className="w-full min-w-0 rounded border border-slate-200 px-1 py-0.5 text-[11px] font-bold font-mono text-slate-800 focus:border-blue-500 shadow-2xs"
-                                                                required={data.kategori === 'harian'}
-                                                            />
-                                                            <span className="text-[10px] font-bold text-slate-400">-</span>
-                                                            <input
-                                                                type="time"
-                                                                value={data.jam_pulang_selesai}
-                                                                onChange={(e) => setData('jam_pulang_selesai', e.target.value)}
-                                                                className="w-full min-w-0 rounded border border-slate-200 px-1 py-0.5 text-[11px] font-bold font-mono text-slate-800 focus:border-blue-500 shadow-2xs"
-                                                                required={data.kategori === 'harian'}
-                                                            />
-                                                        </div>
-                                                    </div>
+                                                {/* Jam Datang & Pulang Dinamis Per Hari */}
+                                                <div className="flex flex-col gap-2 max-h-[150px] overflow-y-auto pr-1">
+                                                    {data.hari_aktif.sort().map(hariId => {
+                                                        const dayName = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'][hariId - 1];
+                                                        const jadwal = data.jadwal_per_hari[hariId] || { jam_datang_mulai: '06:00', jam_datang_selesai: '07:00', jam_pulang_mulai: '15:30', jam_pulang_selesai: '22:00' };
+                                                        
+                                                        return (
+                                                            <div key={hariId} className="bg-white rounded-lg p-1.5 border border-blue-100 shadow-2xs flex flex-col md:flex-row md:items-center gap-2">
+                                                                <div className="w-10 shrink-0 text-center">
+                                                                    <span className="text-[10px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">{dayName}</span>
+                                                                </div>
+                                                                <div className="grid grid-cols-2 gap-2 flex-1">
+                                                                    {/* Datang */}
+                                                                    <div className="flex flex-col">
+                                                                        <span className="block text-[9px] font-bold text-emerald-700 uppercase tracking-wider mb-0.5">🟢 Datang</span>
+                                                                        <div className="flex items-center gap-1">
+                                                                            <input
+                                                                                type="time"
+                                                                                value={jadwal.jam_datang_mulai}
+                                                                                onChange={(e) => updateJadwalPerHari(hariId, 'jam_datang_mulai', e.target.value)}
+                                                                                className="w-full min-w-0 rounded border border-slate-200 px-1 py-0.5 text-[11px] font-bold font-mono text-slate-800 focus:border-blue-500 shadow-2xs"
+                                                                                required={data.kategori === 'harian'}
+                                                                            />
+                                                                            <span className="text-[10px] font-bold text-slate-400">-</span>
+                                                                            <input
+                                                                                type="time"
+                                                                                value={jadwal.jam_datang_selesai}
+                                                                                onChange={(e) => updateJadwalPerHari(hariId, 'jam_datang_selesai', e.target.value)}
+                                                                                className="w-full min-w-0 rounded border border-slate-200 px-1 py-0.5 text-[11px] font-bold font-mono text-slate-800 focus:border-blue-500 shadow-2xs"
+                                                                                required={data.kategori === 'harian'}
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                    {/* Pulang */}
+                                                                    <div className="flex flex-col">
+                                                                        <span className="block text-[9px] font-bold text-amber-700 uppercase tracking-wider mb-0.5">🟠 Pulang</span>
+                                                                        <div className="flex items-center gap-1">
+                                                                            <input
+                                                                                type="time"
+                                                                                value={jadwal.jam_pulang_mulai}
+                                                                                onChange={(e) => updateJadwalPerHari(hariId, 'jam_pulang_mulai', e.target.value)}
+                                                                                className="w-full min-w-0 rounded border border-slate-200 px-1 py-0.5 text-[11px] font-bold font-mono text-slate-800 focus:border-blue-500 shadow-2xs"
+                                                                                required={data.kategori === 'harian'}
+                                                                            />
+                                                                            <span className="text-[10px] font-bold text-slate-400">-</span>
+                                                                            <input
+                                                                                type="time"
+                                                                                value={jadwal.jam_pulang_selesai}
+                                                                                onChange={(e) => updateJadwalPerHari(hariId, 'jam_pulang_selesai', e.target.value)}
+                                                                                className="w-full min-w-0 rounded border border-slate-200 px-1 py-0.5 text-[11px] font-bold font-mono text-slate-800 focus:border-blue-500 shadow-2xs"
+                                                                                required={data.kategori === 'harian'}
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
                                                 </div>
                                             </div>
                                         )}
                                     </div>
 
                                     {/* Activate Checkbox */}
-                                    {!editingWorkcode && (
+                                    {!editingWorkcode && !(data.kategori === 'workcode' && data.tanggal && new Date(data.tanggal) > new Date(new Date().setHours(0,0,0,0))) && (
                                         <label className="flex items-center gap-2 cursor-pointer pt-0.5 select-none">
                                             <input
                                                 type="checkbox"
@@ -771,7 +848,11 @@ export default function WorkcodesIndex({ workcodes }) {
                                 disabled={processing}
                                 className="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-bold text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-700 disabled:opacity-50 transition"
                             >
-                                {processing ? 'Menyimpan...' : 'Simpan & Aktifkan'}
+                                {processing ? 'Menyimpan...' : (
+                                    data.kategori === 'workcode' && data.tanggal && new Date(data.tanggal) > new Date(new Date().setHours(0,0,0,0))
+                                        ? 'Simpan'
+                                        : 'Simpan & Aktifkan'
+                                )}
                             </button>
                         </div>
                     </div>

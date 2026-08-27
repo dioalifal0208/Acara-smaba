@@ -23,6 +23,7 @@ class Workcode extends Model
         'longitude',
         'radius_meters',
         'is_active',
+        'jadwal_per_hari',
     ];
 
     protected $casts = [
@@ -31,6 +32,7 @@ class Workcode extends Model
         'longitude' => 'decimal:8',
         'radius_meters' => 'integer',
         'hari_aktif' => 'array',
+        'jadwal_per_hari' => 'array',
     ];
 
     /**
