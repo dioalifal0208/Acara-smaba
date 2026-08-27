@@ -335,13 +335,25 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
                 if (displaySize.width === 0) return;
 
                 try {
-                    const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+                    const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }))
                         .withFaceLandmarks()
                         .withFaceDescriptor();
 
                     if (detection && !isFaceProcessingRef.current && !isProcessingRef.current) {
-                        isFaceProcessingRef.current = true;
-                        setIsFaceProcessing(true);
+                        const p = detection.landmarks.positions;
+                        const calcEAR = (eyePts) => {
+                            const v1 = Math.hypot(eyePts[1].x - eyePts[5].x, eyePts[1].y - eyePts[5].y);
+                            const v2 = Math.hypot(eyePts[2].x - eyePts[4].x, eyePts[2].y - eyePts[4].y);
+                            const h = Math.hypot(eyePts[0].x - eyePts[3].x, eyePts[0].y - eyePts[3].y);
+                            if (h === 0) return 0.3;
+                            return (v1 + v2) / (2.0 * h);
+                        };
+                        const leftEyeEAR = calcEAR([p[36], p[37], p[38], p[39], p[40], p[41]]);
+                        const rightEyeEAR = calcEAR([p[42], p[43], p[44], p[45], p[46], p[47]]);
+
+                        if (leftEyeEAR > 0.20 && rightEyeEAR > 0.20) {
+                            isFaceProcessingRef.current = true;
+                            setIsFaceProcessing(true);
 
                         let payload = {
                             descriptor: Array.from(detection.descriptor),
@@ -365,6 +377,7 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
                                     setIsFaceProcessing(false);
                                 }, 3000); // 3 seconds cooldown for face scan
                             });
+                        }
                     }
                 } catch (e) {
                     // ignore

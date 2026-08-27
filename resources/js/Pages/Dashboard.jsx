@@ -60,7 +60,7 @@ export default function Dashboard({ stats, activeWorkcode: propActiveWorkcode, p
                                     <Dropdown.Link href={route('profile.edit')} className="text-sm font-semibold text-slate-700 hover:text-indigo-600 hover:bg-indigo-50/50 rounded-lg py-2 transition-colors">
                                         Pengaturan Profil
                                     </Dropdown.Link>
-                                    {user.role !== 'participant' && (
+                                    {user.is_admin && (
                                         <Dropdown.Link href={route('admin.settings')} className="text-sm font-semibold text-slate-700 hover:text-indigo-600 hover:bg-indigo-50/50 rounded-lg py-2 transition-colors">
                                             Pengaturan TTD
                                         </Dropdown.Link>

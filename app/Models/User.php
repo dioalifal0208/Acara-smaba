@@ -37,6 +37,26 @@ class User extends Authenticatable
     ];
 
     /**
+     * The accessors to append to the model's array form.
+     *
+     * @var list<string>
+     */
+    protected $appends = [
+        'is_admin',
+    ];
+
+    /**
+     * Determine if the user is an admin.
+     *
+     * @return bool
+     */
+    public function getIsAdminAttribute(): bool
+    {
+        return $this->isAdmin();
+    }
+
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>

@@ -331,14 +331,13 @@ export default function FaceRegistration({ participant }) {
                                     
                                     {/* Overlay Frame */}
                                     <div className="absolute inset-0 pointer-events-none flex items-center justify-center p-6">
-                                        <div className={`w-full h-72 border-[3px] border-dashed rounded-full transition-colors duration-300 ${challengePassed ? 'border-emerald-400 bg-emerald-400/20' : 'border-white/50'}`}></div>
+                                        <div className={`w-[90%] max-w-[280px] h-[75%] border-4 border-solid rounded-[120px] transition-all duration-300 ${challengePassed ? 'border-emerald-400 bg-emerald-400/10 shadow-[0_0_25px_rgba(52,211,153,0.5)]' : 'border-cyan-400 shadow-[0_0_25px_rgba(34,211,238,0.7)]'}`}></div>
                                     </div>
 
                                     {/* Challenge Badge */}
                                     {challenge && !challengePassed && !isProcessing && (
                                         <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 w-[90%] animate-[fadeIn_0.2s_ease-out]">
                                             <div className="bg-indigo-600/90 backdrop-blur-md text-white px-4 py-3 rounded-2xl shadow-xl text-center border border-indigo-400/30">
-                                                <p className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-0.5">Tantangan Anti-Palsu</p>
                                                 <p className="text-base font-extrabold flex items-center justify-center gap-1.5">
                                                     {challenge.badge}
                                                 </p>

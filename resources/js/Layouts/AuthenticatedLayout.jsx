@@ -19,7 +19,7 @@ export default function AuthenticatedLayout({ header, children }) {
                     <header className="relative z-10 bg-white border-b border-slate-200/80 shadow-sm flex-none">
                         <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8 flex items-center gap-4">
                             <Link 
-                                href={user.role === 'participant' ? route('participant.dashboard') : route('dashboard')}
+                                href={!user.is_admin ? route('participant.dashboard') : route('dashboard')}
                                 className="inline-flex items-center justify-center p-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 shrink-0 group"
                                 title="Kembali ke Dashboard"
                             >
