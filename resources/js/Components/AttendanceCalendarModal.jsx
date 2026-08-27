@@ -330,7 +330,7 @@ export default function AttendanceCalendarModal({
     };
 
     return (
-        <Modal show={show} onClose={onClose} maxWidth="5xl">
+        <Modal show={show} onClose={onClose} maxWidth="5xl" closeable={false}>
             <div className="p-5 sm:p-7 flex flex-col max-h-[92vh] overflow-y-auto">
                 {/* Header: Title & Close */}
                 <div className="flex items-center justify-between border-b border-slate-100 pb-3">

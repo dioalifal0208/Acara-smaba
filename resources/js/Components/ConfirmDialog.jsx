@@ -85,7 +85,13 @@ function ConfirmDialog({ config, onResolve }) {
     const tc = typeConfig[config.type] || typeConfig.info;
 
     return (
-        <div className={`fixed inset-0 z-[10000] flex items-center justify-center p-4 transition-opacity duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${overlayClass}`}>
+        <div 
+            className={`fixed inset-0 z-[10000] flex items-center justify-center p-4 transition-opacity duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${overlayClass}`}
+            onMouseDown={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+        >
             {/* Backdrop */}
             <div
                 className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
