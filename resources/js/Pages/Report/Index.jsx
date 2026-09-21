@@ -456,7 +456,17 @@ export default function ReportIndex({
                 : '07:00';
 
             const rowsHtml = sortedAttendances.map((a, i) => {
-                let tanggal = a.tanggal_formatted || a.tanggal || '-';
+                let hariDanTanggal = '-';
+                if (a.tanggal) {
+                    const [attendanceYear, attendanceMonth, attendanceDay] = a.tanggal.split('-').map(Number);
+                    hariDanTanggal = new Date(attendanceYear, attendanceMonth - 1, attendanceDay)
+                        .toLocaleDateString('id-ID', {
+                            weekday: 'long',
+                            day: '2-digit',
+                            month: 'long',
+                            year: 'numeric',
+                        });
+                }
                 let jamDatang = a.jam_masuk || (a.waktu_hadir !== '-' ? a.waktu_hadir : '-');
                 let jamPulang = a.jam_pulang || (a.waktu_pulang !== '-' ? a.waktu_pulang : '-');
 
@@ -497,7 +507,7 @@ export default function ReportIndex({
                 return `
                     <tr>
                         <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${i + 1}</td>
-                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${tanggal}</td>
+                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${hariDanTanggal}</td>
                         <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${jamDatang}</td>
                         <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${jamPulang}</td>
                         <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-weight: bold; font-size: 11px; color: ${statusColor};">${statusBadge}</td>
@@ -706,7 +716,6 @@ export default function ReportIndex({
 
                     <div class="title-doc">
                         <h2>REKAP BUKTI KEHADIRAN INDIVIDU</h2>
-                        <p style="margin-top: 5px; font-family: Arial, sans-serif; font-size: 11px;">Periode ${periodLabel}</p>
                     </div>
 
                     <div class="meta-info">
@@ -730,6 +739,11 @@ export default function ReportIndex({
                                 <td style="font-weight: bold;">WorkCode</td>
                                 <td>:</td>
                                 <td>${selectedWorkcode.nama_workcode}</td>
+                            </tr>
+                            <tr>
+                                <td style="font-weight: bold;">Periode Bulan</td>
+                                <td>:</td>
+                                <td>${periodLabel}</td>
                             </tr>
                         </table>
                     </div>
@@ -757,7 +771,7 @@ export default function ReportIndex({
                         <thead>
                             <tr>
                                 <th style="width: 35px;">No</th>
-                                <th>Tanggal</th>
+                                <th>Hari &amp; Tanggal</th>
                                 <th>Jam Datang</th>
                                 <th>Jam Pulang</th>
                                 <th style="width: 100px;">Status</th>
