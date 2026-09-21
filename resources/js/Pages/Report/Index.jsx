@@ -434,7 +434,11 @@ export default function ReportIndex({
     const handlePrintIndividualRecap = async (participantId, participantName) => {
         if (!selectedWorkcode) return;
         try {
-            const response = await fetch(`/report/individual/${selectedWorkcode.id}/${participantId}`);
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = now.getMonth() + 1;
+            const periodLabel = now.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+            const response = await fetch(`/report/individual/${selectedWorkcode.id}/${participantId}?year=${year}&month=${month}`);
             const data = await response.json();
             
             const printWindow = window.open('', '_blank', 'width=800,height=900');
@@ -702,6 +706,7 @@ export default function ReportIndex({
 
                     <div class="title-doc">
                         <h2>REKAP BUKTI KEHADIRAN INDIVIDU</h2>
+                        <p style="margin-top: 5px; font-family: Arial, sans-serif; font-size: 11px;">Periode ${periodLabel}</p>
                     </div>
 
                     <div class="meta-info">

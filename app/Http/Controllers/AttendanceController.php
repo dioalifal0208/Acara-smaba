@@ -487,16 +487,34 @@ class AttendanceController extends Controller
     /**
      * Dapatkan detail presensi harian untuk 1 partisipan (untuk Cetak Rekap Individu & Kelola Log).
      */
-    public function getIndividualRecap($workcodeId, $participantId)
+    public function getIndividualRecap(Request $request, $workcodeId, $participantId)
     {
         $workcode = Workcode::findOrFail($workcodeId);
         $participant = Participant::findOrFail($participantId);
 
-        $attendances = Attendance::where('workcode_id', $workcodeId)
+        $attendanceQuery = Attendance::where('workcode_id', $workcodeId)
             ->where('participant_id', $participantId)
             ->orderBy('waktu_hadir', 'asc')
-            ->orderBy('created_at', 'asc')
-            ->get()
+            ->orderBy('created_at', 'asc');
+
+        if ($request->filled('year') && $request->filled('month')) {
+            $request->validate([
+                'year' => ['integer', 'between:2000,2100'],
+                'month' => ['integer', 'between:1,12'],
+            ]);
+
+            $attendanceQuery->where(function ($query) use ($request) {
+                $query->whereYear('waktu_hadir', $request->integer('year'))
+                    ->whereMonth('waktu_hadir', $request->integer('month'))
+                    ->orWhere(function ($fallbackQuery) use ($request) {
+                        $fallbackQuery->whereNull('waktu_hadir')
+                            ->whereYear('created_at', $request->integer('year'))
+                            ->whereMonth('created_at', $request->integer('month'));
+                    });
+            });
+        }
+
+        $attendances = $attendanceQuery->get()
             ->map(function ($att) {
                 $refDate = $att->waktu_hadir ?? $att->created_at;
                 return [
