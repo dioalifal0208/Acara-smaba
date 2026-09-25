@@ -19,7 +19,7 @@ export default function Dashboard({ stats, activeWorkcode: propActiveWorkcode, p
         <AuthenticatedLayout>
             <Head title="Dashboard" />
 
-            <div className="py-3 px-4 sm:px-6 lg:px-8 flex-1 flex flex-col w-full max-w-7xl mx-auto overflow-hidden">
+            <div className="py-3 px-4 sm:px-6 lg:px-8 flex-1 flex flex-col w-full max-w-7xl mx-auto">
                 
                 {/* Header Section (User Profile & Title) */}
                 <div className={`relative z-30 flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3 transition-all duration-700 ease-out transform ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'}`}>
@@ -141,10 +141,10 @@ export default function Dashboard({ stats, activeWorkcode: propActiveWorkcode, p
                 </div>
 
                 {/* Main Content Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-0">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 lg:min-h-0">
                     
                     {/* Left Column (Hero & Quick Actions) */}
-                    <div className="lg:col-span-7 xl:col-span-8 flex flex-col gap-4 min-h-0">
+                    <div className="lg:col-span-7 xl:col-span-8 flex flex-col gap-4">
                         
                         {/* Premium Hero / Welcome Banner */}
                         <div className={`relative overflow-hidden rounded-3xl p-6 lg:p-8 shadow-2xl flex-none transition-all duration-700 ease-out delay-200 transform ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
@@ -196,14 +196,14 @@ export default function Dashboard({ stats, activeWorkcode: propActiveWorkcode, p
                         </div>
 
                         {/* Bento Grid - Quick Actions */}
-                        <div className="flex-1 flex flex-col min-h-0">
+                        <div className="flex-none lg:flex-1 flex flex-col lg:min-h-0">
                             <h3 className={`text-sm font-bold text-slate-800 tracking-tight mb-4 flex items-center gap-2 transition-all duration-700 ease-out delay-300 transform ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-indigo-500" viewBox="0 0 20 20" fill="currentColor">
                                     <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
                                 </svg>
                                 Akses Cepat
                             </h3>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 flex-1">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 flex-none lg:flex-1">
                                 
                                 {/* Item 1 */}
                                 <Link
@@ -281,7 +281,7 @@ export default function Dashboard({ stats, activeWorkcode: propActiveWorkcode, p
                     </div>
 
                     {/* Right Column (Statistics) */}
-                    <div className="lg:col-span-5 xl:col-span-4 flex-1 min-h-0">
+                    <div className="lg:col-span-5 xl:col-span-4">
                         <div className={`relative h-full rounded-3xl bg-white border border-slate-200/60 shadow-xl shadow-slate-200/50 overflow-hidden flex flex-col transition-all duration-700 ease-out delay-500 transform ${mounted ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-8'}`}>
                             
                             {/* Decorative Background for Stats */}

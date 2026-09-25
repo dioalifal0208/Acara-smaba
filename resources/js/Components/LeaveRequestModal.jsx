@@ -42,7 +42,7 @@ export default function LeaveRequestModal({ show, onClose, workcodeId, tanggal }
 
     return (
         <Modal show={show} onClose={closeModal}>
-            <form onSubmit={submit} className="p-6">
+            <form onSubmit={submit} className="p-6 max-h-[90dvh] overflow-y-auto">
                 <h2 className="text-lg font-bold text-gray-900 mb-6">
                     Pengajuan Izin / Sakit
                 </h2>
@@ -54,7 +54,7 @@ export default function LeaveRequestModal({ show, onClose, workcodeId, tanggal }
                         name="tipe"
                         value={data.tipe}
                         onChange={(e) => setData('tipe', e.target.value)}
-                        className="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm"
+                        className="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm min-h-[44px]"
                     >
                         <option value="izin">Izin</option>
                         <option value="sakit">Sakit</option>
@@ -89,9 +89,9 @@ export default function LeaveRequestModal({ show, onClose, workcodeId, tanggal }
                     <InputError message={errors.bukti} className="mt-2" />
                 </div>
 
-                <div className="mt-6 flex justify-end">
+                <div className="mt-6 flex justify-end gap-3">
                     <SecondaryButton onClick={closeModal}>Batal</SecondaryButton>
-                    <PrimaryButton className="ml-3" disabled={processing}>
+                    <PrimaryButton disabled={processing}>
                         Kirim Pengajuan
                     </PrimaryButton>
                 </div>

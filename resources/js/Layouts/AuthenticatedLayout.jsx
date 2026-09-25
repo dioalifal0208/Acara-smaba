@@ -35,7 +35,7 @@ export default function AuthenticatedLayout({ header, children }) {
                 )}
 
                 {/* Page Content */}
-                <main className="relative flex-1 overflow-hidden flex flex-col">{children}</main>
+                <main className="relative flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</main>
             </div>
 
             {/* Footer */}

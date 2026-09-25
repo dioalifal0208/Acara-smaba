@@ -104,6 +104,27 @@ class MapErrorBoundary extends React.Component {
   }
 }
 
+const normalizeTimeForInput = (value, fallback) => {
+    return typeof value === 'string' && value.length >= 5
+        ? value.substring(0, 5)
+        : fallback;
+};
+
+const normalizeDailySchedule = (schedule) => {
+    return Object.fromEntries(
+        Object.entries(schedule).map(([day, times]) => [
+            day,
+            {
+                ...times,
+                jam_datang_mulai: normalizeTimeForInput(times?.jam_datang_mulai, '06:00'),
+                jam_datang_selesai: normalizeTimeForInput(times?.jam_datang_selesai, '07:00'),
+                jam_pulang_mulai: normalizeTimeForInput(times?.jam_pulang_mulai, '15:30'),
+                jam_pulang_selesai: normalizeTimeForInput(times?.jam_pulang_selesai, '22:00'),
+            },
+        ]),
+    );
+};
+
 export default function WorkcodesIndex({ workcodes }) {
     const { flash } = usePage().props;
     const { toast } = useToast();
@@ -113,7 +134,7 @@ export default function WorkcodesIndex({ workcodes }) {
     const [mapPosition, setMapPosition] = useState({ lat: -7.1086, lng: 112.1715 }); // default to SMAN 1 Babat approx area
     const [editingWorkcode, setEditingWorkcode] = useState(null);
 
-    const { data, setData, post, put, processing, errors, reset } = useForm({
+    const { data, setData, post, put, processing, errors, reset, transform } = useForm({
         nama_workcode: '',
         deskripsi: '',
         kategori: 'workcode',
@@ -166,15 +187,22 @@ export default function WorkcodesIndex({ workcodes }) {
     }, [flash]);
 
     const handleSubmit = (e) => {
-        if (mapPosition) {
-            data.latitude = mapPosition.lat;
-            data.longitude = mapPosition.lng;
-        }
-        
-        if (data.kategori === 'workcode' && data.tanggal && new Date(data.tanggal) > new Date(new Date().setHours(0,0,0,0))) {
-            data.set_active = false;
-        }
         e.preventDefault();
+
+        const isFutureWorkcode = data.kategori === 'workcode'
+            && data.tanggal
+            && new Date(data.tanggal) > new Date(new Date().setHours(0, 0, 0, 0));
+
+        transform((formData) => ({
+            ...formData,
+            latitude: mapPosition?.lat ?? formData.latitude,
+            longitude: mapPosition?.lng ?? formData.longitude,
+            set_active: isFutureWorkcode ? false : formData.set_active,
+        }));
+
+        const showSubmissionError = (submissionErrors) => {
+            toast.error(Object.values(submissionErrors)[0] || 'Workcode gagal disimpan. Periksa kembali data yang diisi.');
+        };
         
         if (editingWorkcode) {
             put(route('workcodes.update', editingWorkcode.id), {
@@ -183,6 +211,7 @@ export default function WorkcodesIndex({ workcodes }) {
                     setEditingWorkcode(null);
                     setShowCreateModal(false);
                 },
+                onError: showSubmissionError,
             });
         } else {
             post(route('workcodes.store'), {
@@ -190,6 +219,7 @@ export default function WorkcodesIndex({ workcodes }) {
                     reset();
                     setShowCreateModal(false);
                 },
+                onError: showSubmissionError,
             });
         }
     };
@@ -202,11 +232,11 @@ export default function WorkcodesIndex({ workcodes }) {
             kategori: workcode.kategori || 'workcode',
             tanggal: workcode.tanggal || '',
             hari_aktif: workcode.hari_aktif || [1,2,3,4,5],
-            jam_datang_mulai: workcode.jam_datang_mulai || '06:00',
-            jam_datang_selesai: workcode.jam_datang_selesai || '07:00',
-            jam_pulang_mulai: workcode.jam_pulang_mulai || '15:30',
-            jam_pulang_selesai: workcode.jam_pulang_selesai || '22:00',
-            jadwal_per_hari: workcode.jadwal_per_hari || {
+            jam_datang_mulai: normalizeTimeForInput(workcode.jam_datang_mulai, '06:00'),
+            jam_datang_selesai: normalizeTimeForInput(workcode.jam_datang_selesai, '07:00'),
+            jam_pulang_mulai: normalizeTimeForInput(workcode.jam_pulang_mulai, '15:30'),
+            jam_pulang_selesai: normalizeTimeForInput(workcode.jam_pulang_selesai, '22:00'),
+            jadwal_per_hari: normalizeDailySchedule(workcode.jadwal_per_hari || {
                 1: { jam_datang_mulai: '06:00', jam_datang_selesai: '07:00', jam_pulang_mulai: '15:30', jam_pulang_selesai: '22:00' },
                 2: { jam_datang_mulai: '06:00', jam_datang_selesai: '07:00', jam_pulang_mulai: '15:30', jam_pulang_selesai: '22:00' },
                 3: { jam_datang_mulai: '06:00', jam_datang_selesai: '07:00', jam_pulang_mulai: '15:30', jam_pulang_selesai: '22:00' },
@@ -214,7 +244,7 @@ export default function WorkcodesIndex({ workcodes }) {
                 5: { jam_datang_mulai: '06:00', jam_datang_selesai: '07:00', jam_pulang_mulai: '15:30', jam_pulang_selesai: '22:00' },
                 6: { jam_datang_mulai: '06:00', jam_datang_selesai: '07:00', jam_pulang_mulai: '15:30', jam_pulang_selesai: '22:00' },
                 7: { jam_datang_mulai: '06:00', jam_datang_selesai: '07:00', jam_pulang_mulai: '15:30', jam_pulang_selesai: '22:00' },
-            },
+            }),
             latitude: workcode.latitude || '',
             longitude: workcode.longitude || '',
             radius_meters: workcode.radius_meters || 100,
@@ -848,7 +878,7 @@ export default function WorkcodesIndex({ workcodes }) {
                                 disabled={processing}
                                 className="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-bold text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-700 disabled:opacity-50 transition"
                             >
-                                {processing ? 'Menyimpan...' : (
+                                {processing ? 'Menyimpan...' : editingWorkcode ? 'Simpan Perubahan' : (
                                     data.kategori === 'workcode' && data.tanggal && new Date(data.tanggal) > new Date(new Date().setHours(0,0,0,0))
                                         ? 'Simpan'
                                         : 'Simpan & Aktifkan'

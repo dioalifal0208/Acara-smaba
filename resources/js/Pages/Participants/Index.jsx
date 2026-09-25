@@ -7,6 +7,10 @@ import ImportModal from '@/Components/ImportModal';
 import FaceRegistrationModal from '@/Components/FaceRegistrationModal';
 import ApproveFaceModal from '@/Components/ApproveFaceModal';
 
+const NON_PERMANENT_STATUSES = ['GTT', 'PTT'];
+
+const isNonPermanentStatus = (status) => NON_PERMANENT_STATUSES.includes(status);
+
 export default function ParticipantsIndex({ participants }) {
     const { flash } = usePage().props;
     const { toast } = useToast();
@@ -53,10 +57,30 @@ export default function ParticipantsIndex({ participants }) {
         });
     };
 
+    const handleCreateStatusChange = (status) => {
+        setData({
+            ...data,
+            status,
+            nis_nip: isNonPermanentStatus(status)
+                ? '-'
+                : data.nis_nip === '-' ? '' : data.nis_nip,
+        });
+    };
+
+    const handleEditStatusChange = (status) => {
+        editForm.setData({
+            ...editForm.data,
+            status,
+            nis_nip: isNonPermanentStatus(status)
+                ? '-'
+                : editForm.data.nis_nip === '-' ? '' : editForm.data.nis_nip,
+        });
+    };
+
     const handleEditClick = (participant) => {
         setEditParticipant(participant);
         let statusVal = participant.status || '';
-        const validStatuses = ['PNS', 'PPPK', 'PPPK Paruh Waktu'];
+        const validStatuses = ['PNS', 'PPPK', 'PPPK Paruh Waktu', 'GTT', 'PTT'];
         const found = validStatuses.find(s => s.toLowerCase() === statusVal.trim().toLowerCase());
         if (found) statusVal = found;
 
@@ -204,7 +228,7 @@ export default function ParticipantsIndex({ participants }) {
                     <h2 className="text-xl font-extrabold leading-tight text-slate-800">
                         Kelola Data Peserta
                     </h2>
-                    <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3" data-aos="fade-down">
                         <button
                             type="button"
                             onClick={() => setShowImportModal(true)}
@@ -232,8 +256,8 @@ export default function ParticipantsIndex({ participants }) {
 
             {/* Toast is now handled globally via ToastProvider */}
 
-            <div className="py-4 px-4 sm:px-6 lg:px-8 flex-1 flex flex-col overflow-hidden justify-between max-h-[580px]">
-                <div className="mx-auto max-w-7xl w-full flex-1 flex flex-col overflow-hidden space-y-3">
+            <div className="py-4 px-4 sm:px-6 lg:px-8 flex-1 flex flex-col">
+                <div className="mx-auto max-w-7xl w-full flex-1 flex flex-col space-y-3">
                     
                     {/* Stats Cards (flex-none) */}
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-3 flex-none" data-aos="fade-up">
@@ -315,6 +339,8 @@ export default function ParticipantsIndex({ participants }) {
                                     <option value="PNS">PNS</option>
                                     <option value="PPPK">PPPK</option>
                                     <option value="PPPK Paruh Waktu">PPPK Paruh Waktu</option>
+                                    <option value="GTT">GTT</option>
+                                    <option value="PTT">PTT</option>
                                 </select>
                             </div>
                         </div>
@@ -374,8 +400,107 @@ export default function ParticipantsIndex({ participants }) {
                         </div>
                     )}
 
-                    {/* Table Wrapper (flex-1 and overflow-y-auto to lock scroll within screen height) */}
-                    <div className="overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-sm flex-1 flex flex-col min-h-0" data-aos="fade-up" data-aos-delay="200">
+                    {/* ── Mobile Card List (< sm) ── */}
+                    <div className="sm:hidden space-y-3" data-aos="fade-up" data-aos-delay="200">
+                        {filteredParticipants.length === 0 ? (
+                            <div className="rounded-2xl bg-white border border-slate-200 p-10 text-center shadow-sm">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-10 w-10 text-slate-400 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                                <p className="text-xs font-semibold text-slate-500">Belum ada data peserta.</p>
+                            </div>
+                        ) : (
+                            filteredParticipants.map((participant, index) => (
+                                <div
+                                    key={participant.id}
+                                    className={`rounded-2xl bg-white border p-4 shadow-sm space-y-3 ${selectedIds.includes(participant.id) ? 'border-indigo-400 bg-indigo-50/40' : 'border-slate-200'}`}
+                                >
+                                    {/* Top row: avatar + name + face status */}
+                                    <div className="flex items-center gap-3">
+                                        <div className="relative h-10 w-10 shrink-0">
+                                            {participant.photo_url && (
+                                                <img
+                                                    src={participant.photo_url}
+                                                    alt={participant.nama}
+                                                    className="h-10 w-10 rounded-full object-cover border border-slate-200"
+                                                    onError={(e) => {
+                                                        e.currentTarget.style.display = 'none';
+                                                        if (e.currentTarget.nextElementSibling) {
+                                                            e.currentTarget.nextElementSibling.style.display = 'flex';
+                                                        }
+                                                    }}
+                                                />
+                                            )}
+                                            <div className={`h-10 w-10 items-center justify-center rounded-full bg-indigo-50 border border-indigo-100 text-sm font-bold text-indigo-600 ${participant.photo_url ? 'hidden' : 'flex'}`}>
+                                                {participant.nama.charAt(0).toUpperCase()}
+                                            </div>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-bold text-slate-800 truncate">{participant.nama}</p>
+                                            <p className="text-xs text-slate-500">{participant.nis_nip}</p>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            {participant.status && (
+                                                <span className="inline-flex items-center rounded-md bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-600 border border-indigo-100 uppercase">
+                                                    {participant.status}
+                                                </span>
+                                            )}
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedIds.includes(participant.id)}
+                                                onChange={() => handleToggleSelect(participant.id)}
+                                                className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                            />
+                                        </div>
+                                    </div>
+                                    {/* Face status */}
+                                    <div className="text-[10px]">
+                                        {participant.face_status === 'approved' ? (
+                                            <span className="font-semibold text-emerald-600">✓ Wajah Disetujui</span>
+                                        ) : participant.face_status === 'pending' ? (
+                                            <span className="font-semibold text-amber-600">⏳ Menunggu Persetujuan</span>
+                                        ) : participant.face_status === 'rejected' ? (
+                                            <span className="font-semibold text-red-500">✕ Wajah Ditolak</span>
+                                        ) : (
+                                            <span className="text-slate-400">Wajah Belum Terdaftar</span>
+                                        )}
+                                    </div>
+                                    {/* Actions */}
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        {participant.face_status === 'pending' && (
+                                            <button
+                                                onClick={() => setApproveFaceParticipant(participant)}
+                                                className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-600 shadow-sm"
+                                            >
+                                                Review Wajah
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={() => setShowQr(participant)}
+                                            className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
+                                        >
+                                            Lihat QR
+                                        </button>
+                                        <button
+                                            onClick={() => handleEditClick(participant)}
+                                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                                        >
+                                            Edit
+                                        </button>
+                                        <button
+                                            onClick={() => handleDelete(participant.id, participant.nama)}
+                                            className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-bold text-red-700 hover:bg-red-100"
+                                        >
+                                            Hapus
+                                        </button>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+
+                    {/* Table Wrapper — desktop only */}
+                    <div className="hidden sm:flex overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-sm flex-1 flex-col min-h-0" data-aos="fade-up" data-aos-delay="200">
                         <div className="overflow-x-auto flex-1 overflow-y-auto max-h-[300px]">
                             <table className="min-w-full divide-y divide-slate-200 relative">
                                 <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm">
@@ -534,6 +659,7 @@ export default function ParticipantsIndex({ participants }) {
                             </table>
                         </div>
                     </div>
+                    {/* End desktop table */}
                 </div>
             </div>
 
@@ -582,12 +708,16 @@ export default function ParticipantsIndex({ participants }) {
                                         type="text"
                                         value={data.nis_nip}
                                         onChange={(e) => setData('nis_nip', e.target.value)}
-                                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 font-semibold"
+                                        readOnly={isNonPermanentStatus(data.status)}
+                                        className={`w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 font-semibold ${isNonPermanentStatus(data.status) ? 'bg-slate-100 cursor-not-allowed' : 'bg-slate-50 focus:bg-white'}`}
                                         placeholder="Masukkan NIP"
-                                        required
+                                        required={!isNonPermanentStatus(data.status)}
                                     />
                                     {errors.nis_nip && <p className="mt-1 text-xs text-red-600 font-bold">{errors.nis_nip}</p>}
-                                    {data.nis_nip.trim() && !errors.nis_nip && participants.some(p => p.nis_nip === data.nis_nip.trim().replace(/^['"]+/, '').replace(/\.0+$/, '')) && (
+                                    {isNonPermanentStatus(data.status) && (
+                                        <p className="mt-1 text-[11px] font-semibold text-slate-500">NIP otomatis diisi "-" untuk GTT/PTT.</p>
+                                    )}
+                                    {data.nis_nip.trim() && data.nis_nip !== '-' && !errors.nis_nip && participants.some(p => p.nis_nip === data.nis_nip.trim().replace(/^['"]+/, '').replace(/\.0+$/, '')) && (
                                         <p className="mt-1 text-[11px] font-semibold text-amber-600 flex items-center gap-1">
                                             <span>⚠</span> NIP ini sudah terdaftar pada: {participants.find(p => p.nis_nip === data.nis_nip.trim().replace(/^['"]+/, '').replace(/\.0+$/, ''))?.nama}
                                         </p>
@@ -601,13 +731,15 @@ export default function ParticipantsIndex({ participants }) {
                                 <select
                                     id="status"
                                     value={data.status}
-                                    onChange={(e) => setData('status', e.target.value)}
+                                    onChange={(e) => handleCreateStatusChange(e.target.value)}
                                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 font-semibold"
                                 >
                                     <option value="">-- Pilih Status --</option>
                                     <option value="PNS">PNS</option>
                                     <option value="PPPK">PPPK</option>
                                     <option value="PPPK Paruh Waktu">PPPK Paruh Waktu</option>
+                                    <option value="GTT">GTT</option>
+                                    <option value="PTT">PTT</option>
                                 </select>
                                 {errors.status && <p className="mt-1 text-xs text-red-600 font-bold">{errors.status}</p>}
                             </div>
@@ -678,12 +810,16 @@ export default function ParticipantsIndex({ participants }) {
                                         type="text"
                                         value={editForm.data.nis_nip}
                                         onChange={(e) => editForm.setData('nis_nip', e.target.value)}
-                                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 font-semibold"
+                                        readOnly={isNonPermanentStatus(editForm.data.status)}
+                                        className={`w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-900 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 font-semibold ${isNonPermanentStatus(editForm.data.status) ? 'bg-slate-100 cursor-not-allowed' : 'bg-slate-50 focus:bg-white'}`}
                                         placeholder="Masukkan NIP"
-                                        required
+                                        required={!isNonPermanentStatus(editForm.data.status)}
                                     />
                                     {editForm.errors.nis_nip && <p className="mt-1 text-xs text-red-600 font-bold">{editForm.errors.nis_nip}</p>}
-                                    {editForm.data.nis_nip.trim() && !editForm.errors.nis_nip && participants.some(p => p.id !== editParticipant.id && p.nis_nip === editForm.data.nis_nip.trim().replace(/^['"]+/, '').replace(/\.0+$/, '')) && (
+                                    {isNonPermanentStatus(editForm.data.status) && (
+                                        <p className="mt-1 text-[11px] font-semibold text-slate-500">NIP otomatis diisi "-" untuk GTT/PTT.</p>
+                                    )}
+                                    {editForm.data.nis_nip.trim() && editForm.data.nis_nip !== '-' && !editForm.errors.nis_nip && participants.some(p => p.id !== editParticipant.id && p.nis_nip === editForm.data.nis_nip.trim().replace(/^['"]+/, '').replace(/\.0+$/, '')) && (
                                         <p className="mt-1 text-[11px] font-semibold text-amber-600 flex items-center gap-1">
                                             <span>⚠</span> NIP ini sudah digunakan oleh: {participants.find(p => p.id !== editParticipant.id && p.nis_nip === editForm.data.nis_nip.trim().replace(/^['"]+/, '').replace(/\.0+$/, ''))?.nama}
                                         </p>
@@ -696,13 +832,15 @@ export default function ParticipantsIndex({ participants }) {
                                     <select
                                         id="edit_status"
                                         value={editForm.data.status}
-                                        onChange={(e) => editForm.setData('status', e.target.value)}
+                                        onChange={(e) => handleEditStatusChange(e.target.value)}
                                         className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm text-slate-900 focus:bg-white focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 font-semibold"
                                     >
                                         <option value="">-- Pilih Status --</option>
                                         <option value="PNS">PNS</option>
                                         <option value="PPPK">PPPK</option>
                                         <option value="PPPK Paruh Waktu">PPPK Paruh Waktu</option>
+                                        <option value="GTT">GTT</option>
+                                        <option value="PTT">PTT</option>
                                     </select>
                                     {editForm.errors.status && <p className="mt-1 text-xs text-red-600 font-bold">{editForm.errors.status}</p>}
                                 </div>

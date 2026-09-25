@@ -315,8 +315,8 @@ export default function SelfFaceRegistrationModal({ participant, onClose }) {
     };
 
     const modalContent = (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/80 p-4 backdrop-blur-sm" onClick={handleClose}>
-            <div className="w-full max-w-sm rounded-3xl bg-white overflow-hidden shadow-2xl relative" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-slate-900/80 p-0 sm:p-4 backdrop-blur-sm" onClick={handleClose}>
+            <div className="w-full sm:max-w-sm rounded-none rounded-t-3xl sm:rounded-3xl bg-white overflow-hidden shadow-2xl relative max-h-[95dvh] flex flex-col" onClick={e => e.stopPropagation()}>
                 {/* Header */}
                 <div className="bg-white px-5 py-4 border-b border-slate-100 flex items-center justify-between relative z-10">
                     <div>

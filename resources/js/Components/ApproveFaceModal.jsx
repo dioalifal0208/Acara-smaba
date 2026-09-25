@@ -28,8 +28,8 @@ export default function ApproveFaceModal({ participant, onClose, onSuccess }) {
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm" onClick={onClose}>
-            <div className="w-full max-w-sm animate-[fadeIn_0.2s_ease-out] rounded-3xl bg-white border border-slate-200 p-6 shadow-2xl flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 p-0 sm:p-4 backdrop-blur-sm" onClick={onClose}>
+            <div className="w-full sm:max-w-sm animate-[fadeIn_0.2s_ease-out] rounded-t-3xl sm:rounded-3xl rounded-none bg-white border border-slate-200 p-6 shadow-2xl flex flex-col max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                 <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
                     <div>
                         <h3 className="text-xl font-extrabold text-slate-800">Review Wajah</h3>

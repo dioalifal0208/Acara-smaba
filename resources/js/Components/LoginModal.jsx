@@ -44,11 +44,11 @@ export default function LoginModal({ isOpen, onClose, canResetPassword = true })
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-slate-950/60 backdrop-blur-md transition-all duration-300"
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 overflow-y-auto bg-slate-950/60 backdrop-blur-md transition-all duration-300"
             onClick={onClose}
         >
             <div
-                className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 p-6 sm:p-8 transform transition-all"
+                className="relative w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl rounded-none shadow-2xl border border-slate-100 p-6 sm:p-8 transform transition-all max-h-screen sm:max-h-[90dvh] overflow-y-auto flex flex-col"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Close Button */}

@@ -257,12 +257,12 @@ export default function ImportModal({ isOpen, onClose }) {
 
     return (
         <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto bg-slate-950/50 backdrop-blur-sm transition-opacity"
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 overflow-y-auto bg-slate-950/50 backdrop-blur-sm transition-opacity"
             onClick={() => !isUploading && !isConfirming && onClose()}
         >
             <div
-                className={`relative w-full bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all ${
-                    step === 'conflict_resolution' ? 'max-w-6xl' : 'max-w-lg'
+                className={`relative w-full bg-white sm:rounded-2xl rounded-t-2xl shadow-2xl border border-slate-200 overflow-hidden transform transition-all max-h-screen sm:max-h-[95dvh] flex flex-col ${
+                    step === 'conflict_resolution' ? 'sm:max-w-6xl' : 'sm:max-w-lg'
                 }`}
                 onClick={(e) => e.stopPropagation()}
             >
@@ -388,7 +388,7 @@ export default function ImportModal({ isOpen, onClose }) {
                                 </div>
                                 <div className="bg-white border border-slate-200/80 rounded-lg py-1.5 px-2">
                                     <p className="font-bold text-slate-800">NIP</p>
-                                    <p className="text-[10px] text-red-500 font-semibold">Wajib &amp; Unik</p>
+                                    <p className="text-[10px] text-red-500 font-semibold">Wajib &amp; unik, kecuali GTT/PTT diisi -</p>
                                 </div>
                                 <div className="bg-white border border-slate-200/80 rounded-lg py-1.5 px-2">
                                     <p className="font-bold text-slate-800">Status</p>

@@ -255,8 +255,8 @@ export default function FaceScannerModal({ activeWorkcode, participant, onClose,
     // ── Render ──
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/80 p-4 sm:p-6 backdrop-blur-sm" onClick={handleClose}>
-            <div className="w-full max-w-sm rounded-3xl bg-white overflow-hidden shadow-2xl relative max-h-[95vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/80 p-0 sm:p-6 backdrop-blur-sm" onClick={handleClose}>
+            <div className="w-full sm:max-w-sm sm:rounded-3xl rounded-none bg-white overflow-hidden shadow-2xl relative max-h-screen sm:max-h-[95dvh] flex flex-col" onClick={(e) => e.stopPropagation()}>
                 {/* Header */}
                 <div className="bg-white px-5 py-4 border-b border-slate-100 text-center relative z-10 flex items-center justify-between">
                     <div className="w-8"></div>

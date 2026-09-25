@@ -493,15 +493,16 @@ export default function AttendanceCalendarModal({
                 {/* Calendar Grid (Wider horizontally) */}
                 <div className="mt-3 bg-white rounded-2xl border border-slate-200 p-2.5 shadow-xs">
                     {/* Day Names Header */}
-                    <div className="grid grid-cols-7 gap-1.5 mb-1.5 text-center">
+                    <div className="grid grid-cols-7 gap-1 sm:gap-1.5 mb-1 sm:mb-1.5 text-center">
                         {DAY_NAMES.map((name, i) => (
                             <div
                                 key={i}
-                                className={`py-1 text-[11px] font-extrabold uppercase tracking-wider rounded-lg ${
+                                className={`py-1 text-[9px] sm:text-[11px] font-extrabold uppercase tracking-wider rounded-lg ${
                                     i === 0 || i === 6 ? 'text-red-500 bg-red-50/60' : 'text-slate-500 bg-slate-50'
                                 }`}
                             >
-                                {name}
+                                <span className="sm:hidden">{name.charAt(0)}</span>
+                                <span className="hidden sm:inline">{name}</span>
                             </div>
                         ))}
                     </div>
@@ -513,7 +514,7 @@ export default function AttendanceCalendarModal({
                             Memuat data kalender presensi...
                         </div>
                     ) : (
-                        <div className="grid grid-cols-7 gap-1.5">
+                    <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
                             {calendarDays.map((day, idx) => {
                                 const att = day.attendance;
                                 const isCurrent = day.isCurrentMonth;
@@ -522,7 +523,7 @@ export default function AttendanceCalendarModal({
                                     <div
                                         key={idx}
                                         onClick={() => isCurrent && handleDayClick(day)}
-                                        className={`group min-h-[58px] sm:min-h-[64px] rounded-xl p-1.5 flex flex-col justify-between transition-all select-none ${
+                                    className={`group min-h-[44px] sm:min-h-[64px] rounded-xl p-0.5 sm:p-1.5 flex flex-col justify-between transition-all select-none ${
                                             !isCurrent
                                                 ? 'bg-slate-50/40 text-slate-300 border border-transparent cursor-not-allowed opacity-30'
                                                 : 'border border-slate-200 hover:border-indigo-400 hover:shadow-md cursor-pointer ' +

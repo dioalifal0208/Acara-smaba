@@ -45,7 +45,7 @@ function setLocalLock(workcodeId, participant, timestamp) {
 // ── Komponen: Halaman Terkunci Permanen (sudah absen) ──
 function LockedScreen({ lock, activeWorkcode }) {
     return (
-        <div className="relative h-screen overflow-hidden bg-gradient-to-br from-emerald-50 via-white to-green-50 flex flex-col items-center justify-center p-6 text-center">
+        <div className="relative min-h-[100dvh] bg-gradient-to-br from-emerald-50 via-white to-green-50 flex flex-col items-center justify-center p-4 sm:p-6 text-center overflow-y-auto">
             {/* Glow */}
             <div className="absolute top-0 left-0 w-64 h-64 rounded-full bg-emerald-400/10 blur-3xl pointer-events-none -translate-x-1/2 -translate-y-1/2" />
             <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full bg-green-400/10 blur-3xl pointer-events-none translate-x-1/2 translate-y-1/2" />
@@ -103,6 +103,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
     const [suggestions, setSuggestions] = useState([]);
     const [showSuggestions, setShowSuggestions] = useState(false);
     const suggestionsRef = useRef(null);
+    const [isSearchingSuggestions, setIsSearchingSuggestions] = useState(false);
 
     const { data, setData, processing, reset } = useForm({
         nis_nip: '',
@@ -146,16 +147,21 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
         setData('nis_nip', val);
         setErrorMsg(null);
         if (val.trim().length >= 2) {
+            setIsSearchingSuggestions(true);
+            setShowSuggestions(true);
             fetch(route('participants.search') + `?query=${encodeURIComponent(val)}`)
                 .then((res) => res.json())
                 .then((d) => {
                     setSuggestions(d);
-                    setShowSuggestions(d.length > 0);
+                    setIsSearchingSuggestions(false);
                 })
-                .catch(() => {});
+                .catch(() => {
+                    setIsSearchingSuggestions(false);
+                });
         } else {
             setSuggestions([]);
             setShowSuggestions(false);
+            setIsSearchingSuggestions(false);
         }
     };
 
@@ -301,13 +307,13 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
         <>
             <Head title="Self Check-In - E-Presensi SMABA" />
 
-            <div className="relative h-screen overflow-hidden bg-slate-50 text-slate-800 flex flex-col justify-between p-6">
+            <div className="relative min-h-[100dvh] bg-slate-50 text-slate-800 flex flex-col justify-between p-4 sm:p-6 overflow-y-auto">
                 {/* Glow Spots */}
                 <div className="absolute top-0 left-0 -translate-x-1/2 -translate-y-1/2 w-72 h-72 rounded-full bg-green-500/5 blur-3xl pointer-events-none" />
                 <div className="absolute bottom-0 right-0 translate-x-1/2 translate-y-1/2 w-80 h-80 rounded-full bg-emerald-500/5 blur-3xl pointer-events-none" />
 
                 {/* Header Logo */}
-                <header className="relative z-10 mx-auto text-center mt-3 flex-none" data-aos="fade-down">
+                <header className="relative z-10 mx-auto text-center mt-2 sm:mt-3 flex-none" data-aos="fade-down">
                     <div className="flex justify-center mb-1">
                         <img src="/images/logo.png" alt="Logo E-Presensi SMABA" className="h-10 w-10 object-contain" />
                     </div>
@@ -318,7 +324,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                 </header>
 
                 {/* Main Form Card */}
-                <main className="relative z-10 flex-1 flex items-center justify-center my-4 overflow-hidden">
+                <main className="relative z-10 flex-1 flex items-center justify-center my-6 w-full">
                     <div className="w-full max-w-sm">
 
                         {/* Workcode Inactive */}
@@ -358,37 +364,57 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
 
                                 <form onSubmit={handleSubmit} className="space-y-4">
                                     <div className="relative" ref={suggestionsRef}>
+                                        <label htmlFor="nis_nip_input" className="sr-only">Ketik Nama atau NIP Anda</label>
                                         <input
+                                            id="nis_nip_input"
                                             type="text"
                                             placeholder="Ketik Nama / NIP Anda..."
                                             value={data.nis_nip}
                                             onChange={(e) => handleInputChange(e.target.value)}
-                                            onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
-                                            className="w-full rounded-xl border border-slate-200 bg-slate-50 py-3 px-4 text-center text-sm font-semibold tracking-wide text-slate-800 placeholder-slate-400 focus:bg-white focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/10 shadow-sm"
+                                            onFocus={() => { if (data.nis_nip.trim().length >= 2) setShowSuggestions(true); }}
+                                            className="w-full min-h-[48px] rounded-xl border border-slate-200 bg-slate-50 py-3 px-4 text-center text-sm font-semibold tracking-wide text-slate-800 placeholder-slate-400 focus:bg-white focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/10 shadow-sm"
                                             required
                                             disabled={processing || isLocating}
                                             autoComplete="off"
                                             autoFocus
+                                            role="combobox"
+                                            aria-expanded={showSuggestions}
+                                            aria-controls="suggestions-list"
+                                            aria-autocomplete="list"
                                         />
 
                                         {showSuggestions && (
-                                            <div className="absolute left-0 right-0 mt-2 z-50 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl max-h-48 overflow-y-auto divide-y divide-slate-100 animate-[fadeIn_0.15s_ease-out]">
-                                                {suggestions.map((p) => (
-                                                    <div
-                                                        key={p.id}
-                                                        onClick={() => handleSelectSuggestion(p)}
-                                                        className="px-4 py-2.5 text-left transition-colors hover:bg-slate-50 cursor-pointer"
-                                                    >
-                                                        <p className="text-sm font-semibold text-slate-800">{p.nama}</p>
-                                                        <p className="text-[11px] text-green-700 font-bold mt-0.5">{p.nis_nip}</p>
+                                            <div id="suggestions-list" role="listbox" className="absolute left-0 right-0 mt-2 z-50 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl max-h-56 overflow-y-auto divide-y divide-slate-100 animate-[fadeIn_0.15s_ease-out]">
+                                                {isSearchingSuggestions ? (
+                                                    <div className="px-4 py-4 text-center">
+                                                        <p className="text-xs font-semibold text-slate-500">Mencari data...</p>
                                                     </div>
-                                                ))}
+                                                ) : suggestions.length > 0 ? (
+                                                    suggestions.map((p) => (
+                                                        <div
+                                                            key={p.id}
+                                                            role="option"
+                                                            aria-selected="false"
+                                                            tabIndex={0}
+                                                            onClick={() => handleSelectSuggestion(p)}
+                                                            onKeyDown={(e) => { if (e.key === 'Enter') handleSelectSuggestion(p); }}
+                                                            className="px-4 py-3 text-left transition-colors hover:bg-slate-50 focus:bg-slate-50 focus:outline-none cursor-pointer"
+                                                        >
+                                                            <p className="text-sm font-semibold text-slate-800">{p.nama}</p>
+                                                            <p className="text-[11px] text-green-700 font-bold mt-0.5">{p.nis_nip}</p>
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <div className="px-4 py-4 text-center">
+                                                        <p className="text-xs font-semibold text-slate-500">Data tidak ditemukan.</p>
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </div>
 
                                     {errorMsg && (
-                                        <p className="text-[11px] text-red-600 text-center font-semibold flex items-center justify-center gap-1">
+                                        <p className="text-[11px] text-red-600 text-center font-semibold flex items-center justify-center gap-1" role="alert">
                                             <span>✕</span> {errorMsg}
                                         </p>
                                     )}
@@ -396,9 +422,19 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                                     <button
                                         type="submit"
                                         disabled={processing || isLocating}
-                                        className="w-full rounded-xl bg-green-700 py-3 text-sm font-bold text-white shadow-md shadow-green-500/20 transition-all hover:bg-green-800 disabled:opacity-50"
+                                        className="w-full min-h-[48px] rounded-xl bg-green-700 py-3 text-sm font-bold text-white shadow-md shadow-green-500/20 transition-all hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500/50 disabled:opacity-50 flex items-center justify-center gap-2"
                                     >
-                                        {isLocating ? 'Mencari Lokasi GPS...' : processing ? 'Memproses...' : 'Kirim Kehadiran'}
+                                        {isLocating ? (
+                                            <>
+                                                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                                Mencari Lokasi GPS...
+                                            </>
+                                        ) : processing ? (
+                                            <>
+                                                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                                Memproses Data...
+                                            </>
+                                        ) : 'Kirim Kehadiran'}
                                     </button>
                                 </form>
                             </div>

@@ -10,6 +10,7 @@ use Inertia\Inertia;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpSpreadsheet\IOFactory;
@@ -18,6 +19,10 @@ use PhpOffice\PhpSpreadsheet\Style\Alignment;
 
 class ParticipantController extends Controller
 {
+    private const EMPLOYMENT_STATUSES = ['PNS', 'PPPK', 'PPPK Paruh Waktu', 'GTT', 'PTT'];
+
+    private const NON_PERMANENT_STATUSES = ['GTT', 'PTT'];
+
     /**
      * Tampilkan daftar peserta.
      */
@@ -30,7 +35,7 @@ class ParticipantController extends Controller
                 return [
                     'id' => $participant->id,
                     'nama' => $participant->nama,
-                    'nis_nip' => $participant->nis_nip,
+                    'nis_nip' => $participant->nis_nip ?? '-',
                     'status' => $participant->status,
                     'qr_token' => $participant->qr_token,
                     'has_face' => $participant->face_descriptor !== null,
@@ -71,8 +76,68 @@ class ParticipantController extends Controller
         $norm = strtolower(preg_replace('/\s+/', ' ', trim($status)));
         if ($norm === 'pns') return 'PNS';
         if ($norm === 'pppk') return 'PPPK';
+        if ($norm === 'gtt') return 'GTT';
+        if ($norm === 'ptt') return 'PTT';
         if ($norm === 'pppk paruh waktu' || str_contains($norm, 'paruh waktu')) return 'PPPK Paruh Waktu';
         return trim($status);
+    }
+
+    private function isNonPermanentStatus(?string $status): bool
+    {
+        return in_array($status, self::NON_PERMANENT_STATUSES, true);
+    }
+
+    private function normalizeNisNipForStatus($nisNip, ?string $status): ?string
+    {
+        if ($this->isNonPermanentStatus($status)) {
+            return null;
+        }
+
+        return $this->cleanNisNip($nisNip);
+    }
+
+    private function deleteParticipantUser(Participant $participant, ?string $fallbackUsername = null): void
+    {
+        $username = $fallbackUsername ?? $participant->nis_nip;
+
+        User::where('role', 'participant')
+            ->where(function ($query) use ($participant, $username) {
+                $query->where('participant_id', $participant->id);
+
+                if (! empty($username) && $username !== '-') {
+                    $query->orWhere('username', $username);
+                }
+            })
+            ->delete();
+    }
+
+    private function syncParticipantUser(Participant $participant, ?string $oldNip = null): void
+    {
+        if (empty($participant->nis_nip)) {
+            $this->deleteParticipantUser($participant, $oldNip);
+
+            return;
+        }
+
+        $user = User::where('participant_id', $participant->id)->first();
+
+        if (! $user && ! empty($oldNip)) {
+            $user = User::where('role', 'participant')
+                ->where('username', $oldNip)
+                ->first();
+        }
+
+        $user ??= new User;
+
+        if (! $user->exists) {
+            $user->password = Hash::make($participant->nis_nip);
+        }
+
+        $user->name = $participant->nama;
+        $user->username = $participant->nis_nip;
+        $user->role = 'participant';
+        $user->participant_id = $participant->id;
+        $user->save();
     }
 
     /**
@@ -80,9 +145,10 @@ class ParticipantController extends Controller
      */
     public function store(Request $request)
     {
-        $cleanNip = $this->cleanNisNip($request->input('nis_nip'));
         $cleanNama = trim((string)$request->input('nama'));
         $cleanStatus = $this->normalizeStatus($request->input('status'));
+        $cleanNip = $this->normalizeNisNipForStatus($request->input('nis_nip'), $cleanStatus);
+        $nipIsRequired = ! $this->isNonPermanentStatus($cleanStatus);
 
         $request->merge([
             'nama' => $cleanNama,
@@ -92,9 +158,10 @@ class ParticipantController extends Controller
 
         $validated = $request->validate([
             'nama' => 'required|string|max:255',
-            'nis_nip' => 'required|string|max:50|unique:participants,nis_nip',
-            'status' => 'nullable|in:PNS,PPPK,PPPK Paruh Waktu',
+            'nis_nip' => [Rule::requiredIf($nipIsRequired), 'nullable', 'string', 'max:50', Rule::unique('participants', 'nis_nip')],
+            'status' => ['nullable', Rule::in(self::EMPLOYMENT_STATUSES)],
         ], [
+            'nis_nip.required' => 'NIP wajib diisi untuk status pegawai ini.',
             'nis_nip.unique' => 'NIP sudah terdaftar pada sistem.',
         ]);
 
@@ -109,19 +176,14 @@ class ParticipantController extends Controller
         // QR token di-generate otomatis oleh Participant model boot()
         $participant = Participant::create($validated);
 
-        // Buat akun user
-        User::updateOrCreate(
-            ['username' => $participant->nis_nip],
-            [
-                'name' => $participant->nama,
-                'password' => Hash::make($participant->nis_nip),
-                'role' => 'participant',
-                'participant_id' => $participant->id,
-            ]
-        );
+        $this->syncParticipantUser($participant);
+
+        $message = $participant->nis_nip
+            ? 'Peserta berhasil ditambahkan! Akun peserta (username & password: NIP) siap digunakan.'
+            : 'Peserta berhasil ditambahkan dengan NIP "-". Akun login NIP tidak dibuat untuk GTT/PTT.';
 
         return redirect()->route('participants.index')
-            ->with('success', 'Peserta berhasil ditambahkan! Akun peserta (username & password: NIP) siap digunakan.');
+            ->with('success', $message);
     }
 
     /**
@@ -129,9 +191,10 @@ class ParticipantController extends Controller
      */
     public function update(Request $request, Participant $participant)
     {
-        $cleanNip = $this->cleanNisNip($request->input('nis_nip'));
         $cleanNama = trim((string)$request->input('nama'));
         $cleanStatus = $this->normalizeStatus($request->input('status'));
+        $cleanNip = $this->normalizeNisNipForStatus($request->input('nis_nip'), $cleanStatus);
+        $nipIsRequired = ! $this->isNonPermanentStatus($cleanStatus);
 
         $request->merge([
             'nama' => $cleanNama,
@@ -141,9 +204,10 @@ class ParticipantController extends Controller
 
         $validated = $request->validate([
             'nama' => 'required|string|max:255',
-            'nis_nip' => 'required|string|max:50|unique:participants,nis_nip,' . $participant->id,
-            'status' => 'nullable|in:PNS,PPPK,PPPK Paruh Waktu',
+            'nis_nip' => [Rule::requiredIf($nipIsRequired), 'nullable', 'string', 'max:50', Rule::unique('participants', 'nis_nip')->ignore($participant)],
+            'status' => ['nullable', Rule::in(self::EMPLOYMENT_STATUSES)],
         ], [
+            'nis_nip.required' => 'NIP wajib diisi untuk status pegawai ini.',
             'nis_nip.unique' => 'NIP sudah digunakan oleh peserta lain.',
         ]);
 
@@ -161,13 +225,7 @@ class ParticipantController extends Controller
         $oldNip = $participant->nis_nip;
         $participant->update($validated);
 
-        // Perbarui akun user jika ada
-        User::where('participant_id', $participant->id)
-            ->orWhere('username', $oldNip)
-            ->update([
-                'name' => $cleanNama,
-                'username' => $cleanNip,
-            ]);
+        $this->syncParticipantUser($participant, $oldNip);
 
         return redirect()->route('participants.index')
             ->with('success', 'Data peserta berhasil diperbarui!');
@@ -182,9 +240,7 @@ class ParticipantController extends Controller
             Storage::disk('public')->delete($participant->photo_path);
         }
 
-        User::where('participant_id', $participant->id)
-            ->orWhere('username', $participant->nis_nip)
-            ->delete();
+        $this->deleteParticipantUser($participant);
 
         $participant->delete();
 
@@ -211,9 +267,7 @@ class ParticipantController extends Controller
                 Storage::disk('public')->delete($participant->photo_path);
             }
 
-            User::where('participant_id', $participant->id)
-                ->orWhere('username', $participant->nis_nip)
-                ->delete();
+            $this->deleteParticipantUser($participant);
 
             $participant->delete();
             $count++;
@@ -384,23 +438,25 @@ class ParticipantController extends Controller
                 $rawNama = trim((string)($row[$namaColKey] ?? ''));
                 $rawNip = trim((string)($row[$nisNipColKey] ?? ''));
                 $rawStatus = isset($row[$statusColKey]) ? trim((string)$row[$statusColKey]) : null;
+                $cleanStatus = $this->normalizeStatus($rawStatus);
 
-                if (empty($rawNama) || empty($rawNip)) {
+                if (empty($rawNama) || (empty($rawNip) && ! $this->isNonPermanentStatus($cleanStatus))) {
                     continue;
                 }
 
-                $cleanNip = $this->cleanNisNip($rawNip);
+                $cleanNip = $this->normalizeNisNipForStatus($rawNip, $cleanStatus);
                 $cleanNama = $rawNama;
-                $cleanStatus = $this->normalizeStatus($rawStatus);
 
                 $normNameLower = strtolower(preg_replace('/\s+/', ' ', $cleanNama));
 
                 // Cek database
-                $existingByNip = Participant::where('nis_nip', $cleanNip)->first();
+                $existingByNip = $cleanNip
+                    ? Participant::where('nis_nip', $cleanNip)->first()
+                    : null;
                 $existingByName = Participant::whereRaw('LOWER(TRIM(nama)) = ?', [$normNameLower])->first();
 
                 // Cek duplikasi di dalam file excel itu sendiri
-                $duplicateInFile = isset($seenInExcelNip[$cleanNip]) || isset($seenInExcelName[$normNameLower]);
+                $duplicateInFile = ($cleanNip && isset($seenInExcelNip[$cleanNip])) || isset($seenInExcelName[$normNameLower]);
 
                 if ($existingByNip || $existingByName) {
                     $target = $existingByNip ?? $existingByName;
@@ -418,12 +474,12 @@ class ParticipantController extends Controller
                         'existing' => [
                             'id' => $target->id,
                             'nama' => $target->nama,
-                            'nis_nip' => $target->nis_nip,
+                            'nis_nip' => $target->nis_nip ?? '-',
                             'status' => $target->status ?? '-',
                         ],
                         'new' => [
                             'nama' => $cleanNama,
-                            'nis_nip' => $cleanNip,
+                            'nis_nip' => $cleanNip ?? '-',
                             'status' => $cleanStatus ?? '-',
                         ],
                         'conflict_reason' => $reason,
@@ -435,12 +491,12 @@ class ParticipantController extends Controller
                         'existing' => [
                             'id' => null,
                             'nama' => $seenInExcelName[$normNameLower]['nama'] ?? $cleanNama,
-                            'nis_nip' => $seenInExcelNip[$cleanNip]['nis_nip'] ?? $cleanNip,
-                            'status' => $seenInExcelNip[$cleanNip]['status'] ?? '-',
+                            'nis_nip' => $cleanNip ? ($seenInExcelNip[$cleanNip]['nis_nip'] ?? $cleanNip) : '-',
+                            'status' => $cleanNip ? ($seenInExcelNip[$cleanNip]['status'] ?? '-') : ($seenInExcelName[$normNameLower]['status'] ?? '-'),
                         ],
                         'new' => [
                             'nama' => $cleanNama,
-                            'nis_nip' => $cleanNip,
+                            'nis_nip' => $cleanNip ?? '-',
                             'status' => $cleanStatus ?? '-',
                         ],
                         'conflict_reason' => 'Duplikat di baris lain dalam file Excel',
@@ -452,7 +508,9 @@ class ParticipantController extends Controller
                         'nis_nip' => $cleanNip,
                         'status' => $cleanStatus,
                     ];
-                    $seenInExcelNip[$cleanNip] = ['nama' => $cleanNama, 'nis_nip' => $cleanNip, 'status' => $cleanStatus];
+                    if ($cleanNip) {
+                        $seenInExcelNip[$cleanNip] = ['nama' => $cleanNama, 'nis_nip' => $cleanNip, 'status' => $cleanStatus];
+                    }
                     $seenInExcelName[$normNameLower] = ['nama' => $cleanNama, 'nis_nip' => $cleanNip, 'status' => $cleanStatus];
                 }
             }
@@ -462,15 +520,7 @@ class ParticipantController extends Controller
                 $savedCount = 0;
                 foreach ($cleanData as $item) {
                     $p = Participant::create($item);
-                    User::updateOrCreate(
-                        ['username' => $item['nis_nip']],
-                        [
-                            'name' => $item['nama'],
-                            'password' => Hash::make($item['nis_nip']),
-                            'role' => 'participant',
-                            'participant_id' => $p->id,
-                        ]
-                    );
+                    $this->syncParticipantUser($p);
                     $savedCount++;
                 }
 
@@ -508,20 +558,16 @@ class ParticipantController extends Controller
 
         // 1. Simpan clean data
         foreach ($cleanData as $item) {
+            $cleanStatus = ($item['status'] ?? null) === '-'
+                ? null
+                : $this->normalizeStatus($item['status'] ?? null);
+            $cleanNip = $this->normalizeNisNipForStatus($item['nis_nip'] ?? null, $cleanStatus);
             $p = Participant::create([
                 'nama' => $item['nama'],
-                'nis_nip' => $item['nis_nip'],
-                'status' => $item['status'] ?? null,
+                'nis_nip' => $cleanNip,
+                'status' => $cleanStatus,
             ]);
-            User::updateOrCreate(
-                ['username' => $item['nis_nip']],
-                [
-                    'name' => $item['nama'],
-                    'password' => Hash::make($item['nis_nip']),
-                    'role' => 'participant',
-                    'participant_id' => $p->id,
-                ]
-            );
+            $this->syncParticipantUser($p);
             $newCount++;
         }
 
@@ -532,42 +578,35 @@ class ParticipantController extends Controller
             $newData = $item['new'];
 
             if ($resolution === 'update') {
+                $cleanStatus = ($newData['status'] ?? null) === '-'
+                    ? null
+                    : $this->normalizeStatus($newData['status'] ?? null);
+                $cleanNip = $this->normalizeNisNipForStatus($newData['nis_nip'] ?? null, $cleanStatus);
+
                 if ($existingId) {
                     $participant = Participant::find($existingId);
                     if ($participant) {
                         $oldNip = $participant->nis_nip;
                         $participant->update([
                             'nama' => $newData['nama'],
-                            'nis_nip' => $newData['nis_nip'],
-                            'status' => $newData['status'] === '-' ? null : $newData['status'],
+                            'nis_nip' => $cleanNip,
+                            'status' => $cleanStatus,
                         ]);
 
-                        User::where('participant_id', $participant->id)
-                            ->orWhere('username', $oldNip)
-                            ->update([
-                                'name' => $newData['nama'],
-                                'username' => $newData['nis_nip'],
-                            ]);
+                        $this->syncParticipantUser($participant, $oldNip);
 
                         $updatedCount++;
                     }
                 } else {
-                    $p = Participant::updateOrCreate(
-                        ['nis_nip' => $newData['nis_nip']],
-                        [
-                            'nama' => $newData['nama'],
-                            'status' => $newData['status'] === '-' ? null : $newData['status'],
-                        ]
-                    );
-                    User::updateOrCreate(
-                        ['username' => $newData['nis_nip']],
-                        [
-                            'name' => $newData['nama'],
-                            'password' => Hash::make($newData['nis_nip']),
-                            'role' => 'participant',
-                            'participant_id' => $p->id,
-                        ]
-                    );
+                    $lookup = $cleanNip
+                        ? ['nis_nip' => $cleanNip]
+                        : ['nama' => $newData['nama']];
+                    $p = Participant::updateOrCreate($lookup, [
+                        'nama' => $newData['nama'],
+                        'nis_nip' => $cleanNip,
+                        'status' => $cleanStatus,
+                    ]);
+                    $this->syncParticipantUser($p);
                     $updatedCount++;
                 }
             } else {
@@ -640,40 +679,35 @@ class ParticipantController extends Controller
                 $rawNama = trim((string)($row[$namaColKey] ?? ''));
                 $rawNip = trim((string)($row[$nisNipColKey] ?? ''));
                 $rawStatus = isset($row[$statusColKey]) ? trim((string)$row[$statusColKey]) : null;
+                $cleanStatus = $this->normalizeStatus($rawStatus);
 
-                if (empty($rawNama) || empty($rawNip)) {
+                if (empty($rawNama) || (empty($rawNip) && ! $this->isNonPermanentStatus($cleanStatus))) {
                     continue; // Lewati baris kosong
                 }
 
-                $cleanNip = $this->cleanNisNip($rawNip);
+                $cleanNip = $this->normalizeNisNipForStatus($rawNip, $cleanStatus);
                 $cleanNama = $rawNama;
-                $cleanStatus = $this->normalizeStatus($rawStatus);
 
                 // Update data jika NIP/NIS sudah terdaftar, atau buat baru jika belum
+                $lookup = $cleanNip
+                    ? ['nis_nip' => $cleanNip]
+                    : ['nama' => $cleanNama];
                 $participant = Participant::updateOrCreate(
-                    ['nis_nip' => $cleanNip],
+                    $lookup,
                     [
                         'nama' => $cleanNama,
+                        'nis_nip' => $cleanNip,
                         'status' => $cleanStatus,
                     ]
                 );
 
-                // Buat akun user
-                User::updateOrCreate(
-                    ['username' => $cleanNip],
-                    [
-                        'name' => $cleanNama,
-                        'password' => Hash::make($cleanNip),
-                        'role' => 'participant',
-                        'participant_id' => $participant->id,
-                    ]
-                );
+                $this->syncParticipantUser($participant);
 
                 $successCount++;
             }
 
             return redirect()->route('participants.index')
-                ->with('success', $successCount . ' data peserta berhasil diproses (diimpor/diperbarui). Akun peserta siap digunakan.');
+                ->with('success', $successCount . ' data peserta berhasil diproses (diimpor/diperbarui).');
 
         } catch (\Exception $e) {
             return redirect()->back()->with('error', 'Gagal memproses file Excel: ' . $e->getMessage());
@@ -711,6 +745,14 @@ class ParticipantController extends Controller
                 $sheet->setCellValueExplicit('A4', 'Bambang Sudarsono, S.T', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
                 $sheet->setCellValueExplicit('B4', '198207182008011007', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
                 $sheet->setCellValueExplicit('C4', 'PPPK Paruh Waktu', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+
+                $sheet->setCellValueExplicit('A5', 'Contoh Guru Tidak Tetap, S.Pd', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('B5', '-', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('C5', 'GTT', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+
+                $sheet->setCellValueExplicit('A6', 'Contoh Pegawai Tidak Tetap', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('B6', '-', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('C6', 'PTT', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
 
                 // Styling header
                 $headerStyle = [
@@ -751,6 +793,8 @@ class ParticipantController extends Controller
             fputcsv($handle, ['Drs. H. Ahmad Fauzi, M.Pd', '197503122000031002', 'PNS']);
             fputcsv($handle, ['Siti Nurhaliza, S.Pd', '198504152010012004', 'PPPK']);
             fputcsv($handle, ['Bambang Sudarsono, S.T', '198207182008011007', 'PPPK Paruh Waktu']);
+            fputcsv($handle, ['Contoh Guru Tidak Tetap, S.Pd', '-', 'GTT']);
+            fputcsv($handle, ['Contoh Pegawai Tidak Tetap', '-', 'PTT']);
             fclose($handle);
         }, $csvFilename, [
             'Content-Type' => 'text/csv; charset=UTF-8',

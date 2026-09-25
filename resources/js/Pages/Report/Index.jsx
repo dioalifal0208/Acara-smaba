@@ -892,8 +892,8 @@ export default function ReportIndex({
         >
             <Head title="Laporan Kehadiran" />
 
-            <div className="py-4 px-4 sm:px-6 lg:px-8 flex-1 flex flex-col overflow-hidden justify-between max-h-[580px]">
-                <div className="mx-auto max-w-7xl w-full flex-1 flex flex-col overflow-hidden space-y-3.5">
+            <div className="py-4 px-4 sm:px-6 lg:px-8 flex-1 flex flex-col">
+                <div className="mx-auto max-w-7xl w-full flex-1 flex flex-col space-y-3.5">
                     
                     {/* Stats Cards (flex-none) */}
                     <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4 flex-none" data-aos="fade-up">
@@ -997,8 +997,99 @@ export default function ReportIndex({
                         </div>
                     </div>
 
-                    {/* Report Table Wrapper (flex-1 and overflow-y-auto to lock vertical height) */}
-                    <div className="overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-sm flex-1 flex flex-col min-h-0" data-aos="fade-up" data-aos-delay="200">
+                    {/* ── Mobile Card List (< sm) ── */}
+                    <div className="sm:hidden space-y-3" data-aos="fade-up" data-aos-delay="200">
+                        {filteredAttendances.length === 0 ? (
+                            <div className="rounded-2xl bg-white border border-slate-200 p-10 text-center shadow-sm">
+                                <p className="text-sm font-semibold text-slate-500">Belum ada data kehadiran.</p>
+                            </div>
+                        ) : (
+                            filteredAttendances.map((attendance, index) => (
+                                <div key={attendance.id || attendance.participant_id || index} className="rounded-2xl bg-white border border-slate-200 shadow-sm p-4 space-y-3">
+                                    {/* Header: Name + NIP */}
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-50 border border-indigo-100 text-sm font-bold text-indigo-600 shrink-0">
+                                            {(attendance.nama || 'P').charAt(0).toUpperCase()}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-bold text-slate-800 truncate">{attendance.nama}</p>
+                                            <p className="text-xs text-slate-500 font-mono">{attendance.nis_nip || '-'} · {attendance.status_pegawai || '-'}</p>
+                                        </div>
+                                    </div>
+                                    {/* Stats row (harian only) */}
+                                    {selectedWorkcode?.kategori === 'harian' ? (
+                                        <div className="grid grid-cols-4 gap-1.5 text-center">
+                                            <div className="rounded-lg bg-red-50 border border-red-100 p-1.5">
+                                                <p className="text-[9px] font-bold uppercase text-red-500">Alpha</p>
+                                                <p className="text-base font-extrabold text-red-600">{attendance.total_alpha || '0'}</p>
+                                            </div>
+                                            <div className="rounded-lg bg-amber-50 border border-amber-100 p-1.5">
+                                                <p className="text-[9px] font-bold uppercase text-amber-500">Izin</p>
+                                                <p className="text-base font-extrabold text-amber-600">{attendance.total_izin || '0'}</p>
+                                            </div>
+                                            <div className="rounded-lg bg-blue-50 border border-blue-100 p-1.5">
+                                                <p className="text-[9px] font-bold uppercase text-blue-500">Sakit</p>
+                                                <p className="text-base font-extrabold text-blue-600">{attendance.total_sakit || '0'}</p>
+                                            </div>
+                                            <div className="rounded-lg bg-slate-50 border border-slate-200 p-1.5">
+                                                <p className="text-[9px] font-bold uppercase text-slate-500">Terlambat</p>
+                                                <p className="text-xs font-extrabold text-orange-600 leading-tight mt-0.5">{attendance.total_menit_terlambat ? attendance.total_menit_terlambat + 'm' : '0'}</p>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs text-slate-600 font-mono">{attendance.status !== 'libur' ? attendance.waktu_hadir : '-'}</span>
+                                            {renderStatusBadge(attendance.status)}
+                                        </div>
+                                    )}
+                                    {/* Action buttons */}
+                                    <div className="flex flex-wrap gap-2">
+                                        {selectedWorkcode?.kategori === 'harian' ? (
+                                            <>
+                                                <button
+                                                    onClick={() => {
+                                                        const pObj = participants.find(p => p.id === attendance.participant_id) || {
+                                                            id: attendance.participant_id,
+                                                            nama: attendance.nama,
+                                                            nis_nip: attendance.nis_nip,
+                                                            status: attendance.status_pegawai
+                                                        };
+                                                        setCalendarParticipant(pObj);
+                                                        setShowCalendarModal(true);
+                                                    }}
+                                                    className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100"
+                                                >
+                                                    Kalender
+                                                </button>
+                                                <button
+                                                    onClick={() => fetchLogs(attendance.participant_id, attendance.nama, attendance.nis_nip, attendance.status_pegawai)}
+                                                    className="inline-flex items-center gap-1 rounded-lg bg-slate-100 border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-200"
+                                                >
+                                                    Riwayat
+                                                </button>
+                                                <button
+                                                    onClick={() => handlePrintIndividualRecap(attendance.participant_id, attendance.nama)}
+                                                    className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-200"
+                                                >
+                                                    Cetak
+                                                </button>
+                                            </>
+                                        ) : (
+                                            <button
+                                                onClick={() => openManualEditModal(attendance, attendance.nama)}
+                                                className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 border border-indigo-200 px-3 py-1.5 text-xs font-bold text-indigo-700 hover:bg-indigo-100"
+                                            >
+                                                Edit Presensi
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+
+                    {/* Report Table Wrapper — desktop only */}
+                    <div className="hidden sm:flex overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-sm flex-1 flex-col min-h-0" data-aos="fade-up" data-aos-delay="200">
                         <div className="flex-1 overflow-y-auto max-h-[300px]">
                             <table className="w-full min-w-full divide-y divide-slate-200 text-xs">
                                 <thead className="bg-slate-50 sticky top-0 z-10 shadow-xs">

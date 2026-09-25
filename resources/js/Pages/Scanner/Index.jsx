@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useToast } from '@/Components/Toast';
 import * as faceapi from 'face-api.js';
 import axios from 'axios';
+import { Html5Qrcode } from 'html5-qrcode';
 
 // ─── Main Scanner Component ───
 export default function ScannerIndex({ initialStats, activeWorkcode: propActiveWorkcode }) {
@@ -21,6 +22,11 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
     const [scanCount, setScanCount] = useState(0);
     const [scanLock, setScanLock] = useState({ active: false, style: null });
     const [showFullscreenWarning, setShowFullscreenWarning] = useState(true);
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        setIsMobile(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
+    }, []);
 
     const html5QrCodeRef = useRef(null);
     const isProcessingRef = useRef(false);
@@ -224,7 +230,7 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
                     late_minutes: data.late_minutes || 0,
                     late_formatted: data.late_formatted || '',
                     timestamp,
-                }, ...prev.slice(0, 49)]);
+                }, ...prev.slice(0, 4)]);
 
             } else {
                 playSound('error');
@@ -277,7 +283,7 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
                 late_minutes: data.late_minutes || 0,
                 late_formatted: data.late_formatted || '',
                 timestamp,
-            }, ...prev.slice(0, 49)]);
+            }, ...prev.slice(0, 4)]);
 
         } else {
             playSound('error');
@@ -290,7 +296,7 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
         }
     }, [playSound, addToast]);
 
-    // ─── Auto-start Scanner ───
+    // ─── Start Scanner — called directly from user click ───
     const startScanner = async () => {
         if (!activeWorkcode) {
             toast.error('Gagal memulai scanner: Belum ada workcode yang aktif!');
@@ -301,19 +307,21 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
         setIsScanning(true);
 
         try {
-            const Html5QrcodeModule = await import('html5-qrcode');
-            const Html5Qrcode = Html5QrcodeModule.Html5Qrcode;
+            if (!window.isSecureContext) {
+                throw new Error('InsecureContext');
+            }
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error('UnsupportedBrowser');
+            }
 
-            await new Promise(resolve => setTimeout(resolve, 300));
-
+            // Html5Qrcode is imported statically at the top — no dynamic import needed.
+            // scanner.start() calls getUserMedia internally, staying inside the user-gesture context.
             const scanner = new Html5Qrcode('qr-reader');
             html5QrCodeRef.current = scanner;
 
             await scanner.start(
                 { facingMode: 'environment' },
-                {
-                    fps: 10,
-                },
+                { fps: 10 },
                 (decodedText, decodedResult) => {
                     handleScan(decodedText, decodedResult);
                 },
@@ -326,7 +334,7 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
             if (faceIntervalRef.current) clearInterval(faceIntervalRef.current);
             faceIntervalRef.current = setInterval(async () => {
                 if (!isFaceModelsLoaded) return;
-                if (isFaceProcessingRef.current || isProcessingRef.current) return; // don't process if QR is processing or Face is processing
+                if (isFaceProcessingRef.current || isProcessingRef.current) return;
 
                 const video = document.querySelector('#qr-reader video');
                 if (!video || video.paused || video.ended) return;
@@ -355,40 +363,57 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
                             isFaceProcessingRef.current = true;
                             setIsFaceProcessing(true);
 
-                        let payload = {
-                            descriptor: Array.from(detection.descriptor),
-                        };
+                            let payload = { descriptor: Array.from(detection.descriptor) };
+                            if (activeWorkcode?.latitude && activeWorkcode?.longitude && gpsDataRef.current) {
+                                payload = { ...payload, ...gpsDataRef.current };
+                            }
 
-                        if (activeWorkcode?.latitude && activeWorkcode?.longitude && gpsDataRef.current) {
-                            payload = { ...payload, ...gpsDataRef.current };
-                        }
-
-                        axios.post('/api/face/match', payload)
-                            .then(response => {
-                                handleFaceScanResult(response.data);
-                            })
-                            .catch(error => {
-                                const errorData = error.response?.data || { status: 'error', message: 'Gagal menghubungi server.' };
-                                handleFaceScanResult(errorData);
-                            })
-                            .finally(() => {
-                                setTimeout(() => {
-                                    isFaceProcessingRef.current = false;
-                                    setIsFaceProcessing(false);
-                                }, 3000); // 3 seconds cooldown for face scan
-                            });
+                            axios.post('/api/face/match', payload)
+                                .then(response => {
+                                    handleFaceScanResult(response.data);
+                                })
+                                .catch(error => {
+                                    const errorData = error.response?.data || { status: 'error', message: 'Gagal menghubungi server.' };
+                                    handleFaceScanResult(errorData);
+                                })
+                                .finally(() => {
+                                    setTimeout(() => {
+                                        isFaceProcessingRef.current = false;
+                                        setIsFaceProcessing(false);
+                                    }, 3000);
+                                });
                         }
                     }
                 } catch (e) {
-                    // ignore
+                    // ignore frame errors
                 }
-            }, 600); // Check every 600ms
+            }, 600);
 
         } catch (err) {
             console.error('Camera Error:', err);
             setIsCameraLoading(false);
             setIsScanning(false);
-            setError('Gagal mengakses kamera. Pastikan izin kamera sudah diberikan.');
+
+            let errorMessage;
+            const name = err.name || '';
+            const msg = (err.message || '').toLowerCase();
+
+            if (err.message === 'InsecureContext') {
+                errorMessage = 'Halaman harus dibuka via HTTPS agar kamera dapat diakses.';
+            } else if (err.message === 'UnsupportedBrowser') {
+                errorMessage = 'Browser Anda tidak mendukung akses kamera. Coba Chrome atau Safari terbaru.';
+            } else if (name === 'NotAllowedError' || name === 'PermissionDeniedError' || msg.includes('permission') || msg.includes('denied')) {
+                errorMessage = 'Izin kamera ditolak. Buka Pengaturan browser lalu izinkan akses kamera untuk halaman ini, kemudian muat ulang halaman.';
+            } else if (name === 'NotFoundError' || name === 'DevicesNotFoundError' || msg.includes('not found') || msg.includes('no camera')) {
+                errorMessage = 'Kamera tidak ditemukan pada perangkat ini.';
+            } else if (name === 'NotReadableError' || name === 'TrackStartError' || msg.includes('in use') || msg.includes('busy') || msg.includes('could not start')) {
+                errorMessage = 'Kamera sedang digunakan oleh aplikasi lain. Tutup aplikasi kamera lain lalu coba lagi.';
+            } else if (name === 'OverconstrainedError') {
+                errorMessage = 'Kamera belakang tidak tersedia. Coba di perangkat lain.';
+            } else {
+                errorMessage = 'Gagal menginisialisasi pemindai. Silakan muat ulang halaman dan coba lagi.';
+            }
+            setError(errorMessage);
         }
     };
 
@@ -441,10 +466,16 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
 
     useEffect(() => {
         return () => {
+            // Release camera and face interval on unmount
+            if (faceIntervalRef.current) {
+                clearInterval(faceIntervalRef.current);
+                faceIntervalRef.current = null;
+            }
             if (html5QrCodeRef.current) {
                 try {
                     html5QrCodeRef.current.stop();
                 } catch (e) {}
+                html5QrCodeRef.current = null;
             }
             if (cooldownTimerRef.current) {
                 clearTimeout(cooldownTimerRef.current);
@@ -530,7 +561,11 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
                         </div>
                         <h2 className="text-2xl font-black text-gray-800 mb-3">Mode Fullscreen</h2>
                         <p className="text-gray-500 text-sm mb-8 leading-relaxed">
-                            Demi kenyamanan dan agar seluruh antarmuka scanner terlihat sempurna tanpa terpotong, silakan masuk ke mode layar penuh (Fullscreen) atau tekan tombol <kbd className="bg-gray-100 border border-gray-300 rounded px-2 py-0.5 text-xs font-mono font-bold text-gray-700">F11</kbd>.
+                            {isMobile ? (
+                                "Demi kenyamanan dan agar antarmuka scanner terlihat sempurna, silakan masuk ke mode layar penuh (Fullscreen)."
+                            ) : (
+                                <>Demi kenyamanan dan agar seluruh antarmuka scanner terlihat sempurna tanpa terpotong, silakan masuk ke mode layar penuh (Fullscreen) atau tekan tombol <kbd className="bg-gray-100 border border-gray-300 rounded px-2 py-0.5 text-xs font-mono font-bold text-gray-700">F11</kbd>.</>
+                            )}
                         </p>
                         
                         <div className="flex flex-col gap-3">
@@ -552,7 +587,7 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
             )}
 
             {/* Main container: Allow scroll if screen is too small, but aim for full screen */}
-            <div className="p-4 sm:p-6 w-full max-w-7xl mx-auto flex flex-col gap-4 lg:gap-6 min-h-[calc(100vh-100px)]">
+            <div className="p-3 sm:p-6 w-full max-w-7xl mx-auto flex flex-col gap-3 lg:gap-6 min-h-[calc(100vh-100px)]">
                 
                 {!activeWorkcode && (
                     <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-amber-900 flex items-center justify-between gap-4 shadow-sm shrink-0">
@@ -573,25 +608,25 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
                 )}
                 
                 {/* Compact Stats Bar (1 row) - Shrinks if needed */}
-                <div className="shrink-0 flex flex-wrap sm:flex-nowrap items-center justify-between rounded-2xl bg-white p-4 shadow-sm border border-gray-100 gap-4 sm:gap-6">
-                    <div className="flex items-center gap-6 px-2 w-full sm:w-auto justify-around sm:justify-start">
+                <div className="shrink-0 flex flex-wrap sm:flex-nowrap items-center justify-between rounded-xl sm:rounded-2xl bg-white p-2.5 sm:p-4 shadow-sm border border-gray-100 gap-3 sm:gap-6">
+                    <div className="flex items-center gap-4 sm:gap-6 px-1 sm:px-2 w-full sm:w-auto justify-around sm:justify-start">
                         <div className="text-center sm:text-left">
-                            <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Total Peserta</p>
-                            <p className="text-2xl font-black text-gray-800 leading-none mt-1">{stats.total}</p>
+                            <p className="text-[9px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-400">Total Peserta</p>
+                            <p className="text-lg sm:text-2xl font-black text-gray-800 leading-none mt-0.5 sm:mt-1">{stats.total}</p>
                         </div>
-                        <div className="w-px h-10 bg-gray-200 hidden sm:block"></div>
+                        <div className="w-px h-8 sm:h-10 bg-gray-200 hidden sm:block"></div>
                         <div className="text-center sm:text-left">
-                            <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Telah Hadir</p>
-                            <p className="text-2xl font-black text-emerald-600 leading-none mt-1">{stats.hadir}</p>
+                            <p className="text-[9px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-400">Telah Hadir</p>
+                            <p className="text-lg sm:text-2xl font-black text-emerald-600 leading-none mt-0.5 sm:mt-1">{stats.hadir}</p>
                         </div>
                     </div>
-                    <div className="w-px h-10 bg-gray-200 hidden sm:block"></div>
-                    <div className="flex-1 px-2 w-full sm:w-auto">
-                        <div className="flex items-center justify-between mb-2">
-                            <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400">Progress Presensi</p>
-                            <p className="text-sm font-black text-indigo-600">{attendancePercentage}%</p>
+                    <div className="w-px h-8 sm:h-10 bg-gray-200 hidden sm:block"></div>
+                    <div className="flex-1 px-1 sm:px-2 w-full sm:w-auto">
+                        <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+                            <p className="text-[9px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-400">Progress Presensi</p>
+                            <p className="text-xs sm:text-sm font-black text-indigo-600">{attendancePercentage}%</p>
                         </div>
-                        <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-100 shadow-inner">
+                        <div className="h-1.5 sm:h-2.5 w-full overflow-hidden rounded-full bg-gray-100 shadow-inner">
                             <div
                                 className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-700 ease-out"
                                 style={{ width: `${attendancePercentage}%` }}
@@ -601,11 +636,11 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
                 </div>
 
                 {/* Golden Ratio Grid (~61.8% / 38.2% -> 7.4/4.6 -> 7.5/4.5 -> Col 8 / Col 4 is 66%/33% close enough) */}
-                <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[1.618fr_1fr] gap-4 lg:gap-6 items-stretch">
+                <div className="flex-1 flex flex-col lg:grid lg:grid-cols-[1.618fr_1fr] gap-3 lg:gap-6 lg:items-stretch lg:min-h-0">
                     
                     {/* ── Left: Scanner Card (Golden Ratio: Larger Part) ── */}
-                    <div className="overflow-hidden rounded-2xl bg-white shadow-sm border border-gray-100 flex flex-col h-full">
-                        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-3 flex items-center justify-between shrink-0">
+                    <div className="overflow-hidden rounded-2xl bg-white shadow-sm border border-gray-100 flex flex-col lg:h-full">
+                        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between shrink-0">
                             <div className="flex items-center gap-2 text-white">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 opacity-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
@@ -630,15 +665,22 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
                             </div>
                         </div>
 
-                        <div className="p-4 flex flex-col gap-4">
+                        <div className="p-3 sm:p-4 flex flex-col gap-3 sm:gap-4">
                             {/* Camera View Wrapper - Predictable height using aspect ratio */}
                             <div className="relative overflow-hidden rounded-xl bg-gray-950 w-full aspect-[4/3] lg:aspect-video flex items-center justify-center transition-all duration-300 shadow-inner">
                                 {/* Target container for Html5Qrcode scanner. */}
-                                {isScanning && (
-                                    <div
-                                        id="qr-reader"
-                                        className="w-full h-full absolute inset-0 flex items-center justify-center"
-                                    />
+                                <div
+                                    id="qr-reader"
+                                    className="w-full h-full absolute inset-0 flex items-center justify-center"
+                                    style={{ opacity: isScanning ? 1 : 0, pointerEvents: isScanning ? 'auto' : 'none', zIndex: isScanning ? 1 : -1 }}
+                                />
+
+                                {isCameraLoading && (
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 z-10 text-white">
+                                        <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent mb-3"></div>
+                                        <p className="text-sm font-bold">Mengaktifkan kamera...</p>
+                                        <p className="text-xs text-gray-400 mt-1 text-center px-4">Izinkan akses kamera pada popup browser</p>
+                                    </div>
                                 )}
 
                                 {isScanning && !isCameraLoading && (
@@ -675,12 +717,12 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                         </svg>
                                         <div>
-                                            <p className="text-xs font-medium text-red-800">{error}</p>
+                                            <p className="text-xs font-semibold text-red-800">{error}</p>
                                             <button
                                                 onClick={startScanner}
-                                                className="mt-1 text-xs font-bold text-red-600 hover:text-red-700 underline"
+                                                className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-white bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg transition-colors"
                                             >
-                                                Coba akses lagi
+                                                Coba Aktifkan Kamera Lagi
                                             </button>
                                         </div>
                                     </div>
@@ -692,9 +734,9 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
                                 {isScanning ? (
                                     <button
                                         onClick={stopScanner}
-                                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm font-bold text-red-600 transition-all hover:bg-red-100 border border-red-100 shadow-sm"
+                                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-50 px-3 sm:px-4 py-2.5 sm:py-3 text-sm font-bold text-red-600 transition-all hover:bg-red-100 border border-red-100 shadow-sm"
                                     >
-                                        <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                                        <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="currentColor" viewBox="0 0 20 20">
                                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clipRule="evenodd" />
                                         </svg>
                                         Hentikan Kamera
@@ -702,12 +744,12 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
                                 ) : (
                                     <button
                                         onClick={startScanner}
-                                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-sm font-bold text-white shadow-md transition-all hover:bg-indigo-700 hover:shadow-lg active:scale-[0.99]"
+                                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-3 sm:px-4 py-2.5 sm:py-3 text-sm font-bold text-white shadow-md transition-all hover:bg-indigo-700 hover:shadow-lg active:scale-[0.99]"
                                     >
-                                        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                                         </svg>
-                                        Mulai Scan QR Code
+                                        {isMobile ? 'Aktifkan Kamera' : 'Mulai Scan QR Code'}
                                     </button>
                                 )}
                             </div>
@@ -716,13 +758,13 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
 
                     {/* ── Right: Scan History (Golden Ratio: Smaller Part) ── */}
                     {/* Flex column taking full height of grid cell */}
-                    <div className="flex flex-col h-[450px] lg:h-full rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden">
-                        <div className="bg-white border-b border-gray-100 px-5 py-3.5 shrink-0 flex items-center justify-between z-10">
-                            <h3 className="text-sm font-bold text-gray-800">Riwayat Scan</h3>
+                    <div className="flex flex-col rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden lg:h-full">
+                        <div className="bg-white border-b border-gray-100 px-3 sm:px-5 py-2.5 sm:py-3.5 shrink-0 flex items-center justify-between z-10">
+                            <h3 className="text-xs sm:text-sm font-bold text-gray-800">Riwayat Scan</h3>
                             {scanHistory.length > 0 && (
                                 <button
                                     onClick={() => setScanHistory([])}
-                                    className="text-[11px] font-bold text-gray-500 hover:text-gray-800 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg transition-colors"
+                                    className="text-[10px] sm:text-[11px] font-bold text-gray-500 hover:text-gray-800 bg-gray-100 hover:bg-gray-200 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg transition-colors"
                                 >
                                     Bersihkan
                                 </button>
@@ -730,7 +772,7 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
                         </div>
 
                         {/* This area flex-grows to take all remaining vertical space inside the history card */}
-                        <div className="flex-1 overflow-y-auto bg-gray-50/50 min-h-0 h-0">
+                        <div className="lg:flex-1 overflow-y-auto max-h-[220px] lg:max-h-none lg:min-h-0 lg:h-0 bg-gray-50/50">
                             {scanHistory.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center h-full text-center px-6 py-10">
                                     <div className="w-16 h-16 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center mb-4">
@@ -746,9 +788,9 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
                                     {scanHistory.map((item, index) => (
                                         <div
                                             key={item.id}
-                                            className={`flex items-center gap-3 px-5 py-3 transition-colors hover:bg-white ${index === 0 ? 'bg-indigo-50/30' : ''}`}
+                                            className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-2 sm:py-3 transition-colors hover:bg-white ${index === 0 ? 'bg-indigo-50/30' : ''}`}
                                         >
-                                            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-bold shadow-sm ${
+                                            <div className={`flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full text-xs sm:text-sm font-bold shadow-sm ${
                                                 item.status === 'warning' || item.is_late ? 'bg-amber-100 text-amber-800 border border-amber-300' :
                                                 item.status === 'success' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
                                                 item.status === 'already' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
@@ -757,14 +799,14 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
                                                 {item.nama?.charAt(0)?.toUpperCase() || '?'}
                                             </div>
                                             <div className="min-w-0 flex-1">
-                                                <p className="truncate text-[13px] font-bold text-gray-900">{item.nama}</p>
-                                                <div className="flex items-center gap-2 mt-0.5">
-                                                    <span className="text-[11px] text-gray-500 font-medium">{item.nis_nip}</span>
+                                                <p className="truncate text-[12px] sm:text-[13px] font-bold text-gray-900">{item.nama}</p>
+                                                <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5">
+                                                    <span className="text-[10px] sm:text-[11px] text-gray-500 font-medium">{item.nis_nip}</span>
                                                     {getStatusBadge(item)}
                                                 </div>
                                             </div>
                                             <div className="shrink-0">
-                                                <span className="text-[10px] font-bold text-gray-400 bg-white border border-gray-100 px-1.5 py-1 rounded shadow-sm">
+                                                <span className="text-[9px] sm:text-[10px] font-bold text-gray-400 bg-white border border-gray-100 px-1 sm:px-1.5 py-0.5 sm:py-1 rounded shadow-sm">
                                                     {item.timestamp}
                                                 </span>
                                             </div>
@@ -775,18 +817,18 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
                         </div>
 
                         {/* Mini Legend */}
-                        <div className="bg-white border-t border-gray-100 px-5 py-3 shrink-0 z-10">
+                        <div className="bg-white border-t border-gray-100 px-3 sm:px-5 py-2 sm:py-3 shrink-0 z-10">
                             <div className="flex items-center justify-between">
-                                <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500">
-                                    <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.6)]"></span>
+                                <p className="flex items-center gap-1 sm:gap-1.5 text-[8px] sm:text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                                    <span className="h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-full bg-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.6)]"></span>
                                     Berhasil
                                 </p>
-                                <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500">
-                                    <span className="h-2.5 w-2.5 rounded-full bg-amber-500 shadow-[0_0_4px_rgba(245,158,11,0.6)]"></span>
+                                <p className="flex items-center gap-1 sm:gap-1.5 text-[8px] sm:text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                                    <span className="h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-full bg-amber-500 shadow-[0_0_4px_rgba(245,158,11,0.6)]"></span>
                                     Duplikat
                                 </p>
-                                <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500">
-                                    <span className="h-2.5 w-2.5 rounded-full bg-red-500 shadow-[0_0_4px_rgba(239,68,68,0.6)]"></span>
+                                <p className="flex items-center gap-1 sm:gap-1.5 text-[8px] sm:text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                                    <span className="h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-full bg-red-500 shadow-[0_0_4px_rgba(239,68,68,0.6)]"></span>
                                     Gagal
                                 </p>
                             </div>

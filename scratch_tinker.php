@@ -1,0 +1,1 @@
+echo json_encode(App\Models\User::select('id', 'name', 'email', 'username', 'role', 'participant_id', 'password')->get()->map(function($u) { $u->pass_hash = substr($u->password, 0, 15); unset($u->password); return $u; })->toArray(), JSON_PRETTY_PRINT);

@@ -10,7 +10,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        DB::statement("ALTER TABLE attendances MODIFY COLUMN status ENUM('hadir', 'alpha', 'izin', 'sakit', 'lupa_absen', 'libur') DEFAULT 'hadir'");
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement("ALTER TABLE attendances MODIFY COLUMN status ENUM('hadir', 'alpha', 'izin', 'sakit', 'lupa_absen', 'libur') DEFAULT 'hadir'");
+        }
     }
 
     /**
@@ -18,6 +20,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        DB::statement("ALTER TABLE attendances MODIFY COLUMN status ENUM('hadir', 'alpha', 'izin', 'sakit', 'lupa_absen') DEFAULT 'hadir'");
+        if (DB::getDriverName() !== 'sqlite') {
+            DB::statement("ALTER TABLE attendances MODIFY COLUMN status ENUM('hadir', 'alpha', 'izin', 'sakit', 'lupa_absen') DEFAULT 'hadir'");
+        }
     }
 };
