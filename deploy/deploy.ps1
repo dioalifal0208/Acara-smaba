@@ -88,6 +88,7 @@ Set-Content -Path $tmpFile -Value $sshCommand -Encoding UTF8
 $pythonAvailable = Get-Command python -ErrorAction SilentlyContinue
 
 $sshResult = $null
+$plinkAvailable = Get-Command plink -ErrorAction SilentlyContinue
 
 if ($pythonAvailable) {
     $pyScript = @"
@@ -107,11 +108,7 @@ sys.exit(result.returncode)
     $pyFile = [System.IO.Path]::ChangeExtension($tmpFile, ".py")
     Set-Content -Path $pyFile -Value $pyScript
     $sshResult = python $pyFile
-}
-
-# Fallback: gunakan Plink jika tersedia (PuTTY CLI)
-$plinkAvailable = Get-Command plink -ErrorAction SilentlyContinue
-if ($plinkAvailable) {
+} elseif ($plinkAvailable) {
     Write-Host "  Menggunakan PuTTY Plink..." -ForegroundColor DarkGray
     $sshResult = plink -ssh -P $SSH_PORT -l $SSH_USER -pw $SSH_PASS $SSH_HOST `
         "mkdir -p ~/$REMOTE_DIR && cd ~/$REMOTE_DIR && if [ ! -d .git ]; then git clone https://github.com/dioalifal0208/Acara-smaba.git .; else git pull origin main; fi && composer install --no-dev --optimize-autoloader --no-interaction && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan migrate --force && chmod -R 775 storage bootstrap/cache && cp -r public/. ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/ && ln -sfn ~/domains/smanegeri1babatlmg.sch.id/presensi-app/storage/app/public ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/storage && sed -i 's|/../vendor|/../../presensi-app/vendor|g' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php && sed -i 's|/../bootstrap|/../../presensi-app/bootstrap|g' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php && echo DEPLOY_SUCCESS" 2>&1
