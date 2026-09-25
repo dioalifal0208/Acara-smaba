@@ -48,14 +48,16 @@ class AttendanceValidationService
 
         if ($deviceAttendance && $deviceAttendance->participant) {
             $lockedParticipant = $deviceAttendance->participant;
+            $participantIdentity = $lockedParticipant->nis_nip ?: ($lockedParticipant->status ?: 'Tanpa NIP');
             
             // Lemparkan exception custom yang bisa ditangkap oleh controller
             throw new \Exception(json_encode([
                 'status' => 'device_locked',
-                'message' => 'Perangkat ini sudah digunakan untuk presensi atas nama ' . $lockedParticipant->nama . ' (' . $lockedParticipant->nis_nip . '). 1 perangkat hanya diizinkan untuk 1 kali presensi per workcode.',
+                'message' => 'Perangkat ini sudah digunakan untuk presensi atas nama ' . $lockedParticipant->nama . ' (' . $participantIdentity . '). 1 perangkat hanya diizinkan untuk 1 kali presensi per workcode.',
                 'locked_participant' => [
                     'nama' => $lockedParticipant->nama,
                     'nis_nip' => $lockedParticipant->nis_nip,
+                    'status' => $lockedParticipant->status,
                     'waktu_hadir' => $deviceAttendance->waktu_hadir->format('H:i:s'),
                 ],
             ]), 403);

@@ -71,7 +71,9 @@ function LockedScreen({ lock, activeWorkcode }) {
 
                 <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mb-4">
                     <p className="text-base font-extrabold text-slate-900 leading-tight">{lock.participant?.nama}</p>
-                    <p className="text-xs text-emerald-700 font-bold mt-0.5">{lock.participant?.nis_nip}</p>
+                    <p className="text-xs text-emerald-700 font-bold mt-0.5">
+                        {lock.participant?.nis_nip || lock.participant?.status || 'Tanpa NIP'}
+                    </p>
                     <p className="text-xs text-slate-500 mt-2 font-semibold">
                         Tercatat pukul: <span className="font-extrabold text-slate-700">{lock.timestamp}</span>
                     </p>
@@ -104,9 +106,11 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
     const [showSuggestions, setShowSuggestions] = useState(false);
     const suggestionsRef = useRef(null);
     const [isSearchingSuggestions, setIsSearchingSuggestions] = useState(false);
+    const [selectedParticipant, setSelectedParticipant] = useState(null);
 
     const { data, setData, processing, reset } = useForm({
         nis_nip: '',
+        participant_id: null,
     });
 
     // Cek LocalStorage lock saat halaman pertama dibuka
@@ -144,7 +148,11 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
     }, []);
 
     const handleInputChange = (val) => {
-        setData('nis_nip', val);
+        setData({
+            nis_nip: val,
+            participant_id: null,
+        });
+        setSelectedParticipant(null);
         setErrorMsg(null);
         if (val.trim().length >= 2) {
             setIsSearchingSuggestions(true);
@@ -166,7 +174,11 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
     };
 
     const handleSelectSuggestion = (participant) => {
-        setData('nis_nip', participant.nis_nip);
+        setData({
+            nis_nip: participant.nis_nip || participant.nama,
+            participant_id: participant.id,
+        });
+        setSelectedParticipant(participant);
         setSuggestions([]);
         setShowSuggestions(false);
     };
@@ -183,7 +195,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!data.nis_nip.trim()) return;
+        if (!data.participant_id && !data.nis_nip.trim()) return;
 
         setResult(null);
         setErrorMsg(null);
@@ -228,6 +240,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                         },
                         body: JSON.stringify({
                             nis_nip: data.nis_nip,
+                            participant_id: data.participant_id,
                             latitude,
                             longitude,
                             accuracy: accuracy ? Math.round(accuracy * 10) / 10 : null,
@@ -249,24 +262,26 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                             setDeviceLock({ participant: resData.participant, timestamp: resData.timestamp });
                             playAudio('success');
                             reset();
+                            setSelectedParticipant(null);
                         } else if (resData.status === 'already') {
                             setResult({
                                 type: 'already',
                                 title: 'Sudah Presensi',
-                                message: `${resData.participant.nama} (${resData.participant.nis_nip}) sudah mengisi presensi untuk workcode ini.`,
+                                message: `${resData.participant.nama} (${resData.participant.nis_nip || resData.participant.status || 'Tanpa NIP'}) sudah mengisi presensi untuk workcode ini.`,
                                 nama: resData.participant.nama,
                                 nis_nip: resData.participant.nis_nip,
                             });
                             playAudio('error');
                             reset();
+                            setSelectedParticipant(null);
                         }
                     } else {
                         // Cek device_locked dari server
                         if (resData.status === 'device_locked') {
                             // Kunci juga secara lokal menggunakan data dari server
                             const lp = resData.locked_participant;
-                            setLocalLock(activeWorkcode.id, { nama: lp.nama, nis_nip: lp.nis_nip }, lp.waktu_hadir);
-                            setDeviceLock({ participant: { nama: lp.nama, nis_nip: lp.nis_nip }, timestamp: lp.waktu_hadir });
+                            setLocalLock(activeWorkcode.id, { nama: lp.nama, nis_nip: lp.nis_nip, status: lp.status }, lp.waktu_hadir);
+                            setDeviceLock({ participant: { nama: lp.nama, nis_nip: lp.nis_nip, status: lp.status }, timestamp: lp.waktu_hadir });
                             playAudio('error');
                         } else {
                             setErrorMsg(resData.message || 'Terjadi kesalahan sistem.');
@@ -371,7 +386,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                                             placeholder="Ketik Nama / NIP Anda..."
                                             value={data.nis_nip}
                                             onChange={(e) => handleInputChange(e.target.value)}
-                                            onFocus={() => { if (data.nis_nip.trim().length >= 2) setShowSuggestions(true); }}
+                                            onFocus={() => { if (!selectedParticipant && data.nis_nip.trim().length >= 2) setShowSuggestions(true); }}
                                             className="w-full min-h-[48px] rounded-xl border border-slate-200 bg-slate-50 py-3 px-4 text-center text-sm font-semibold tracking-wide text-slate-800 placeholder-slate-400 focus:bg-white focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/10 shadow-sm"
                                             required
                                             disabled={processing || isLocating}
@@ -401,7 +416,9 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                                                             className="px-4 py-3 text-left transition-colors hover:bg-slate-50 focus:bg-slate-50 focus:outline-none cursor-pointer"
                                                         >
                                                             <p className="text-sm font-semibold text-slate-800">{p.nama}</p>
-                                                            <p className="text-[11px] text-green-700 font-bold mt-0.5">{p.nis_nip}</p>
+                                                            <p className="text-[11px] text-green-700 font-bold mt-0.5">
+                                                                {p.nis_nip || `${p.status || 'GTT/PTT'} · Tanpa NIP`}
+                                                            </p>
                                                         </div>
                                                     ))
                                                 ) : (

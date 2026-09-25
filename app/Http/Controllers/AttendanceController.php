@@ -551,12 +551,13 @@ class AttendanceController extends Controller
             'status' => 'required|in:hadir,izin,sakit,alpha,lupa_absen,libur',
         ]);
 
+        $workcode = Workcode::findOrFail($request->workcode_id);
         $tanggal = $request->tanggal;
         $waktuHadir = $request->filled('jam_masuk')
             ? \Carbon\Carbon::parse($tanggal . ' ' . $request->jam_masuk)
             : ($request->status === 'hadir' ? \Carbon\Carbon::parse($tanggal . ' 07:00:00') : null);
 
-        $waktuPulang = $request->filled('jam_pulang')
+        $waktuPulang = $workcode->kategori !== 'workcode' && $request->filled('jam_pulang')
             ? \Carbon\Carbon::parse($tanggal . ' ' . $request->jam_pulang)
             : null;
 
@@ -612,12 +613,13 @@ class AttendanceController extends Controller
             'status' => 'required|in:hadir,izin,sakit,alpha,lupa_absen,libur',
         ]);
 
+        $attendance->loadMissing('workcode');
         $tanggal = $request->tanggal;
         $waktuHadir = $request->filled('jam_masuk')
             ? \Carbon\Carbon::parse($tanggal . ' ' . $request->jam_masuk)
             : ($request->status === 'hadir' ? ($attendance->waktu_hadir ?? \Carbon\Carbon::parse($tanggal . ' 07:00:00')) : null);
 
-        $waktuPulang = $request->filled('jam_pulang')
+        $waktuPulang = $attendance->workcode?->kategori !== 'workcode' && $request->filled('jam_pulang')
             ? \Carbon\Carbon::parse($tanggal . ' ' . $request->jam_pulang)
             : null;
 

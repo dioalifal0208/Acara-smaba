@@ -78,6 +78,51 @@ class SelfCheckInWebTest extends TestCase
         ]);
     }
 
+    public function test_gtt_participant_without_nip_can_be_selected_and_check_in()
+    {
+        Workcode::create([
+            'nama_workcode' => 'Pembinaan Guru',
+            'kategori' => 'workcode',
+            'is_active' => true,
+        ]);
+
+        $participant = Participant::create([
+            'nama' => 'Guru Tidak Tetap',
+            'nis_nip' => null,
+            'status' => 'GTT',
+        ]);
+
+        $this->getJson(route('participants.search', ['query' => 'Guru Tidak']))
+            ->assertOk()
+            ->assertJsonFragment([
+                'id' => $participant->id,
+                'nama' => 'Guru Tidak Tetap',
+                'nis_nip' => null,
+                'status' => 'GTT',
+            ]);
+
+        $response = $this->postJson("/self-checkin/{$this->token}", [
+            'participant_id' => $participant->id,
+            'device_id' => 'gtt-device',
+            'device_timestamp' => now()->timestamp * 1000,
+        ], ['User-Agent' => 'TestAgentGtt']);
+
+        $response->assertOk()
+            ->assertJson([
+                'status' => 'success',
+                'participant' => [
+                    'id' => $participant->id,
+                    'nama' => 'Guru Tidak Tetap',
+                    'nis_nip' => null,
+                    'status' => 'GTT',
+                ],
+            ]);
+
+        $this->assertDatabaseHas('attendances', [
+            'participant_id' => $participant->id,
+        ]);
+    }
+
     public function test_duplicate_attendance_returns_already_status()
     {
         $workcode = Workcode::create([

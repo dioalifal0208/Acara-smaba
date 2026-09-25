@@ -374,7 +374,7 @@ class ParticipantController extends Controller
         $participants = Participant::where('nis_nip', 'like', $query . '%')
             ->orWhere('nama', 'like', '%' . $query . '%')
             ->limit(5)
-            ->get(['id', 'nama', 'nis_nip']);
+            ->get(['id', 'nama', 'nis_nip', 'status']);
 
         return response()->json($participants);
     }

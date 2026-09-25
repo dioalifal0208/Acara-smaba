@@ -70,8 +70,10 @@ export default function ReportIndex({
             return matchSearch && matchStatus;
         }
     );
+    const mobileAttendances = filteredAttendances.slice(0, 5);
 
     const attendancePercentage = stats && stats.total > 0 ? Math.round((stats.hadir / stats.total) * 100) : 0;
+    const isSingleAttendanceWorkcode = selectedWorkcode?.kategori === 'workcode';
 
     // Open Manual Edit Modal
     const openManualEditModal = (att, participantName = '') => {
@@ -80,7 +82,7 @@ export default function ReportIndex({
             id: att.id,
             tanggal: att.tanggal || (att.waktu_hadir ? att.waktu_hadir.split(' ')[0] : new Date().toISOString().split('T')[0]),
             jam_masuk: att.jam_masuk || '',
-            jam_pulang: att.jam_pulang || '',
+            jam_pulang: isSingleAttendanceWorkcode ? '' : (att.jam_pulang || ''),
             status: att.status || 'hadir',
         });
         setShowEditModal(true);
@@ -1004,7 +1006,7 @@ export default function ReportIndex({
                                 <p className="text-sm font-semibold text-slate-500">Belum ada data kehadiran.</p>
                             </div>
                         ) : (
-                            filteredAttendances.map((attendance, index) => (
+                            mobileAttendances.map((attendance, index) => (
                                 <div key={attendance.id || attendance.participant_id || index} className="rounded-2xl bg-white border border-slate-200 shadow-sm p-4 space-y-3">
                                     {/* Header: Name + NIP */}
                                     <div className="flex items-center gap-3">
@@ -1090,7 +1092,7 @@ export default function ReportIndex({
 
                     {/* Report Table Wrapper — desktop only */}
                     <div className="hidden sm:flex overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-sm flex-1 flex-col min-h-0" data-aos="fade-up" data-aos-delay="200">
-                        <div className="flex-1 overflow-y-auto max-h-[300px]">
+                        <div className="min-h-0 flex-1 overflow-y-auto">
                             <table className="w-full min-w-full divide-y divide-slate-200 text-xs">
                                 <thead className="bg-slate-50 sticky top-0 z-10 shadow-xs">
                                     <tr>
@@ -1292,9 +1294,13 @@ export default function ReportIndex({
                         </div>
 
                         {manualEditForm.data.status !== 'alpha' && (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                            <div className={`grid grid-cols-1 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 ${isSingleAttendanceWorkcode ? '' : 'sm:grid-cols-2'}`}>
                                 <div>
-                                    <InputLabel htmlFor="edit_jam_masuk" value="Jam Datang" className="text-xs font-bold text-slate-600" />
+                                    <InputLabel
+                                        htmlFor="edit_jam_masuk"
+                                        value={isSingleAttendanceWorkcode ? 'Jam Absen' : 'Jam Datang'}
+                                        className="text-xs font-bold text-slate-600"
+                                    />
                                     <TextInput
                                         id="edit_jam_masuk"
                                         type="time"
@@ -1305,17 +1311,19 @@ export default function ReportIndex({
                                     <InputError message={manualEditForm.errors.jam_masuk} className="mt-1 text-xs" />
                                 </div>
 
-                                <div>
-                                    <InputLabel htmlFor="edit_jam_pulang" value="Jam Pulang" className="text-xs font-bold text-slate-600" />
-                                    <TextInput
-                                        id="edit_jam_pulang"
-                                        type="time"
-                                        value={manualEditForm.data.jam_pulang}
-                                        onChange={(e) => manualEditForm.setData('jam_pulang', e.target.value)}
-                                        className="mt-1 w-full text-xs"
-                                    />
-                                    <InputError message={manualEditForm.errors.jam_pulang} className="mt-1 text-xs" />
-                                </div>
+                                {!isSingleAttendanceWorkcode && (
+                                    <div>
+                                        <InputLabel htmlFor="edit_jam_pulang" value="Jam Pulang" className="text-xs font-bold text-slate-600" />
+                                        <TextInput
+                                            id="edit_jam_pulang"
+                                            type="time"
+                                            value={manualEditForm.data.jam_pulang}
+                                            onChange={(e) => manualEditForm.setData('jam_pulang', e.target.value)}
+                                            className="mt-1 w-full text-xs"
+                                        />
+                                        <InputError message={manualEditForm.errors.jam_pulang} className="mt-1 text-xs" />
+                                    </div>
+                                )}
                             </div>
                         )}
 

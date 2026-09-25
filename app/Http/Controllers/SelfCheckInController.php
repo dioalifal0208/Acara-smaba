@@ -119,7 +119,8 @@ class SelfCheckInController extends Controller
         }
 
         $request->validate([
-            'nis_nip' => 'required|string|max:50',
+            'participant_id' => 'nullable|integer|exists:participants,id',
+            'nis_nip' => 'required_without:participant_id|nullable|string|max:50',
             'latitude' => 'nullable|numeric',
             'longitude' => 'nullable|numeric',
             'accuracy' => 'nullable|numeric',
@@ -142,13 +143,14 @@ class SelfCheckInController extends Controller
             throw $e;
         }
 
-        $nisNip = trim($request->input('nis_nip'));
-        $participant = Participant::where('nis_nip', $nisNip)->first();
+        $participant = $request->filled('participant_id')
+            ? Participant::find($request->integer('participant_id'))
+            : Participant::where('nis_nip', trim($request->input('nis_nip')))->first();
 
         if (!$participant) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'NIP tidak terdaftar. Hubungi panitia.',
+                'message' => 'Data peserta tidak terdaftar. Hubungi panitia.',
             ], 404);
         }
 
