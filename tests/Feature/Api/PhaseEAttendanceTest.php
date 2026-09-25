@@ -246,4 +246,90 @@ class PhaseEAttendanceTest extends TestCase
                      'message' => 'Peringatan Keamanan: Terdeteksi manipulasi lokasi (Mock Location). Matikan aplikasi Fake GPS pada perangkat Anda.',
                  ]);
     }
+    public function test_out_of_radius_error_message_is_consistent_and_has_no_distance_leak()
+    {
+        $user = User::factory()->create(['role' => 'participant']);
+        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid()]);
+        $user->participant_id = $participant->id;
+        $user->save();
+        Sanctum::actingAs($user, ['role:participant']);
+
+        Workcode::create([
+            'nama_workcode' => 'Acara Pagi',
+            'kategori' => 'workcode',
+            'is_active' => true,
+            'latitude' => -6.1234,
+            'longitude' => 106.1234,
+            'radius_meters' => 150, // Setting radius to 150m
+        ]);
+
+        $payload = [
+            'latitude' => -6.1000, // Very far away
+            'longitude' => 106.1000,
+            'accuracy' => 10,
+            'installation_id' => Str::uuid()->toString(),
+        ];
+
+        $response = $this->postJson('/api/v1/attendance', $payload, ['Idempotency-Key' => Str::uuid()->toString()]);
+
+        $response->assertStatus(403)
+                 ->assertJson([
+                     'status' => 'error',
+                     'message' => 'Anda berada di luar radius presensi. Anda harus berada dalam radius 150 meter dari lokasi workcode.',
+                 ]);
+
+        // Assert distance leak is gone (message shouldn't contain parenthetical distance like "(4500 meter)")
+        $this->assertStringNotContainsString('(', $response->json('message'));
+    }
+
+    public function test_device_locked_error_does_not_leak_participant_data()
+    {
+        $user1 = User::factory()->create(['role' => 'participant']);
+        $participant1 = Participant::create(['nama' => 'Test1', 'nis_nip' => '111', 'qr_token' => Str::uuid()]);
+        $user1->participant_id = $participant1->id;
+        $user1->save();
+
+        $user2 = User::factory()->create(['role' => 'participant']);
+        $participant2 = Participant::create(['nama' => 'Test2', 'nis_nip' => '222', 'qr_token' => Str::uuid()]);
+        $user2->participant_id = $participant2->id;
+        $user2->save();
+
+        $workcode = Workcode::create([
+            'nama_workcode' => 'Acara Pagi',
+            'kategori' => 'workcode',
+            'is_active' => true,
+            'latitude' => -6.1234,
+            'longitude' => 106.1234,
+            'radius_meters' => 150000000000,
+        ]);
+
+        $installationId = Str::uuid()->toString();
+
+        // 1. Participant 1 uses the device
+        Sanctum::actingAs($user1, ['role:participant']);
+        $payload = [
+            'latitude' => -6.1234,
+            'longitude' => 106.1234,
+            'accuracy' => 10,
+            'device_timestamp' => now()->toIso8601String(),
+            'installation_id' => $installationId,
+        ];
+        $this->postJson('/api/v1/attendance', $payload, ['Idempotency-Key' => Str::uuid()->toString()])->assertStatus(201);
+
+        // 2. Participant 2 tries to use the same device (same installation_id)
+        Sanctum::actingAs($user2, ['role:participant']);
+        $payload['device_timestamp'] = now()->addSeconds(5)->toIso8601String(); // slight change
+        $response = $this->postJson('/api/v1/attendance', $payload, ['Idempotency-Key' => Str::uuid()->toString()]);
+
+        $response->assertStatus(403)
+                 ->assertJson([
+                     'status' => 'device_locked',
+                     'message' => 'Perangkat ini sudah digunakan untuk presensi pada workcode ini.',
+                 ]);
+
+        $json = $response->json();
+        $this->assertArrayNotHasKey('locked_participant', $json);
+        $this->assertStringNotContainsString('Test1', $json['message']);
+        $this->assertStringNotContainsString('111', $json['message']);
+    }
 }

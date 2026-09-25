@@ -47,19 +47,10 @@ class AttendanceValidationService
             ->first();
 
         if ($deviceAttendance && $deviceAttendance->participant) {
-            $lockedParticipant = $deviceAttendance->participant;
-            $participantIdentity = $lockedParticipant->nis_nip ?: ($lockedParticipant->status ?: 'Tanpa NIP');
-            
             // Lemparkan exception custom yang bisa ditangkap oleh controller
             throw new \Exception(json_encode([
                 'status' => 'device_locked',
-                'message' => 'Perangkat ini sudah digunakan untuk presensi atas nama ' . $lockedParticipant->nama . ' (' . $participantIdentity . '). 1 perangkat hanya diizinkan untuk 1 kali presensi per workcode.',
-                'locked_participant' => [
-                    'nama' => $lockedParticipant->nama,
-                    'nis_nip' => $lockedParticipant->nis_nip,
-                    'status' => $lockedParticipant->status,
-                    'waktu_hadir' => $deviceAttendance->waktu_hadir->format('H:i:s'),
-                ],
+                'message' => 'Perangkat ini sudah digunakan untuk presensi pada workcode ini.',
             ]), 403);
         }
     }
@@ -117,10 +108,9 @@ class AttendanceValidationService
             $radiusLimit = $workcode->radius_meters ?? 100;
             
             if ($distance > $radiusLimit) {
-                $distanceFmt = number_format($distance, 0);
                 throw new \Exception(json_encode([
                     'status' => 'error',
-                    'message' => "Anda berada di luar radius presensi ({$distanceFmt} meter). Anda harus berada dalam radius {$radiusLimit} meter dari lokasi workcode.",
+                    'message' => "Anda berada di luar radius presensi. Anda harus berada dalam radius {$radiusLimit} meter dari lokasi workcode.",
                 ]), 403);
             }
         }
