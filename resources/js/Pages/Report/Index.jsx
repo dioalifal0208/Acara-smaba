@@ -56,7 +56,12 @@ export default function ReportIndex({
         }
     }, [flash]);
 
-    const uniqueStatuses = [...new Set(attendances.map(a => a.status_pegawai).filter(Boolean))].sort();
+    const standardEmploymentStatuses = ['PNS', 'PPPK', 'PPPK Paruh Waktu', 'GTT', 'PTT'];
+    const detectedEmploymentStatuses = attendances
+        .map((attendance) => attendance.status_pegawai)
+        .filter(Boolean)
+        .sort();
+    const uniqueStatuses = [...new Set([...standardEmploymentStatuses, ...detectedEmploymentStatuses])];
 
     const handleWorkcodeChange = (workcodeId) => {
         router.get(route('report'), { workcode_id: workcodeId }, { preserveState: true, preserveScroll: true });
@@ -71,6 +76,7 @@ export default function ReportIndex({
         }
     );
     const mobileAttendances = filteredAttendances.slice(0, 5);
+    const desktopAttendances = filteredAttendances.slice(0, 8);
 
     const attendancePercentage = stats && stats.total > 0 ? Math.round((stats.hadir / stats.total) * 100) : 0;
     const isSingleAttendanceWorkcode = selectedWorkcode?.kategori === 'workcode';
@@ -1092,7 +1098,7 @@ export default function ReportIndex({
 
                     {/* Report Table Wrapper — desktop only */}
                     <div className="hidden sm:flex overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-sm flex-1 flex-col min-h-0" data-aos="fade-up" data-aos-delay="200">
-                        <div className="min-h-0 flex-1 overflow-y-auto">
+                        <div className="min-h-0 flex-1 overflow-hidden">
                             <table className="w-full min-w-full divide-y divide-slate-200 text-xs">
                                 <thead className="bg-slate-50 sticky top-0 z-10 shadow-xs">
                                     <tr>
@@ -1134,7 +1140,7 @@ export default function ReportIndex({
                                             </td>
                                         </tr>
                                     ) : (
-                                        filteredAttendances.map((attendance, index) => (
+                                        desktopAttendances.map((attendance, index) => (
                                             <tr key={attendance.id || attendance.participant_id || index} className="transition-colors hover:bg-slate-50/70">
                                                 <td className="px-3 py-2.5 text-center text-xs text-slate-400 font-semibold">{index + 1}</td>
                                                 <td className="px-4 py-2.5">

@@ -119,10 +119,12 @@ export default function ParticipantsIndex({ participants }) {
     };
 
     const handleSelectAll = (e) => {
+        const visibleIds = desktopParticipants.map((participant) => participant.id);
+
         if (e.target.checked) {
-            setSelectedIds(filteredParticipants.map((p) => p.id));
+            setSelectedIds((previousIds) => [...new Set([...previousIds, ...visibleIds])]);
         } else {
-            setSelectedIds([]);
+            setSelectedIds((previousIds) => previousIds.filter((id) => !visibleIds.includes(id)));
         }
     };
 
@@ -220,6 +222,8 @@ export default function ParticipantsIndex({ participants }) {
                 return b.id - a.id;
             }
         });
+    const mobileParticipants = filteredParticipants.slice(0, 5);
+    const desktopParticipants = filteredParticipants.slice(0, 8);
 
     return (
         <AuthenticatedLayout
@@ -410,7 +414,7 @@ export default function ParticipantsIndex({ participants }) {
                                 <p className="text-xs font-semibold text-slate-500">Belum ada data peserta.</p>
                             </div>
                         ) : (
-                            filteredParticipants.map((participant, index) => (
+                            mobileParticipants.map((participant, index) => (
                                 <div
                                     key={participant.id}
                                     className={`rounded-2xl bg-white border p-4 shadow-sm space-y-3 ${selectedIds.includes(participant.id) ? 'border-indigo-400 bg-indigo-50/40' : 'border-slate-200'}`}
@@ -501,22 +505,23 @@ export default function ParticipantsIndex({ participants }) {
 
                     {/* Table Wrapper — desktop only */}
                     <div className="hidden sm:flex overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-sm flex-1 flex-col min-h-0" data-aos="fade-up" data-aos-delay="200">
-                        <div className="overflow-x-auto flex-1 overflow-y-auto max-h-[300px]">
+                        <div className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden">
                             <table className="min-w-full divide-y divide-slate-200 relative">
                                 <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm">
                                     <tr>
                                         <th className="w-12 px-4 py-3 text-center">
                                             <input
                                                 type="checkbox"
-                                                checked={filteredParticipants.length > 0 && selectedIds.length === filteredParticipants.length}
+                                                checked={desktopParticipants.length > 0 && desktopParticipants.every((participant) => selectedIds.includes(participant.id))}
                                                 ref={(el) => {
                                                     if (el) {
-                                                        el.indeterminate = selectedIds.length > 0 && selectedIds.length < filteredParticipants.length;
+                                                        const selectedVisibleCount = desktopParticipants.filter((participant) => selectedIds.includes(participant.id)).length;
+                                                        el.indeterminate = selectedVisibleCount > 0 && selectedVisibleCount < desktopParticipants.length;
                                                     }
                                                 }}
                                                 onChange={handleSelectAll}
                                                 className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
-                                                title={selectedIds.length === filteredParticipants.length ? "Batal Pilih Semua" : "Pilih Semua"}
+                                                title={desktopParticipants.length > 0 && desktopParticipants.every((participant) => selectedIds.includes(participant.id)) ? "Batal Pilih Semua" : "Pilih Semua yang Ditampilkan"}
                                             />
                                         </th>
                                         <th className="px-6 py-3 text-left text-xs font-extrabold uppercase tracking-wider text-slate-500">No</th>
@@ -537,7 +542,7 @@ export default function ParticipantsIndex({ participants }) {
                                             </td>
                                         </tr>
                                     ) : (
-                                        filteredParticipants.map((participant, index) => (
+                                        desktopParticipants.map((participant, index) => (
                                             <tr 
                                                 key={participant.id} 
                                                 className={`transition-colors ${selectedIds.includes(participant.id) ? 'bg-indigo-50/60' : 'hover:bg-slate-50/50'}`}
