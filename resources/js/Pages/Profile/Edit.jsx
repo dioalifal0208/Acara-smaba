@@ -16,7 +16,7 @@ export default function Edit({ mustVerifyEmail, status }) {
     return (
         <AuthenticatedLayout
             header={
-                <h2 className="text-xl font-extrabold text-slate-800 tracking-tight leading-tight">Pengaturan Profil</h2>
+                <h2 className="truncate text-base font-extrabold leading-tight text-slate-800 sm:text-xl">Pengaturan Profil</h2>
             }
         >
             <Head title="Pengaturan Profil" />

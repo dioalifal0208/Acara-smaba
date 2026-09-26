@@ -77,7 +77,7 @@ class LeaveRequestController extends Controller
             $activeWorkcode = Workcode::getActive();
 
             try {
-                $validationService->validateWorkcodeActive($activeWorkcode);
+                $validationService->validateWorkcodeActive($activeWorkcode, true);
             } catch (ValidationException $e) {
                 return $this->storeIdempotencyAndReturn($user->participant_id, $idempotencyKey, $requestHash, $e->status, [
                     'status' => 'error',

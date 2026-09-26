@@ -557,7 +557,7 @@ class AttendanceController extends Controller
             ? \Carbon\Carbon::parse($tanggal . ' ' . $request->jam_masuk)
             : ($request->status === 'hadir' ? \Carbon\Carbon::parse($tanggal . ' 07:00:00') : null);
 
-        $waktuPulang = $workcode->kategori !== 'workcode' && $request->filled('jam_pulang')
+        $waktuPulang = $workcode->kategori === 'harian' && $request->filled('jam_pulang')
             ? \Carbon\Carbon::parse($tanggal . ' ' . $request->jam_pulang)
             : null;
 
@@ -619,7 +619,7 @@ class AttendanceController extends Controller
             ? \Carbon\Carbon::parse($tanggal . ' ' . $request->jam_masuk)
             : ($request->status === 'hadir' ? ($attendance->waktu_hadir ?? \Carbon\Carbon::parse($tanggal . ' 07:00:00')) : null);
 
-        $waktuPulang = $attendance->workcode?->kategori !== 'workcode' && $request->filled('jam_pulang')
+        $waktuPulang = $attendance->workcode?->kategori === 'harian' && $request->filled('jam_pulang')
             ? \Carbon\Carbon::parse($tanggal . ' ' . $request->jam_pulang)
             : null;
 

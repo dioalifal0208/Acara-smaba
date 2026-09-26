@@ -1,4 +1,4 @@
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+﻿import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, useForm, router, usePage } from '@inertiajs/react';
 import React, { useState, useEffect, useRef } from 'react';
 import 'leaflet/dist/leaflet.css';
@@ -64,92 +64,21 @@ function MapModalCenter({ center }) {
     return null;
 }
 
-function MapRecenter({ center }) {
-    const map = useMap();
-    useEffect(() => {
-        if (center) {
-            const timer = setTimeout(() => {
-                map.invalidateSize();
-                map.setView([center.lat, center.lng], map.getZoom());
-            }, 200);
-            return () => clearTimeout(timer);
-        }
-    }, [center, map]);
-    return null;
-}
-
 function LocationMarker({ position, setPosition, radius, setLocationStatus }) {
     const locateButtonRef = useRef(null);
     const locationWatchRef = useRef(null);
     const locationTimeoutRef = useRef(null);
     const bestLocationRef = useRef(null);
-    const setPositionRef = useRef(setPosition);
-    setPositionRef.current = setPosition;
-    const setLocationStatusRef = useRef(setLocationStatus);
-    setLocationStatusRef.current = setLocationStatus;
-    const radiusRef = useRef(radius);
-    radiusRef.current = radius;
+    const currentPositionRef = useRef(position);
+    currentPositionRef.current = position;
 
-    // Calculate zoom level that fits the radius nicely on screen
-    const getZoomForRadius = (radiusMeters) => {
-        // Zoom lebih dekat (lebih besar nilainya) agar radius terlihat besar di layar
-        const z = 19 - Math.log2(Math.max(radiusMeters, 20) / 50);
-        return Math.min(19, Math.max(14, Math.round(z * 2) / 2));
-    };
+    const setLocateButtonLoading = (isLoading) => {
+        if (!locateButtonRef.current) return;
 
-    const setLocateButtonState = (state) => {
-        const btn = locateButtonRef.current;
-        if (!btn) return;
-
-        // Reset all states
-        btn.disabled = false;
-        btn.style.cursor = 'pointer';
-        btn.style.backgroundColor = 'white';
-        btn.style.boxShadow = '';
-        btn.style.transform = '';
-        btn.style.transition = 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)';
-        btn.setAttribute('aria-busy', 'false');
-
-        const svgEl = btn.querySelector('svg');
-        if (svgEl) {
-            svgEl.style.animation = '';
-            svgEl.style.color = '#4f46e5'; // indigo-600
-        }
-
-        if (state === 'loading') {
-            btn.disabled = true;
-            btn.style.cursor = 'wait';
-            btn.style.backgroundColor = '#eef2ff'; // indigo-50
-            btn.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.15)';
-            btn.setAttribute('aria-busy', 'true');
-            if (svgEl) {
-                svgEl.style.color = '#4f46e5';
-            }
-        } else if (state === 'success') {
-            btn.style.backgroundColor = '#dcfce7'; // green-100
-            btn.style.boxShadow = '0 0 0 3px rgba(34,197,94,0.25)';
-            btn.style.animation = 'locatePulse 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)';
-            if (svgEl) svgEl.style.color = '#16a34a'; // green-600
-            setTimeout(() => {
-                if (!locateButtonRef.current) return;
-                locateButtonRef.current.style.backgroundColor = 'white';
-                locateButtonRef.current.style.boxShadow = '';
-                locateButtonRef.current.style.animation = '';
-                const s = locateButtonRef.current.querySelector('svg');
-                if (s) s.style.color = '#4f46e5';
-            }, 2500);
-        } else if (state === 'error') {
-            btn.style.backgroundColor = '#fef2f2'; // red-50
-            btn.style.boxShadow = '0 0 0 3px rgba(239,68,68,0.2)';
-            if (svgEl) svgEl.style.color = '#dc2626'; // red-600
-            setTimeout(() => {
-                if (!locateButtonRef.current) return;
-                locateButtonRef.current.style.backgroundColor = 'white';
-                locateButtonRef.current.style.boxShadow = '';
-                const s = locateButtonRef.current.querySelector('svg');
-                if (s) s.style.color = '#4f46e5';
-            }, 2000);
-        }
+        locateButtonRef.current.disabled = isLoading;
+        locateButtonRef.current.style.cursor = isLoading ? 'wait' : 'pointer';
+        locateButtonRef.current.style.opacity = isLoading ? '0.55' : '1';
+        locateButtonRef.current.setAttribute('aria-busy', isLoading ? 'true' : 'false');
     };
 
     const stopLocationSearch = () => {
@@ -157,88 +86,35 @@ function LocationMarker({ position, setPosition, radius, setLocationStatus }) {
             navigator.geolocation.clearWatch(locationWatchRef.current);
             locationWatchRef.current = null;
         }
+
         if (locationTimeoutRef.current !== null) {
             clearTimeout(locationTimeoutRef.current);
             locationTimeoutRef.current = null;
         }
-        setLocateButtonState('idle');
-    };
 
-    // Ripple effect on map when position found (berjalan terus-menerus)
-    const triggerLocationFoundEffect = (latlng) => {
-        // Hapus ripple sebelumnya jika ada
-        if (map._rippleInterval) cancelAnimationFrame(map._rippleInterval);
-        if (map._ripple1) map.removeLayer(map._ripple1);
-        if (map._ripple2) map.removeLayer(map._ripple2);
-
-        const ripple1 = L.circleMarker(latlng, {
-            radius: 5, color: '#4f46e5', fillColor: '#4f46e5',
-            fillOpacity: 0.4, opacity: 0.8, weight: 2,
-            className: 'locate-ripple',
-        }).addTo(map);
-        const ripple2 = L.circleMarker(latlng, {
-            radius: 5, color: '#4f46e5', fillColor: 'transparent',
-            fillOpacity: 0, opacity: 0.6, weight: 2,
-            className: 'locate-ripple-2',
-        }).addTo(map);
-
-        map._ripple1 = ripple1;
-        map._ripple2 = ripple2;
-
-        let frame = 0;
-        const animate = () => {
-            frame++;
-            if (frame > 60) frame = 0; // Loop kembali ke awal
-            const r1 = 5 + frame * 1.5;
-            const r2 = 5 + frame * 2.5;
-            const op1 = Math.max(0, 0.8 - (frame / 60) * 0.8);
-            const op2 = Math.max(0, 0.6 - (frame / 60) * 0.6);
-            try {
-                ripple1.setRadius(r1).setStyle({ opacity: op1, fillOpacity: op1 * 0.5 });
-                ripple2.setRadius(r2).setStyle({ opacity: op2 });
-                map._rippleInterval = requestAnimationFrame(animate);
-            } catch (_) {}
-        };
-        map._rippleInterval = requestAnimationFrame(animate);
+        setLocateButtonLoading(false);
     };
 
     const map = useMapEvents({
         click(e) {
             stopLocationSearch();
             const selectedPosition = { lat: e.latlng.lat, lng: e.latlng.lng };
-            setPositionRef.current(selectedPosition);
-            setLocationStatusRef.current({
+            currentPositionRef.current = selectedPosition;
+            setPosition(selectedPosition);
+            setLocationStatus({
                 type: 'manual',
                 message: 'Titik lokasi dipilih secara manual pada peta.',
             });
         },
     });
-
+    
+    // Add custom control for Locate Me
     useEffect(() => {
-        // Inject CSS keyframes for button animations
-        const styleId = 'locate-btn-styles';
-        if (!document.getElementById(styleId)) {
-            const style = document.createElement('style');
-            style.id = styleId;
-            style.textContent = `
-                @keyframes locateSpin {
-                    0%   { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
-                }
-                @keyframes locatePulse {
-                    0%   { transform: scale(1); box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
-                    50%  { transform: scale(1.15); box-shadow: 0 0 0 8px rgba(34,197,94,0); }
-                    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(34,197,94,0); }
-                }
-                .leaflet-control-custom button { border-radius: 8px !important; }
-            `;
-            document.head.appendChild(style);
-        }
-
         const locateControl = L.control({ position: 'topright' });
         locateControl.onAdd = function () {
             const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
             const button = L.DomUtil.create('button', '', container);
+
             button.type = 'button';
             button.style.backgroundColor = 'white';
             button.style.width = '34px';
@@ -247,132 +123,150 @@ function LocationMarker({ position, setPosition, radius, setLocationStatus }) {
             button.style.display = 'flex';
             button.style.alignItems = 'center';
             button.style.justifyContent = 'center';
-            button.style.borderRadius = '8px';
-            button.style.border = 'none';
-            button.style.transition = 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)';
             button.title = 'Gunakan Lokasi Saya Saat Ini';
             button.setAttribute('aria-label', 'Gunakan Lokasi Saya Saat Ini');
-            // MAP PIN icon (lebih intuitif dari globe)
-            button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#4f46e5;display:block;transition:color 0.3s ease"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>';
+            button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-indigo-600"><circle cx="12" cy="12" r="10"></circle><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path><path d="M2 12h20"></path></svg>';
             locateButtonRef.current = button;
-            L.DomEvent.disableClickPropagation(container);
 
-            L.DomEvent.on(button, 'click', (event) => {
+            L.DomEvent.disableClickPropagation(container);
+            const handleLocate = (event) => {
                 L.DomEvent.preventDefault(event);
 
                 if (!navigator.geolocation) {
-                    setLocationStatusRef.current({ type: 'error', message: 'Browser ini tidak mendukung deteksi lokasi.' });
+                    setLocationStatus({
+                        type: 'error',
+                        message: 'Browser ini tidak mendukung deteksi lokasi.',
+                    });
                     return;
                 }
 
                 stopLocationSearch();
                 bestLocationRef.current = null;
-                setLocateButtonState('loading');
-                setLocationStatusRef.current({ type: 'locating', message: 'Mencari lokasi GPS Anda...' });
 
-                const applyGpsPosition = (geolocationPosition) => {
+                setLocateButtonLoading(true);
+                setLocationStatus({
+                    type: 'locating',
+                    message: 'Mencari lokasi GPS Anda...',
+                });
+
+                const handlePosition = (geolocationPosition) => {
                     const accuracy = Number(geolocationPosition.coords.accuracy);
                     const candidate = {
                         lat: Number(geolocationPosition.coords.latitude),
                         lng: Number(geolocationPosition.coords.longitude),
                     };
 
-                    // Validasi: koordinat harus valid dan berada di wilayah Indonesia
-                    if (!isValidCoordinate(candidate)) return;
-                    if (!isWithinIndonesia(candidate)) return;
-                    if (!Number.isFinite(accuracy) || accuracy <= 0) return;
-
-                    const existingBest = bestLocationRef.current;
-                    const isBetter = existingBest === null || accuracy < existingBest.accuracy;
-                    if (!isBetter) return;
-
-                    const isFirst = existingBest === null;
-                    bestLocationRef.current = { ...candidate, accuracy };
-                    setPositionRef.current(candidate);
-
-                    const finalZoom = getZoomForRadius(radiusRef.current);
-
-                    // Animasi map menyeret (bergeser) secara perlahan tanpa loncat (zoom out)
-                    map.panTo([candidate.lat, candidate.lng], { animate: true, duration: 1.5 });
-                    setTimeout(() => {
-                        map.setZoom(finalZoom, { animate: true });
-                    }, 500); // Zoom disesuaikan sedikit setelah mulai bergeser
-
-                    // Mempercepat loading: Langsung terima koordinat GPS valid pertama tanpa harus menunggu akurasi tertinggi
-                    setTimeout(() => {
-                        triggerLocationFoundEffect([candidate.lat, candidate.lng]);
-                        setLocateButtonState('success');
-                    }, 1000);
-                    stopLocationSearch();
-                    setLocationStatusRef.current({ type: 'success', message: `Lokasi ditemukan (akurasi ${Math.round(accuracy)} m).` });
-                    return;
-                };
-
-                const handleError = (error) => {
-                    const best = bestLocationRef.current;
-                    stopLocationSearch();
-                    setLocateButtonState(best ? 'success' : 'error');
-                    if (best) {
-                        triggerLocationFoundEffect([best.lat, best.lng]);
-                        setLocationStatusRef.current({ type: 'success', message: `Lokasi terbaik diterapkan (akurasi ${Math.round(best.accuracy)} m).` });
+                    if (!isValidCoordinate(candidate)) {
+                        setLocationStatus({
+                            type: 'locating',
+                            message: 'Pembacaan GPS belum valid. Sistem sedang mencoba kembali...',
+                        });
                         return;
                     }
-                    const msgs = {
-                        1: 'Akses lokasi ditolak. Izinkan akses lokasi di browser, lalu coba lagi.',
-                        2: 'Posisi tidak dapat ditentukan. Silakan coba lagi.',
-                        3: 'Waktu habis. Pastikan GPS/lokasi perangkat aktif.',
-                    };
-                    setLocationStatusRef.current({ type: 'error', message: msgs[error.code] || 'Lokasi tidak dapat diperoleh.' });
+
+                    if (!Number.isFinite(accuracy) || accuracy <= 0) {
+                        setLocationStatus({
+                            type: 'locating',
+                            message: 'Pembacaan GPS belum memiliki data akurasi. Sistem sedang mencoba kembali...',
+                        });
+                        return;
+                    }
+
+                    const normalizedAccuracy = accuracy;
+                    const isBetterLocation = bestLocationRef.current === null
+                        || normalizedAccuracy < bestLocationRef.current.accuracy;
+
+                    if (isBetterLocation) {
+                        bestLocationRef.current = {
+                            ...candidate,
+                            accuracy: normalizedAccuracy,
+                        };
+                        currentPositionRef.current = candidate;
+                        setPosition(candidate);
+                        map.flyTo(candidate, normalizedAccuracy <= HIGH_ACCURACY_TARGET_METERS ? 18 : 16);
+                    }
+
+                    const bestLocation = bestLocationRef.current;
+
+                    if (bestLocation.accuracy <= HIGH_ACCURACY_TARGET_METERS) {
+                        stopLocationSearch();
+                        setLocationStatus({
+                            type: 'success',
+                            message: `Lokasi saat ini diterapkan dengan akurasi Â±${Math.round(bestLocation.accuracy)} meter.`,
+                        });
+                        return;
+                    }
+
+                    setLocationStatus({
+                        type: 'locating',
+                        message: `Titik sementara ditemukan (akurasi Â±${Math.round(bestLocation.accuracy)} m). Masih mencari hasil yang lebih presisi...`,
+                    });
                 };
 
-                // IP geolocation API sebagai fallback cepat (jika GPS lambat/gagal)
-                fetch('https://ipapi.co/json/')
-                    .then(r => r.json())
-                    .then(ipData => {
-                        if (ipData && ipData.latitude && ipData.longitude && !bestLocationRef.current) {
-                            const ipCandidate = { lat: Number(ipData.latitude), lng: Number(ipData.longitude) };
-                            if (isValidCoordinate(ipCandidate)) {
-                                bestLocationRef.current = { ...ipCandidate, accuracy: 5000 };
-                                setPositionRef.current(ipCandidate);
-                                map.panTo([ipCandidate.lat, ipCandidate.lng], { animate: true, duration: 1.5 });
-                                setTimeout(() => map.setZoom(15, { animate: true }), 500);
-                                setLocationStatusRef.current({ type: 'locating', message: 'Posisi awal dari jaringan. Menunggu GPS untuk lokasi presisi...' });
-                            }
-                        }
-                    })
-                    .catch(() => {});
+                const handleLocationError = (error) => {
+                    const bestLocation = bestLocationRef.current;
+                    stopLocationSearch();
 
-                // Browser GPS: langsung watchPosition untuk hasil real-time
+                    if (bestLocation) {
+                        setLocationStatus({
+                            type: 'success',
+                            message: `Lokasi terbaik diterapkan dengan akurasi Â±${Math.round(bestLocation.accuracy)} meter.`,
+                        });
+                        return;
+                    }
+
+                    const messages = {
+                        1: 'Akses lokasi ditolak. Izinkan akses lokasi pada browser, lalu coba lagi.',
+                        2: 'Lokasi belum dapat ditentukan. Titik peta tidak diubah; silakan coba lagi.',
+                        3: 'Pencarian lokasi habis waktu. Titik peta tidak diubah; silakan coba lagi.',
+                    };
+
+                    setLocationStatus({
+                        type: 'error',
+                        message: messages[error.code] || 'Lokasi saat ini tidak dapat diperoleh dari browser.',
+                    });
+                };
+
                 locationWatchRef.current = navigator.geolocation.watchPosition(
-                    applyGpsPosition,
-                    handleError,
-                    { enableHighAccuracy: true, maximumAge: 0, timeout: LOCATION_SEARCH_TIMEOUT_MS }
+                    handlePosition,
+                    handleLocationError,
+                    {
+                        enableHighAccuracy: true,
+                        maximumAge: 0,
+                        timeout: LOCATION_SEARCH_TIMEOUT_MS,
+                    },
                 );
 
-                // Fallback timeout
                 locationTimeoutRef.current = setTimeout(() => {
-                    const best = bestLocationRef.current;
+                    const bestLocation = bestLocationRef.current;
                     stopLocationSearch();
-                    if (best) {
-                        setLocateButtonState('success');
-                        triggerLocationFoundEffect([best.lat, best.lng]);
-                        setLocationStatusRef.current({ type: 'success', message: `Lokasi terbaik diterapkan (akurasi ${Math.round(best.accuracy)} m).` });
+
+                    if (bestLocation) {
+                        setLocationStatus({
+                            type: 'success',
+                            message: `Lokasi terbaik diterapkan dengan akurasi Â±${Math.round(bestLocation.accuracy)} meter.`,
+                        });
                     } else {
-                        setLocateButtonState('error');
-                        setLocationStatusRef.current({ type: 'error', message: 'Lokasi GPS tidak dapat diperoleh. Pastikan izin lokasi browser diaktifkan.' });
+                        setLocationStatus({
+                            type: 'error',
+                            message: 'Lokasi GPS tidak dapat diperoleh. Titik peta tidak diubah; silakan coba lagi.',
+                        });
                     }
                 }, LOCATION_SEARCH_TIMEOUT_MS);
-            });
+            };
+
+            L.DomEvent.on(button, 'click', handleLocate);
 
             return container;
         };
         locateControl.addTo(map);
+        
         return () => {
             stopLocationSearch();
             locateButtonRef.current = null;
             map.removeControl(locateControl);
         };
-    }, [map]);
+    }, [map, setLocationStatus]);
 
     return position === null ? null : (
         <React.Fragment>
@@ -657,7 +551,7 @@ export default function WorkcodesIndex({ workcodes }) {
                                             onClick={() => setPreviewMapWorkcode(activeWorkcode)}
                                             className="text-indigo-200 hover:text-white underline font-bold ml-1 text-[11px] inline-flex items-center gap-0.5 cursor-pointer"
                                         >
-                                            Lihat Peta ↗
+                                            Lihat Peta â†—
                                         </button>
                                     </div>
                                 )}
@@ -717,10 +611,6 @@ export default function WorkcodesIndex({ workcodes }) {
                                                         <span className="inline-flex items-center rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[10px] font-bold text-blue-700">
                                                             Harian
                                                         </span>
-                                                    ) : workcode.kategori === '24_jam' ? (
-                                                        <span className="inline-flex items-center rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
-                                                            24 Jam
-                                                        </span>
                                                     ) : (
                                                         <span className="inline-flex items-center rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-600">
                                                             Kegiatan
@@ -757,7 +647,7 @@ export default function WorkcodesIndex({ workcodes }) {
                                             {workcode.kategori === 'harian' && (
                                                 <div className="mt-2.5 flex flex-col gap-1 rounded-lg bg-blue-50/60 border border-blue-100 p-2 text-[11px] text-blue-900 font-medium">
                                                     <div className="flex items-start gap-1.5">
-                                                        <span className="text-blue-500 mt-0.5">📅</span>
+                                                        <span className="text-blue-500 mt-0.5">ðŸ“…</span>
                                                         <div className="flex-1 w-full">
                                                             <div className="flex items-center justify-between mb-1">
                                                                 <span className="font-bold block text-blue-800">Jadwal Per-Hari Aktif</span>
@@ -779,11 +669,11 @@ export default function WorkcodesIndex({ workcodes }) {
                                                                         <div className="flex flex-col gap-0.5 mt-1 border-t border-blue-100/50 pt-1">
                                                                             <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Hari Ini ({todayName}):</span>
                                                                             <div className="flex items-center justify-between">
-                                                                                <span className="text-emerald-700 font-semibold text-[10px]">🟢 Datang:</span>
+                                                                                <span className="text-emerald-700 font-semibold text-[10px]">ðŸŸ¢ Datang:</span>
                                                                                 <span className="font-bold font-mono">{jadwal.jam_datang_mulai?.substring(0,5) || '06:00'} - {jadwal.jam_datang_selesai?.substring(0,5) || '07:00'}</span>
                                                                             </div>
                                                                             <div className="flex items-center justify-between">
-                                                                                <span className="text-amber-700 font-semibold text-[10px]">🟠 Pulang:</span>
+                                                                                <span className="text-amber-700 font-semibold text-[10px]">ðŸŸ  Pulang:</span>
                                                                                 <span className="font-bold font-mono">{jadwal.jam_pulang_mulai?.substring(0,5) || '15:30'} - {jadwal.jam_pulang_selesai?.substring(0,5) || '22:00'}</span>
                                                                             </div>
                                                                         </div>
@@ -908,7 +798,7 @@ export default function WorkcodesIndex({ workcodes }) {
                                 </div>
                                 <div>
                                     <h3 className="text-sm font-extrabold text-slate-800">{editingWorkcode ? 'Edit Workcode' : 'Buat Workcode Baru'}</h3>
-                                    <p className="text-[11px] text-slate-500 font-medium">Pilih format presensi & batasan radius</p>
+                                    <p className="text-[11px] text-slate-500 font-medium">Konfigurasi jadwal waktu & batasan radius presensi</p>
                                 </div>
                             </div>
                             <button 
@@ -963,7 +853,7 @@ export default function WorkcodesIndex({ workcodes }) {
                                         <label className="block text-[10px] font-extrabold text-slate-700 uppercase tracking-wider mb-1">
                                             Kategori Presensi <span className="text-red-500">*</span>
                                         </label>
-                                        <div className="grid grid-cols-1 gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/80 sm:grid-cols-3">
+                                        <div className="grid grid-cols-2 gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/80">
                                             <button
                                                 type="button"
                                                 onClick={() => setData('kategori', 'workcode')}
@@ -973,7 +863,7 @@ export default function WorkcodesIndex({ workcodes }) {
                                                         : 'text-slate-600 hover:text-slate-900'
                                                 }`}
                                             >
-                                                <span>📅</span>
+                                                <span>ðŸ“…</span>
                                                 <span>Absen Kegiatan (1x)</span>
                                             </button>
                                             <button
@@ -985,20 +875,8 @@ export default function WorkcodesIndex({ workcodes }) {
                                                         : 'text-slate-600 hover:text-slate-900'
                                                 }`}
                                             >
-                                                <span>⏰</span>
+                                                <span>â°</span>
                                                 <span>Presensi Harian</span>
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setData('kategori', '24_jam')}
-                                                className={`flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-bold transition-all ${
-                                                    data.kategori === '24_jam'
-                                                        ? 'bg-emerald-600 text-white shadow-sm'
-                                                        : 'text-slate-600 hover:text-slate-900'
-                                                }`}
-                                            >
-                                                <span>24/7</span>
-                                                <span>Presensi 24 Jam</span>
                                             </button>
                                         </div>
                                     </div>
@@ -1009,7 +887,7 @@ export default function WorkcodesIndex({ workcodes }) {
                                             <div className="rounded-xl border border-indigo-200/80 bg-indigo-50/40 p-3 flex-1 flex flex-col justify-center gap-3 animate-[fadeIn_0.15s_ease-out]">
                                                 <div className="flex items-center justify-between">
                                                     <span className="text-[10px] font-extrabold text-indigo-900 uppercase tracking-wider flex items-center gap-1.5">
-                                                        <span>📌</span> Mode Presensi Sekali
+                                                        <span>ðŸ“Œ</span> Mode Presensi Sekali
                                                     </span>
                                                     <span className="text-[10px] text-indigo-700 font-bold bg-indigo-100/70 px-2 py-0.5 rounded-md">
                                                         1x Scan / Peserta
@@ -1019,7 +897,7 @@ export default function WorkcodesIndex({ workcodes }) {
                                                 <div className="grid grid-cols-2 gap-2 flex-1 mt-1.5">
                                                     <div className="bg-white rounded-lg p-2 border border-indigo-100/80 shadow-2xs flex flex-col justify-center">
                                                         <span className="block text-[10px] font-bold text-indigo-700 uppercase tracking-wider mb-0.5">
-                                                            🎯 Mekanisme
+                                                            ðŸŽ¯ Mekanisme
                                                         </span>
                                                         <p className="text-[11px] text-slate-600 leading-snug">
                                                             Peserta cukup scan 1 kali. Kehadiran langsung tercatat sebagai <b>HADIR</b>.
@@ -1027,40 +905,10 @@ export default function WorkcodesIndex({ workcodes }) {
                                                     </div>
                                                     <div className="bg-white rounded-lg p-2 border border-indigo-100/80 shadow-2xs flex flex-col justify-center">
                                                         <span className="block text-[10px] font-bold text-indigo-700 uppercase tracking-wider mb-0.5">
-                                                            💡 Penggunaan
+                                                            ðŸ’¡ Penggunaan
                                                         </span>
                                                         <p className="text-[11px] text-slate-600 leading-snug">
                                                             Upworkcode bendera, seminar, rapat pleno, ujian sekolah, dan kegiatan insidental.
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ) : data.kategori === '24_jam' ? (
-                                            <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/50 p-3 flex-1 flex flex-col justify-center gap-3 animate-[fadeIn_0.15s_ease-out]">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-[10px] font-extrabold text-emerald-900 uppercase tracking-wider flex items-center gap-1.5">
-                                                        <span>24/7</span> Mode Presensi 24 Jam
-                                                    </span>
-                                                    <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100/70 px-2 py-0.5 rounded-md">
-                                                        Tanpa Batas Jam
-                                                    </span>
-                                                </div>
-
-                                                <div className="grid grid-cols-1 gap-2 flex-1 mt-1.5 sm:grid-cols-2">
-                                                    <div className="bg-white rounded-lg p-2 border border-emerald-100/80 shadow-2xs flex flex-col justify-center">
-                                                        <span className="block text-[10px] font-bold text-emerald-700 uppercase tracking-wider mb-0.5">
-                                                            Mekanisme
-                                                        </span>
-                                                        <p className="text-[11px] text-slate-600 leading-snug">
-                                                            Peserta dapat melakukan presensi kapan saja selama Workcode ini aktif.
-                                                        </p>
-                                                    </div>
-                                                    <div className="bg-white rounded-lg p-2 border border-emerald-100/80 shadow-2xs flex flex-col justify-center">
-                                                        <span className="block text-[10px] font-bold text-emerald-700 uppercase tracking-wider mb-0.5">
-                                                            Ketentuan
-                                                        </span>
-                                                        <p className="text-[11px] text-slate-600 leading-snug">
-                                                            Tidak memakai tanggal atau rentang jam. Setiap peserta cukup presensi 1 kali.
                                                         </p>
                                                     </div>
                                                 </div>
@@ -1116,7 +964,7 @@ export default function WorkcodesIndex({ workcodes }) {
                                                                 <div className="grid grid-cols-2 gap-2 flex-1">
                                                                     {/* Datang */}
                                                                     <div className="flex flex-col">
-                                                                        <span className="block text-[9px] font-bold text-emerald-700 uppercase tracking-wider mb-0.5">🟢 Datang</span>
+                                                                        <span className="block text-[9px] font-bold text-emerald-700 uppercase tracking-wider mb-0.5">ðŸŸ¢ Datang</span>
                                                                         <div className="flex items-center gap-1">
                                                                             <input
                                                                                 type="time"
@@ -1137,7 +985,7 @@ export default function WorkcodesIndex({ workcodes }) {
                                                                     </div>
                                                                     {/* Pulang */}
                                                                     <div className="flex flex-col">
-                                                                        <span className="block text-[9px] font-bold text-amber-700 uppercase tracking-wider mb-0.5">🟠 Pulang</span>
+                                                                        <span className="block text-[9px] font-bold text-amber-700 uppercase tracking-wider mb-0.5">ðŸŸ  Pulang</span>
                                                                         <div className="flex items-center gap-1">
                                                                             <input
                                                                                 type="time"
@@ -1217,7 +1065,6 @@ export default function WorkcodesIndex({ workcodes }) {
                                                     attribution='&copy; OpenStreetMap contributors'
                                                     url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                                                 />
-                                                <MapRecenter center={mapPosition} />
                                                 <LocationMarker
                                                     position={mapPosition}
                                                     setPosition={setMapPosition}

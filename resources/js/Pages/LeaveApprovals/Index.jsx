@@ -1,5 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, useForm } from '@inertiajs/react';
 import { useToast } from '@/Components/Toast';
 
 export default function LeaveApprovalsIndex({ leaveRequests }) {
@@ -27,18 +27,13 @@ export default function LeaveApprovalsIndex({ leaveRequests }) {
     };
 
     return (
-        <AuthenticatedLayout>
+        <AuthenticatedLayout
+            header={<h2 className="truncate text-base font-extrabold leading-tight text-slate-800 sm:text-xl">Verifikasi Izin &amp; Sakit</h2>}
+        >
             <Head title="Verifikasi Izin & Sakit" />
 
             <div className="py-6 px-4 sm:px-6 lg:px-8 flex-1 w-full">
                 <div className="mx-auto max-w-7xl w-full">
-                    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-3">
-                        <h2 className="text-2xl font-bold text-slate-800">Verifikasi Izin &amp; Sakit</h2>
-                        <Link href={route('dashboard')} className="px-4 py-2 bg-white text-slate-600 rounded-lg shadow-sm border border-slate-200 hover:bg-slate-50 font-semibold transition-colors text-sm text-center">
-                            Kembali ke Dashboard
-                        </Link>
-                    </div>
-
                     {/* ── Mobile Card List (< sm) ── */}
                     <div className="sm:hidden space-y-3">
                         {leaveRequests.length === 0 ? (

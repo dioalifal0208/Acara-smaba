@@ -328,7 +328,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                 <div className="absolute bottom-0 right-0 translate-x-1/2 translate-y-1/2 w-80 h-80 rounded-full bg-emerald-500/5 blur-3xl pointer-events-none" />
 
                 {/* Header Logo */}
-                <header className="relative z-10 mx-auto text-center mt-2 sm:mt-3 flex-none" data-aos="fade-down">
+                <header className="relative z-10 mx-auto flex h-[72px] flex-none flex-col items-center justify-center text-center" data-aos="fade-down">
                     <div className="flex justify-center mb-1">
                         <img src="/images/logo.png" alt="Logo E-Presensi SMABA" className="h-10 w-10 object-contain" />
                     </div>
@@ -461,7 +461,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                 </main>
 
                 {/* Footer */}
-                <footer className="relative z-10 text-center text-[10px] text-slate-500 mt-2 flex-none" data-aos="fade-up">
+                <footer className="relative z-10 flex h-12 flex-none items-center justify-center text-center text-[10px] text-slate-500" data-aos="fade-up">
                     <p>&copy; {new Date().getFullYear()} E-Presensi SMABA.</p>
                 </footer>
             </div>

@@ -31,7 +31,7 @@ class WorkcodeController extends Controller
         $validated = $request->validate([
             'nama_workcode' => 'required|string|max:255',
             'deskripsi' => 'nullable|string|max:1000',
-            'kategori' => 'required|in:workcode,harian',
+            'kategori' => 'required|in:workcode,harian,24_jam',
             'tanggal' => 'nullable|date',
             'hari_aktif' => 'nullable|array',
             'jam_datang_mulai' => 'nullable|date_format:H:i,H:i:s',
@@ -60,21 +60,23 @@ class WorkcodeController extends Controller
             Workcode::query()->update(['is_active' => false]);
         }
 
+        $isDaily = $validated['kategori'] === 'harian';
+
         $workcode = Workcode::create([
             'nama_workcode' => $validated['nama_workcode'],
             'deskripsi' => $validated['deskripsi'] ?? null,
             'kategori' => $validated['kategori'] ?? 'workcode',
-            'tanggal' => $validated['tanggal'] ?? null,
-            'hari_aktif' => $validated['hari_aktif'] ?? null,
-            'jam_datang_mulai' => $validated['jam_datang_mulai'] ?? null,
-            'jam_datang_selesai' => $validated['jam_datang_selesai'] ?? null,
-            'jam_pulang_mulai' => $validated['jam_pulang_mulai'] ?? null,
-            'jam_pulang_selesai' => $validated['jam_pulang_selesai'] ?? null,
+            'tanggal' => $validated['kategori'] === 'workcode' ? ($validated['tanggal'] ?? null) : null,
+            'hari_aktif' => $isDaily ? ($validated['hari_aktif'] ?? null) : null,
+            'jam_datang_mulai' => $isDaily ? ($validated['jam_datang_mulai'] ?? null) : null,
+            'jam_datang_selesai' => $isDaily ? ($validated['jam_datang_selesai'] ?? null) : null,
+            'jam_pulang_mulai' => $isDaily ? ($validated['jam_pulang_mulai'] ?? null) : null,
+            'jam_pulang_selesai' => $isDaily ? ($validated['jam_pulang_selesai'] ?? null) : null,
             'latitude' => $validated['latitude'] ?? null,
             'longitude' => $validated['longitude'] ?? null,
             'radius_meters' => $validated['radius_meters'] ?? 50,
             'is_active' => $setActive,
-            'jadwal_per_hari' => $validated['jadwal_per_hari'] ?? null,
+            'jadwal_per_hari' => $isDaily ? ($validated['jadwal_per_hari'] ?? null) : null,
         ]);
 
         $message = $setActive
@@ -124,7 +126,7 @@ class WorkcodeController extends Controller
         $validated = $request->validate([
             'nama_workcode' => 'required|string|max:255',
             'deskripsi' => 'nullable|string|max:1000',
-            'kategori' => 'required|in:workcode,harian',
+            'kategori' => 'required|in:workcode,harian,24_jam',
             'tanggal' => 'nullable|date',
             'hari_aktif' => 'nullable|array',
             'jam_datang_mulai' => 'nullable|date_format:H:i,H:i:s',
@@ -137,20 +139,22 @@ class WorkcodeController extends Controller
             'jadwal_per_hari' => 'nullable|array',
         ]);
 
+        $isDaily = $validated['kategori'] === 'harian';
+
         $workcode->update([
             'nama_workcode' => $validated['nama_workcode'],
             'deskripsi' => $validated['deskripsi'] ?? null,
             'kategori' => $validated['kategori'] ?? 'workcode',
-            'tanggal' => $validated['tanggal'] ?? null,
-            'hari_aktif' => $validated['hari_aktif'] ?? null,
-            'jam_datang_mulai' => $validated['jam_datang_mulai'] ?? null,
-            'jam_datang_selesai' => $validated['jam_datang_selesai'] ?? null,
-            'jam_pulang_mulai' => $validated['jam_pulang_mulai'] ?? null,
-            'jam_pulang_selesai' => $validated['jam_pulang_selesai'] ?? null,
+            'tanggal' => $validated['kategori'] === 'workcode' ? ($validated['tanggal'] ?? null) : null,
+            'hari_aktif' => $isDaily ? ($validated['hari_aktif'] ?? null) : null,
+            'jam_datang_mulai' => $isDaily ? ($validated['jam_datang_mulai'] ?? null) : null,
+            'jam_datang_selesai' => $isDaily ? ($validated['jam_datang_selesai'] ?? null) : null,
+            'jam_pulang_mulai' => $isDaily ? ($validated['jam_pulang_mulai'] ?? null) : null,
+            'jam_pulang_selesai' => $isDaily ? ($validated['jam_pulang_selesai'] ?? null) : null,
             'latitude' => $validated['latitude'] ?? null,
             'longitude' => $validated['longitude'] ?? null,
             'radius_meters' => $validated['radius_meters'] ?? 50,
-            'jadwal_per_hari' => $validated['jadwal_per_hari'] ?? null,
+            'jadwal_per_hari' => $isDaily ? ($validated['jadwal_per_hari'] ?? null) : null,
         ]);
 
         return redirect()->back()->with('success', "Workcode '{$workcode->nama_workcode}' berhasil diperbarui.");

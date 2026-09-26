@@ -12,7 +12,7 @@ class AttendanceValidationService
     /**
      * Validasi ketersediaan dan tipe workcode.
      */
-    public function validateWorkcodeActive(?Workcode $workcode)
+    public function validateWorkcodeActive(?Workcode $workcode, bool $isMobileApi = false)
     {
         if (!$workcode) {
             throw ValidationException::withMessages([
@@ -20,7 +20,7 @@ class AttendanceValidationService
             ])->status(400);
         }
 
-        if ($workcode->kategori === 'harian') {
+        if ($workcode->kategori === 'harian' && !$isMobileApi) {
             throw ValidationException::withMessages([
                 'workcode' => 'Presensi harian hanya dapat dilakukan melalui scan QR Code Pribadi oleh petugas/admin.',
             ])->status(403);
@@ -141,9 +141,13 @@ class AttendanceValidationService
      */
     public function checkAlreadyAttended(Workcode $workcode, Participant $participant): bool
     {
-        return Attendance::where('workcode_id', $workcode->id)
+        $attendanceQuery = Attendance::where('workcode_id', $workcode->id)
             ->where('participant_id', $participant->id)
-            ->whereDate('created_at', now()->toDateString())
-            ->exists();
+            ->when(
+                $workcode->kategori === 'harian',
+                fn ($query) => $query->whereDate('created_at', now()->toDateString())
+            );
+
+        return $attendanceQuery->exists();
     }
 }

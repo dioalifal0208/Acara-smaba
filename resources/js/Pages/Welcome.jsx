@@ -364,7 +364,7 @@ export default function Welcome({ auth, stats: initialStats, recentScans: initia
                     NAVBAR — sticky, minimal, integrated with page
                 ═══════════════════════════════════════════════════ */}
                 <header className="relative z-50 sticky top-0" style={{ borderBottom: '1px solid rgba(0,0,0,0.07)', backgroundColor: 'rgba(246,250,246,0.95)', backdropFilter: 'blur(12px)' }}>
-                    <div className="max-w-6xl mx-auto px-6 h-[64px] flex items-center justify-between">
+                    <div className="mx-auto flex h-[72px] max-w-6xl items-center justify-between px-6">
                         {/* Brand Mark */}
                         <div className="flex items-center gap-3">
                             <div className="h-9 w-9 rounded-lg flex items-center justify-center" style={{ background: '#f0faf0', border: '1px solid #c3efc6' }}>
@@ -780,11 +780,11 @@ export default function Welcome({ auth, stats: initialStats, recentScans: initia
                     FOOTER — minimal, integrated
                 ═══════════════════════════════════════════════════ */}
                 <footer className="relative z-10" style={{ borderTop: '1px solid rgba(0,0,0,0.07)', background: 'rgba(246,250,246,0.9)' }}>
-                    <div className="max-w-6xl mx-auto px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-2">
+                    <div className="mx-auto flex h-12 max-w-6xl items-center justify-between gap-3 px-6">
                         <p className="text-[12px] font-semibold" style={{ color: '#9ca3af' }}>
                             © {new Date().getFullYear()} E-Presensi SMA Negeri 1 Babat
                         </p>
-                        <p className="text-[12px] font-medium" style={{ color: '#d1d5db' }}>
+                        <p className="hidden text-[12px] font-medium sm:block" style={{ color: '#d1d5db' }}>
                             Dikelola oleh Tim IT Sekolah
                         </p>
                     </div>

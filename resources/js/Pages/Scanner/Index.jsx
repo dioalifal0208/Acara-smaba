@@ -525,23 +525,23 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
     return (
         <AuthenticatedLayout
             header={
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h2 className="text-xl font-semibold leading-tight text-gray-800">
+                <div className="flex min-w-0 items-center justify-between gap-3">
+                    <div className="min-w-0">
+                        <h2 className="truncate text-base font-extrabold leading-tight text-slate-800 sm:text-xl">
                             Scanner Presensi
                         </h2>
-                        <p className="text-xs text-indigo-600 font-bold mt-0.5">
+                        <p className="mt-0.5 max-w-[11rem] truncate text-[10px] font-bold text-indigo-600 sm:max-w-sm sm:text-xs lg:max-w-xl">
                             {activeWorkcode ? `Workcode: ${activeWorkcode.nama_workcode}` : '⚠️ Workcode Tidak Aktif'}
                         </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
                         {isScanning && (
-                            <span className="flex items-center gap-1.5 rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700 shadow-sm border border-emerald-200">
+                            <span className="flex h-8 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-100 px-2.5 text-xs font-semibold text-emerald-700 shadow-sm" title="Kamera Aktif">
                                 <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.8)]"></span>
-                                Kamera Aktif
+                                <span className="hidden sm:inline">Kamera Aktif</span>
                             </span>
                         )}
-                        <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-indigo-700 shadow-sm border border-indigo-100">
+                        <span className="inline-flex h-8 items-center rounded-full border border-indigo-100 bg-white px-2.5 text-xs font-semibold text-indigo-700 shadow-sm">
                             {scanCount} scan
                         </span>
                     </div>

@@ -48,33 +48,27 @@ export default function MasterQr({ checkInUrl, qrCodeSvg, token, activeWorkcode:
     return (
         <AuthenticatedLayout
             header={
-                <div className="flex items-center justify-between" data-aos="fade-down">
-                    <div>
-                        <div className="flex items-center gap-2">
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700 border border-indigo-100">
-                                Mode Mandiri / Self Check-In
-                            </span>
-                            <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold ${
-                                activeWorkcode ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'
-                            }`}>
-                                <span className={`h-2 w-2 rounded-full ${activeWorkcode ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
-                                {activeWorkcode ? `Workcode: ${activeWorkcode.nama_workcode}` : 'Belum Ada Workcode Aktif'}
-                            </span>
-                        </div>
-                        <h2 className="text-xl font-extrabold leading-tight text-slate-800 mt-2">
+                <div className="flex min-w-0 items-center justify-between gap-3" data-aos="fade-down">
+                    <div className="min-w-0">
+                        <h2 className="truncate text-base font-extrabold leading-tight text-slate-800 sm:text-xl">
                             Master QR Code Presensi
                         </h2>
+                        <p className={`mt-0.5 max-w-[12rem] truncate text-[10px] font-bold sm:max-w-md sm:text-xs ${activeWorkcode ? 'text-emerald-700' : 'text-amber-700'}`}>
+                            {activeWorkcode ? `Workcode: ${activeWorkcode.nama_workcode}` : 'Belum Ada Workcode Aktif'}
+                        </p>
                     </div>
                     <form onSubmit={handleRegenerate}>
                         <button
                             type="submit"
                             disabled={processing}
-                            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 transition-all hover:bg-slate-50 hover:text-slate-900 shadow-sm disabled:opacity-50"
+                            title="Regenerasi Token URL"
+                            aria-label="Regenerasi Token URL"
+                            className="inline-flex h-9 w-9 shrink-0 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-700 shadow-sm transition-all hover:bg-slate-50 hover:text-slate-900 disabled:opacity-50 sm:w-auto sm:px-4"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 7.89H18" />
                             </svg>
-                            Regenerasi Token URL
+                            <span className="hidden sm:inline">Regenerasi Token URL</span>
                         </button>
                     </form>
                 </div>

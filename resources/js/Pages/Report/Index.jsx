@@ -78,7 +78,7 @@ export default function ReportIndex({
     const mobileAttendances = filteredAttendances.slice(0, 5);
 
     const attendancePercentage = stats && stats.total > 0 ? Math.round((stats.hadir / stats.total) * 100) : 0;
-    const isSingleAttendanceWorkcode = selectedWorkcode?.kategori === 'workcode';
+    const isSingleAttendanceWorkcode = ['workcode', '24_jam'].includes(selectedWorkcode?.kategori);
 
     // Open Manual Edit Modal
     const openManualEditModal = (att, participantName = '') => {
@@ -393,7 +393,11 @@ export default function ReportIndex({
                         <tr>
                             <td style="font-weight: bold;">Kategori Presensi</td>
                             <td>:</td>
-                            <td style="text-transform: capitalize;">${selectedWorkcode.kategori === 'harian' ? 'Presensi Harian' : 'Presensi Sekali / Event'}</td>
+                            <td style="text-transform: capitalize;">${selectedWorkcode.kategori === 'harian'
+                                ? 'Presensi Harian'
+                                : selectedWorkcode.kategori === '24_jam'
+                                    ? 'Presensi 24 Jam'
+                                    : 'Presensi Sekali / Event'}</td>
                         </tr>
                         <tr>
                             <td style="font-weight: bold;">Waktu Cetak</td>
@@ -836,60 +840,53 @@ export default function ReportIndex({
     return (
         <AuthenticatedLayout
             header={
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4" data-aos="fade-down">
-                    <div>
-                        <h2 className="text-xl font-extrabold leading-tight text-slate-800">
-                            Laporan Kehadiran
-                        </h2>
-                        <p className="text-xs text-slate-500 font-medium mt-0.5">
-                            {selectedWorkcode ? `Menampilkan laporan untuk: ${selectedWorkcode.nama_workcode}` : 'Pilih workcode untuk melihat data'}
-                        </p>
-                    </div>
+                <div className="flex min-w-0 items-center justify-between gap-3" data-aos="fade-down">
+                    <h2 className="shrink-0 text-base font-extrabold leading-tight text-slate-800 sm:text-xl">
+                        <span className="md:hidden">Laporan</span>
+                        <span className="hidden md:inline">Laporan Kehadiran</span>
+                    </h2>
 
-                    {/* Action & Filter Header */}
-                    <div className="flex flex-wrap items-center gap-2.5">
-                        {/* Filter Workcode Dropdown */}
-                        <div className="flex items-center gap-2">
-                            <label htmlFor="workcode-filter" className="text-xs font-bold text-slate-600 shrink-0">
-                                Workcode:
-                            </label>
-                            <select
-                                id="workcode-filter"
-                                value={selectedWorkcodeId || ''}
-                                onChange={(e) => handleWorkcodeChange(e.target.value)}
-                                className="rounded-xl border border-slate-200 bg-white py-2 px-3 text-xs font-bold text-indigo-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 cursor-pointer min-w-[170px]"
-                            >
+                    <div className="flex min-w-0 items-center justify-end gap-2">
+                        <label htmlFor="workcode-filter" className="sr-only">Pilih workcode laporan</label>
+                        <select
+                            id="workcode-filter"
+                            value={selectedWorkcodeId || ''}
+                            onChange={(e) => handleWorkcodeChange(e.target.value)}
+                            className="w-28 min-w-0 cursor-pointer truncate rounded-xl border border-slate-200 bg-white px-2.5 py-2 text-xs font-bold text-indigo-700 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 sm:w-44 lg:w-72"
+                        >
                                 {workcodes.length === 0 && <option value="">Belum Ada Workcode</option>}
                                 {workcodes.map((evt) => (
                                     <option key={evt.id} value={evt.id}>
                                         {evt.is_active ? '🟢 ' : ''}{evt.nama_workcode} ({evt.attendances_count} hadir)
                                     </option>
                                 ))}
-                            </select>
-                        </div>
+                        </select>
 
-                        {/* Export & Print Buttons */}
                         {selectedWorkcodeId && (
-                            <div className="flex flex-wrap items-center gap-2">
+                            <div className="flex shrink-0 items-center gap-2">
                                 <a
                                     href={route('workcodes.export', selectedWorkcodeId)}
-                                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-50 hover:border-emerald-200 shadow-sm transition-all active:scale-95"
+                                    aria-label="Export Excel"
+                                    title="Export Excel (.xlsx)"
+                                    className="inline-flex h-9 w-9 items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-emerald-200 bg-white text-xs font-bold text-emerald-700 shadow-sm transition-all hover:bg-emerald-50 active:scale-[0.98] xl:w-auto xl:px-3.5"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                     </svg>
-                                    Export Excel (.xlsx)
+                                    <span className="hidden xl:inline">Export Excel (.xlsx)</span>
                                 </a>
 
                                 <button
                                     type="button"
                                     onClick={handlePrintReport}
-                                    className="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 px-3.5 py-2 text-xs font-bold text-white shadow-sm transition-all active:scale-95"
+                                    aria-label="Cetak bukti hadir"
+                                    title="Cetak Bukti Hadir"
+                                    className="inline-flex h-9 w-9 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-indigo-600 text-xs font-bold text-white shadow-sm shadow-indigo-500/20 transition-all hover:bg-indigo-700 active:scale-[0.98] xl:w-auto xl:px-3.5"
                                 >
                                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                                     </svg>
-                                    Cetak Bukti Hadir
+                                    <span className="hidden xl:inline">Cetak Bukti Hadir</span>
                                 </button>
                             </div>
                         )}

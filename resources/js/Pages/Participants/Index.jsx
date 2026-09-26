@@ -227,29 +227,33 @@ export default function ParticipantsIndex({ participants }) {
     return (
         <AuthenticatedLayout
             header={
-                <div className="flex items-center justify-between" data-aos="fade-down">
-                    <h2 className="text-xl font-extrabold leading-tight text-slate-800">
+                <div className="flex min-w-0 items-center justify-between gap-3" data-aos="fade-down">
+                    <h2 className="min-w-0 truncate text-base font-extrabold leading-tight text-slate-800 sm:text-xl">
                         Kelola Data Peserta
                     </h2>
-                <div className="flex flex-wrap items-center gap-3" data-aos="fade-down">
+                    <div className="flex shrink-0 items-center gap-2">
                         <button
                             type="button"
                             onClick={() => setShowImportModal(true)}
-                            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-slate-900 shadow-sm focus:outline-none transition-all active:scale-95 cursor-pointer"
+                            title="Impor Excel"
+                            aria-label="Impor Excel"
+                            className="inline-flex h-9 w-9 cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white text-sm font-bold text-slate-700 shadow-sm transition-all hover:bg-slate-50 hover:text-slate-900 focus:outline-none active:scale-95 lg:w-auto lg:px-4"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                             </svg>
-                            Impor Excel
+                            <span className="hidden lg:inline">Impor Excel</span>
                         </button>
                         <button
                             onClick={() => setShowModal(true)}
-                            className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-bold text-white shadow-md transition-all hover:bg-indigo-700 shadow-indigo-500/10 focus:outline-none"
+                            title="Tambah Peserta"
+                            aria-label="Tambah Peserta"
+                            className="inline-flex h-9 w-9 items-center justify-center gap-2 rounded-xl bg-indigo-600 text-sm font-bold text-white shadow-md shadow-indigo-500/10 transition-all hover:bg-indigo-700 focus:outline-none lg:w-auto lg:px-4"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                                 <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
                             </svg>
-                            Tambah Peserta
+                            <span className="hidden lg:inline">Tambah Peserta</span>
                         </button>
                     </div>
                 </div>

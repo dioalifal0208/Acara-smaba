@@ -332,4 +332,101 @@ class PhaseEAttendanceTest extends TestCase
         $this->assertStringNotContainsString('Test1', $json['message']);
         $this->assertStringNotContainsString('111', $json['message']);
     }
+
+    public function test_attendance_submission_success_for_harian_mobile_api()
+    {
+        $user = User::factory()->create(['role' => 'participant']);
+        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid()]);
+        $user->participant_id = $participant->id;
+        $user->save();
+        Sanctum::actingAs($user, ['role:participant']);
+
+        $currentDay = now()->dayOfWeekIso;
+        Workcode::create([
+            'nama_workcode' => 'Harian Test',
+            'kategori' => 'harian',
+            'is_active' => true,
+            'hari_aktif' => [$currentDay],
+            'jam_datang_mulai' => '00:00:00',
+            'jam_datang_selesai' => '23:59:59',
+            'jam_pulang_mulai' => '23:59:59',
+            'jam_pulang_selesai' => '23:59:59',
+        ]);
+
+        $payload = [
+            'latitude' => -6.1234,
+            'longitude' => 106.1234,
+            'accuracy' => 10,
+            'device_timestamp' => now()->toIso8601String(),
+            'installation_id' => Str::uuid()->toString(),
+        ];
+
+        $response = $this->postJson('/api/v1/attendance', $payload, [
+            'Idempotency-Key' => Str::uuid()->toString()
+        ]);
+
+        $response->assertStatus(201);
+    }
+
+    public function test_attendance_submission_rejected_for_harian_if_no_active_workcode()
+    {
+        $user = User::factory()->create(['role' => 'participant']);
+        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid()]);
+        $user->participant_id = $participant->id;
+        $user->save();
+        Sanctum::actingAs($user, ['role:participant']);
+
+        // No active workcode
+        Workcode::where('is_active', true)->update(['is_active' => false]);
+
+        $payload = [
+            'latitude' => -6.1234,
+            'longitude' => 106.1234,
+            'accuracy' => 10,
+            'device_timestamp' => now()->toIso8601String(),
+            'installation_id' => Str::uuid()->toString(),
+        ];
+
+        $response = $this->postJson('/api/v1/attendance', $payload, [
+            'Idempotency-Key' => Str::uuid()->toString()
+        ]);
+
+        $response->assertStatus(400)
+                 ->assertJson(['message' => 'Belum ada Workcode yang aktif. Presensi mandiri saat ini ditutup.']);
+    }
+
+    public function test_admin_scan_qr_pribadi_harian_success()
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        Sanctum::actingAs($admin, ['role:admin']);
+
+        $token = Str::uuid()->toString();
+        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => $token]);
+
+        $currentDay = now()->dayOfWeekIso;
+        Workcode::create([
+            'nama_workcode' => 'Harian Test Admin',
+            'kategori' => 'harian',
+            'is_active' => true,
+            'hari_aktif' => [$currentDay],
+            'jam_datang_mulai' => '00:00:00',
+            'jam_datang_selesai' => '23:59:59',
+            'jam_pulang_mulai' => '23:59:59',
+            'jam_pulang_selesai' => '23:59:59',
+            'latitude' => -6.1234,
+            'longitude' => 106.1234,
+            'radius_meters' => 1500,
+        ]);
+
+        $payload = [
+            'qr_token' => $token,
+            'latitude' => -6.1234,
+            'longitude' => 106.1234,
+        ];
+
+        $response = $this->postJson('/api/scan', $payload);
+
+        $response->assertStatus(200)
+                 ->assertJson(['status' => 'success']);
+    }
 }

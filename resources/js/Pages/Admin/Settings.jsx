@@ -30,7 +30,7 @@ export default function Settings({ settings, flash }) {
 
     return (
         <AuthenticatedLayout
-            header={<h2 className="font-semibold text-xl text-gray-800 leading-tight">Pengaturan Tanda Tangan</h2>}
+            header={<h2 className="truncate text-base font-extrabold leading-tight text-slate-800 sm:text-xl">Pengaturan Tanda Tangan</h2>}
         >
             <Head title="Pengaturan Tanda Tangan" />
 
