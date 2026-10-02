@@ -36,7 +36,7 @@ class QrCodeService
         $logoBase64 = '';
         if (file_exists($logoPath)) {
             $logoData = file_get_contents($logoPath);
-            $logoBase64 = 'data:image/png;base64,' . base64_encode($logoData);
+            $logoBase64 = 'data:image/png;base64,'.base64_encode($logoData);
         } else {
             $logoBase64 = '/images/logo.png';
         }

@@ -17,7 +17,7 @@ class AttendanceHistoryController extends Controller
     {
         $user = $request->user();
 
-        if (!$user->tokenCan('role:participant') || $user->role !== 'participant' || !$user->participant_id) {
+        if (! $user->tokenCan('role:participant') || $user->role !== 'participant' || ! $user->participant_id) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Akses ditolak. Endpoint ini khusus untuk peserta.',
@@ -51,7 +51,7 @@ class AttendanceHistoryController extends Controller
                 'per_page' => $attendances->perPage(),
                 'total' => $attendances->total(),
                 'path' => $attendances->path(),
-            ]
+            ],
         ]);
     }
 }

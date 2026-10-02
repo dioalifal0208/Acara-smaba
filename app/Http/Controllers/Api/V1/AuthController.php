@@ -6,7 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
@@ -29,13 +28,13 @@ class AuthController extends Controller
         if (! $user || ! Hash::check($password, $user->password)) {
             return response()->json([
                 'status' => 'error',
-                'message' => __('auth.failed') // Use generic message
+                'message' => __('auth.failed'), // Use generic message
             ], 401);
         }
 
         // Determine token abilities based on role
-        $abilities = ['role:' . $user->role];
-        
+        $abilities = ['role:'.$user->role];
+
         $token = $user->createToken($request->input('device_name'), $abilities);
 
         return response()->json([

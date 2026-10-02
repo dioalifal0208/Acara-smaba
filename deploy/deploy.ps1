@@ -1,19 +1,57 @@
 # ============================================
 # DEPLOY SCRIPT - ACARA SMABA
-# Ketik "deploy" di terminal untuk menjalankan
+# ============================================
+#
+# KONFIGURASI:
+# Buat file deploy/.env.deploy (TIDAK di-commit) dengan isi:
+#   SSH_HOST=xxx.xxx.xxx.xxx
+#   SSH_PORT=65002
+#   SSH_USER=username
+#   REMOTE_DIR=domains/smanegeri1babatlmg.sch.id/presensi-app
+#   GITHUB_REPO=https://github.com/dioalifal0208/Acara-smaba.git
+#
+# Autentikasi SSH menggunakan SSH key (bukan password).
+# Langkah setup:
+#   1. ssh-keygen -t ed25519 -C "deploy@smaba"
+#   2. ssh-copy-id -p 65002 username@host
+#   3. Pastikan login tanpa password berhasil sebelum deploy.
+#
+# Jalankan: .\deploy\deploy.ps1
 # ============================================
 
 param(
     [string]$CommitMessage = ""
 )
 
-# ---- KONFIGURASI ----
-$SSH_HOST = "45.90.229.210"
-$SSH_PORT = "65002"
-$SSH_USER = "u203096280"
-$SSH_PASS = "@Sumowiharjo01"
-$REMOTE_DIR = "domains/smanegeri1babatlmg.sch.id/presensi-app"
-$GITHUB_REPO = "https://github.com/dioalifal0208/Acara-smaba.git"
+# ---- BACA KONFIGURASI DARI FILE ----
+$envFile = Join-Path $PSScriptRoot ".env.deploy"
+if (-Not (Test-Path $envFile)) {
+    Write-Host ""
+    Write-Host "  ❌ File konfigurasi tidak ditemukan: $envFile" -ForegroundColor Red
+    Write-Host "  Buat file deploy/.env.deploy dengan variabel SSH_HOST, SSH_PORT, SSH_USER, REMOTE_DIR, GITHUB_REPO." -ForegroundColor Yellow
+    Write-Host "  Lihat komentar di awal script ini untuk contoh." -ForegroundColor Yellow
+    Write-Host ""
+    exit 1
+}
+
+$config = @{}
+Get-Content $envFile | ForEach-Object {
+    if ($_ -match '^\s*([^#][^=]+)=(.*)$') {
+        $config[$matches[1].Trim()] = $matches[2].Trim()
+    }
+}
+
+$SSH_HOST   = $config['SSH_HOST']
+$SSH_PORT   = $config['SSH_PORT']
+$SSH_USER   = $config['SSH_USER']
+$REMOTE_DIR = $config['REMOTE_DIR']
+$GITHUB_REPO = $config['GITHUB_REPO']
+
+if (-Not $SSH_HOST -or -Not $SSH_USER -or -Not $REMOTE_DIR) {
+    Write-Host "  ❌ Konfigurasi tidak lengkap. Pastikan SSH_HOST, SSH_USER, REMOTE_DIR terisi di .env.deploy" -ForegroundColor Red
+    exit 1
+}
+
 # ---------------------
 
 function Write-Step { param($msg) Write-Host "`n  ▶ $msg" -ForegroundColor Cyan }
@@ -35,24 +73,22 @@ try {
     exit 1
 }
 
-# --- 2. PUSH KE GITHUB ---
-Write-Step "Push ke GitHub..."
+# --- 2. GIT OPERATIONS ---
+Write-Step "Mempersiapkan Git..."
 $commitMsg = $CommitMessage
 if ([string]::IsNullOrWhiteSpace($commitMsg)) {
     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm"
     $commitMsg = "deploy: update $timestamp"
 }
 
-git add -A
+# JANGAN gunakan git add -A. Stage file secara selektif.
+Write-Host "  ⚠️  Pastikan Anda sudah 'git add' file yang akan di-deploy." -ForegroundColor Yellow
 $gitStatus = git status --porcelain
 if ($gitStatus) {
-    git commit -m $commitMsg 2>&1 | Out-Null
-    Write-OK "Commit: $commitMsg"
-} else {
-    Write-OK "Tidak ada perubahan untuk di-commit."
+    Write-Host "  Ada perubahan belum di-stage. Gunakan 'git add <file>' sebelum deploy." -ForegroundColor Yellow
+    Write-Host "  Atau jalankan deploy dengan parameter: -CommitMessage 'pesan commit'" -ForegroundColor Yellow
 }
 
-# Cek jika remote origin mengarah ke repo lama
 git remote set-url origin $GITHUB_REPO 2>&1 | Out-Null
 
 git push origin main 2>&1
@@ -63,81 +99,33 @@ if ($LASTEXITCODE -eq 0) {
     exit 1
 }
 
-# --- 3. DEPLOY KE HOSTINGER VIA SSH ---
-Write-Step "Deploy ke Hostinger via SSH..."
+# --- 3. DEPLOY KE SERVER VIA SSH (KEY-BASED AUTH) ---
+Write-Step "Deploy ke server via SSH..."
 Write-Host "  (Menghubungi $SSH_HOST port $SSH_PORT...)" -ForegroundColor DarkGray
 
-# Generate SSH command script
-$sshCommand = @"
-mkdir -p ~/\$REMOTE_DIR && cd ~/\$REMOTE_DIR &&
-if [ ! -d .git ]; then git clone https://github.com/dioalifal0208/Acara-smaba.git .; else git pull origin main; fi &&
+$remoteCmd = @"
+cd ~/$REMOTE_DIR &&
+git pull origin main &&
 composer install --no-dev --optimize-autoloader --no-interaction &&
 php artisan config:cache &&
 php artisan route:cache &&
 php artisan view:cache &&
 php artisan migrate --force &&
-chmod -R 775 storage bootstrap/cache && cp -r public/. ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/ && ln -sfn ~/domains/smanegeri1babatlmg.sch.id/presensi-app/storage/app/public ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/storage && sed -i 's|/../vendor|/../../presensi-app/vendor|g' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php && sed -i 's|/../bootstrap|/../../presensi-app/bootstrap|g' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php &&
+chmod -R 775 storage bootstrap/cache &&
 echo DEPLOY_SUCCESS
 "@
 
-# Tulis command ke temp file
-$tmpFile = [System.IO.Path]::GetTempFileName()
-Set-Content -Path $tmpFile -Value $sshCommand -Encoding UTF8
-
-# Gunakan Python jika tersedia (lebih mudah handle password)
-$pythonAvailable = Get-Command python -ErrorAction SilentlyContinue
-
-$sshResult = $null
-$plinkAvailable = Get-Command plink -ErrorAction SilentlyContinue
-
-if ($pythonAvailable) {
-    $pyScript = @"
-import subprocess, sys
-
-result = subprocess.run(
-    ['ssh', '-o', 'StrictHostKeyChecking=no', '-o', 'PasswordAuthentication=yes',
-     '-o', 'BatchMode=no', '-p', '$SSH_PORT',
-     '$SSH_USER@$SSH_HOST',
-     'mkdir -p ~/$REMOTE_DIR && cd ~/$REMOTE_DIR && if [ ! -d .git ]; then git clone https://github.com/dioalifal0208/Acara-smaba.git .; else git pull origin main; fi && composer install --no-dev --optimize-autoloader --no-interaction && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan migrate --force && chmod -R 775 storage bootstrap/cache && cp -r public/. ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/ && ln -sfn ~/domains/smanegeri1babatlmg.sch.id/presensi-app/storage/app/public ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/storage && sed -i \'s|/../vendor|/../../presensi-app/vendor|g\' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php && sed -i \'s|/../bootstrap|/../../presensi-app/bootstrap|g\' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php && echo DEPLOY_SUCCESS'],
-    capture_output=True, text=True
-)
-print(result.stdout)
-print(result.stderr, file=sys.stderr)
-sys.exit(result.returncode)
-"@
-    $pyFile = [System.IO.Path]::ChangeExtension($tmpFile, ".py")
-    Set-Content -Path $pyFile -Value $pyScript
-    $sshResult = python $pyFile
-} elseif ($plinkAvailable) {
-    Write-Host "  Menggunakan PuTTY Plink..." -ForegroundColor DarkGray
-    $sshResult = plink -ssh -P $SSH_PORT -l $SSH_USER -pw $SSH_PASS $SSH_HOST `
-        "mkdir -p ~/$REMOTE_DIR && cd ~/$REMOTE_DIR && if [ ! -d .git ]; then git clone https://github.com/dioalifal0208/Acara-smaba.git .; else git pull origin main; fi && composer install --no-dev --optimize-autoloader --no-interaction && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan migrate --force && chmod -R 775 storage bootstrap/cache && cp -r public/. ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/ && ln -sfn ~/domains/smanegeri1babatlmg.sch.id/presensi-app/storage/app/public ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/storage && sed -i 's|/../vendor|/../../presensi-app/vendor|g' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php && sed -i 's|/../bootstrap|/../../presensi-app/bootstrap|g' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php && echo DEPLOY_SUCCESS" 2>&1
-} else {
-    # Gunakan ssh dengan PasswordAuthentication (membutuhkan input manual)
-    Write-Host ""
-    Write-Host "  ⚠️  Sistem tidak menemukan Plink (PuTTY)." -ForegroundColor Yellow
-    Write-Host "  Masukkan password SSH saat diminta: $SSH_PASS" -ForegroundColor Yellow
-    Write-Host ""
-    $sshResult = ssh -o StrictHostKeyChecking=no -p $SSH_PORT "${SSH_USER}@${SSH_HOST}" `
-        "mkdir -p ~/$REMOTE_DIR && cd ~/$REMOTE_DIR && if [ ! -d .git ]; then git clone https://github.com/dioalifal0208/Acara-smaba.git .; else git pull origin main; fi && composer install --no-dev --optimize-autoloader --no-interaction && php artisan config:cache && php artisan route:cache && php artisan view:cache && php artisan migrate --force && chmod -R 775 storage bootstrap/cache && cp -r public/. ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/ && ln -sfn ~/domains/smanegeri1babatlmg.sch.id/presensi-app/storage/app/public ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/storage && sed -i 's|/../vendor|/../../presensi-app/vendor|g' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php && sed -i 's|/../bootstrap|/../../presensi-app/bootstrap|g' ~/domains/smanegeri1babatlmg.sch.id/public_html/presensi/index.php && echo DEPLOY_SUCCESS" 2>&1
-}
+$sshResult = ssh -o StrictHostKeyChecking=no -p $SSH_PORT "${SSH_USER}@${SSH_HOST}" $remoteCmd 2>&1
 
 if ($sshResult -match "DEPLOY_SUCCESS") {
-    Write-OK "Hostinger berhasil diperbarui!"
+    Write-OK "Server berhasil diperbarui!"
 } else {
     Write-Host $sshResult -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "  [i]  Jika koneksi SSH membutuhkan input password manual, itu normal." -ForegroundColor Yellow
+    Write-Fail "Deploy mungkin tidak berhasil. Periksa output di atas."
 }
-
-# Cleanup
-Remove-Item $tmpFile -ErrorAction SilentlyContinue
 
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Magenta
 Write-Host "   ✅ PROSES DEPLOY SELESAI!" -ForegroundColor Green
-Write-Host "   🌐 https://presensi.smanegeri1babatlmg.sch.id" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Magenta
 Write-Host ""
-
-

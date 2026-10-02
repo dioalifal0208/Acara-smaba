@@ -93,6 +93,12 @@ export default function ParticipantDashboard({ activeWorkcode, participant }) {
                                             </svg>
                                             Pengaturan Profil
                                         </Dropdown.Link>
+                                        <Dropdown.Link href={route('leave.history')} className="flex items-center gap-2 text-xs font-bold text-slate-700 hover:text-indigo-600 hover:bg-indigo-50/60 rounded-xl py-2 px-3 transition-colors">
+                                            <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            Riwayat Izin
+                                        </Dropdown.Link>
                                         <Dropdown.Link href={route('logout')} method="post" as="button" className="flex items-center gap-2 text-xs font-bold text-red-600 hover:text-red-700 hover:bg-red-50/60 rounded-xl py-2 px-3 w-full text-left transition-colors">
                                             <svg className="w-4 h-4 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -341,6 +347,15 @@ export default function ParticipantDashboard({ activeWorkcode, participant }) {
                                             </svg>
                                             Ajukan Izin / Sakit
                                         </button>
+                                        <Link
+                                            href={route('leave.history')}
+                                            className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 bg-white/15 hover:bg-white/25 text-white font-extrabold text-sm rounded-xl border border-white/25 shadow-md backdrop-blur-md hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 w-full sm:w-auto"
+                                        >
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white/90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            Riwayat Izin
+                                        </Link>
                                     </div>
                                 </div>
                                 
@@ -454,4 +469,3 @@ export default function ParticipantDashboard({ activeWorkcode, participant }) {
         </AuthenticatedLayout>
     );
 }
-

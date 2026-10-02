@@ -8,9 +8,9 @@ use App\Models\Participant;
 use App\Models\User;
 use App\Models\Workcode;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
-use Illuminate\Support\Str;
 
 class PhaseDParticipantTest extends TestCase
 {
@@ -33,23 +33,23 @@ class PhaseDParticipantTest extends TestCase
         $user = User::factory()->create([
             'role' => 'admin',
         ]);
-        
+
         Sanctum::actingAs($user, ['role:admin']);
 
         $response1 = $this->getJson('/api/v1/workcodes/active');
         $response1->assertStatus(403)
-                  ->assertJson(['status' => 'error', 'message' => 'Akses ditolak. Endpoint ini khusus untuk peserta.']);
+            ->assertJson(['status' => 'error', 'message' => 'Akses ditolak. Endpoint ini khusus untuk peserta.']);
 
         $response2 = $this->getJson('/api/v1/attendance-history');
         $response2->assertStatus(403)
-                  ->assertJson(['status' => 'error']);
+            ->assertJson(['status' => 'error']);
     }
 
     public function test_active_workcode_returns_null_when_none_active()
     {
         $user = User::factory()->create(['role' => 'participant']);
         $participant = Participant::create([
-            'nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid()
+            'nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(),
         ]);
         $user->participant_id = $participant->id;
         $user->save();
@@ -62,17 +62,17 @@ class PhaseDParticipantTest extends TestCase
         $response = $this->getJson('/api/v1/workcodes/active');
 
         $response->assertStatus(200)
-                 ->assertJson([
-                     'status' => 'success',
-                     'data' => null,
-                 ]);
+            ->assertJson([
+                'status' => 'success',
+                'data' => null,
+            ]);
     }
 
     public function test_active_workcode_returns_safe_fields_only()
     {
         $user = User::factory()->create(['role' => 'participant']);
         $participant = Participant::create([
-            'nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid()
+            'nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(),
         ]);
         $user->participant_id = $participant->id;
         $user->save();
@@ -92,31 +92,34 @@ class PhaseDParticipantTest extends TestCase
         $response = $this->getJson('/api/v1/workcodes/active');
 
         $response->assertStatus(200)
-                 ->assertJsonStructure([
-                     'status',
-                     'data' => [
-                         'id',
-                         'nama_workcode',
-                         'kategori',
-                         'tanggal',
-                         'latitude',
-                         'longitude',
-                         'radius_meters',
-                         'jadwal_per_hari',
-                     ]
-                 ]);
+            ->assertJsonStructure([
+                'status',
+                'data' => [
+                    'workcode_aktif' => [
+                        'id',
+                        'nama_workcode',
+                        'kategori',
+                        'tanggal',
+                        'latitude',
+                        'longitude',
+                        'radius_meters',
+                        'jadwal_per_hari',
+                    ],
+                    'presensi_hari_ini',
+                ],
+            ]);
 
         $json = $response->json();
-        $this->assertArrayNotHasKey('deskripsi', $json['data']);
-        $this->assertArrayNotHasKey('is_active', $json['data']);
-        $this->assertEquals(-6.1234, $json['data']['latitude']);
+        $this->assertArrayNotHasKey('deskripsi', $json['data']['workcode_aktif']);
+        $this->assertArrayNotHasKey('is_active', $json['data']['workcode_aktif']);
+        $this->assertEquals(-6.1234, $json['data']['workcode_aktif']['latitude']);
     }
 
     public function test_attendance_history_pagination_and_safe_fields()
     {
         $user = User::factory()->create(['role' => 'participant']);
         $participant = Participant::create([
-            'nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid()
+            'nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(),
         ]);
         $user->participant_id = $participant->id;
         $user->save();
@@ -143,8 +146,9 @@ class PhaseDParticipantTest extends TestCase
             $att = Attendance::create([
                 'workcode_id' => $workcode->id,
                 'participant_id' => $participant->id,
+                'tanggal' => now()->subDays($i)->toDateString(),
                 'waktu_hadir' => now()->subDays($i),
-                'device_hash' => 'secret_hash_' . $i,
+                'device_hash' => 'secret_hash_'.$i,
                 'ip_address' => '192.168.1.1',
                 'status' => 'hadir',
                 'leave_request_id' => $i === 0 ? $leave->id : null,
@@ -155,33 +159,33 @@ class PhaseDParticipantTest extends TestCase
 
         // Test default pagination (15 items)
         $response = $this->getJson('/api/v1/attendance-history');
-        
+
         $response->assertStatus(200)
-                 ->assertJsonCount(15, 'data')
-                 ->assertJsonStructure([
-                     'status',
-                     'data' => [
-                         '*' => [
-                             'id',
-                             'workcode' => ['id', 'nama_workcode', 'kategori'],
-                             'status',
-                             'waktu_hadir',
-                             'waktu_pulang',
-                             'created_at',
-                             'leave_request',
-                         ]
-                     ],
-                     'meta' => ['current_page', 'last_page', 'per_page', 'total', 'path']
-                 ]);
-        
+            ->assertJsonCount(15, 'data')
+            ->assertJsonStructure([
+                'status',
+                'data' => [
+                    '*' => [
+                        'id',
+                        'workcode' => ['id', 'nama_workcode', 'kategori'],
+                        'status',
+                        'waktu_hadir',
+                        'waktu_pulang',
+                        'created_at',
+                        'leave_request',
+                    ],
+                ],
+                'meta' => ['current_page', 'last_page', 'per_page', 'total', 'path'],
+            ]);
+
         $json = $response->json();
-        
+
         // Ensure sensitive fields are missing
         $firstItem = $json['data'][0];
         $this->assertArrayNotHasKey('device_hash', $firstItem);
         $this->assertArrayNotHasKey('ip_address', $firstItem);
         $this->assertArrayNotHasKey('participant_id', $firstItem);
-        
+
         // Check leave request relation
         $this->assertNotNull($firstItem['leave_request']);
         $this->assertEquals('sakit', $firstItem['leave_request']['tipe']);
@@ -195,11 +199,11 @@ class PhaseDParticipantTest extends TestCase
         // Test max pagination
         $response2 = $this->getJson('/api/v1/attendance-history?per_page=50');
         $response2->assertStatus(200)
-                  ->assertJsonCount(20, 'data'); // Total is 20
-                  
+            ->assertJsonCount(20, 'data'); // Total is 20
+
         // Test invalid pagination
         $response3 = $this->getJson('/api/v1/attendance-history?per_page=51');
         $response3->assertStatus(422)
-                  ->assertJson(['status' => 'error']);
+            ->assertJson(['status' => 'error']);
     }
 }

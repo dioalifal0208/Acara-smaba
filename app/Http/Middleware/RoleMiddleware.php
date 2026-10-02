@@ -11,7 +11,7 @@ class RoleMiddleware
     /**
      * Handle an incoming request.
      *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     * @param  Closure(Request): (Response)  $next
      */
     public function handle(Request $request, Closure $next, string $role): Response
     {
@@ -19,11 +19,12 @@ class RoleMiddleware
             return redirect('/login');
         }
 
-        if ($request->user()->role !== $role && !$request->user()->isAdmin()) {
+        if ($request->user()->role !== $role && ! $request->user()->isAdmin()) {
             // Admin can access everything, but if not admin and role doesn't match:
             if ($request->user()->role === 'participant') {
                 return redirect()->route('participant.dashboard');
             }
+
             return redirect('/');
         }
 

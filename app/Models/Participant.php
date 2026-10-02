@@ -33,7 +33,7 @@ class Participant extends Model
      */
     public function getPhotoUrlAttribute(): ?string
     {
-        return $this->photo_path ? asset('storage/' . $this->photo_path) : null;
+        return $this->photo_path ? asset('storage/'.$this->photo_path) : null;
     }
 
     /**
@@ -56,6 +56,14 @@ class Participant extends Model
     public function attendances()
     {
         return $this->hasMany(Attendance::class);
+    }
+
+    /**
+     * Riwayat pengajuan perubahan foto dari peserta.
+     */
+    public function photoChangeRequests()
+    {
+        return $this->hasMany(PhotoChangeRequest::class);
     }
 
     /**

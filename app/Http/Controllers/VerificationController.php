@@ -2,10 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-
-use App\Models\Workcode;
 use App\Models\Setting;
+use App\Models\Workcode;
 use Inertia\Inertia;
 
 class VerificationController extends Controller
@@ -19,7 +17,7 @@ class VerificationController extends Controller
             'workcode' => $workcode,
             'kepalaSekolahNama' => $namaKepsek,
             'kepalaSekolahNip' => $nipKepsek,
-            'waktuCetak' => now()->translatedFormat('l, d F Y H:i') . ' WIB',
+            'waktuCetak' => now()->translatedFormat('l, d F Y H:i').' WIB',
         ]);
     }
 }

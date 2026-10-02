@@ -22,3 +22,22 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Deploy credentials (NEVER commit)
+deploy/.env.deploy
+deploy/.env.staging
+
+# Firebase service account (NEVER commit)
+storage/app/firebase-credentials.json
+
+# Scratch/temp files
+/scratch/
+/start_server.bat
+/test_hash.php
+
+# Backups
+/storage/app/backups/
+
+# Analysis docs (local only)
+/business_logic_audit.md
+/face_recognition_analysis.md

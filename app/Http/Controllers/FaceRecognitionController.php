@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Attendance;
-use App\Models\Workcode;
 use App\Models\Participant;
+use App\Models\Workcode;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class FaceRecognitionController extends Controller
 {
@@ -15,18 +17,18 @@ class FaceRecognitionController extends Controller
     private function calculateDistance($lat1, $lon1, $lat2, $lon2)
     {
         $earthRadius = 6371000;
-        
+
         $latFrom = deg2rad($lat1);
         $lonFrom = deg2rad($lon1);
         $latTo = deg2rad($lat2);
         $lonTo = deg2rad($lon2);
-        
+
         $latDelta = $latTo - $latFrom;
         $lonDelta = $lonTo - $lonFrom;
-        
+
         $angle = 2 * asin(sqrt(pow(sin($latDelta / 2), 2) +
             cos($latFrom) * cos($latTo) * pow(sin($lonDelta / 2), 2)));
-            
+
         return $angle * $earthRadius;
     }
 
@@ -43,6 +45,7 @@ class FaceRecognitionController extends Controller
         for ($i = 0; $i < count($v1); $i++) {
             $sum += pow($v1[$i] - $v2[$i], 2);
         }
+
         return sqrt($sum);
     }
 
@@ -52,12 +55,12 @@ class FaceRecognitionController extends Controller
      */
     private function getMinDistance(array $inputDescriptor, $dbDescriptor)
     {
-        if (!is_array($dbDescriptor) || empty($dbDescriptor)) {
+        if (! is_array($dbDescriptor) || empty($dbDescriptor)) {
             return INF;
         }
 
         // Single 128-dimensional vector
-        if (count($dbDescriptor) === 128 && !is_array($dbDescriptor[0])) {
+        if (count($dbDescriptor) === 128 && ! is_array($dbDescriptor[0])) {
             return $this->euclideanDistance($inputDescriptor, $dbDescriptor);
         }
 
@@ -71,6 +74,7 @@ class FaceRecognitionController extends Controller
                 }
             }
         }
+
         return $minDist;
     }
 
@@ -81,12 +85,12 @@ class FaceRecognitionController extends Controller
     {
         $request->validate([
             'descriptor' => 'required|array',
-            'photo' => 'nullable|string'
+            'photo' => 'nullable|string',
         ]);
 
         $updateData = [
             'face_descriptor' => $request->input('descriptor'),
-            'face_status' => 'approved' // Admin langsung approved
+            'face_status' => 'approved', // Admin langsung approved
         ];
 
         if ($request->has('photo')) {
@@ -96,14 +100,14 @@ class FaceRecognitionController extends Controller
                 $type = strtolower($type[1]);
                 if (in_array($type, ['jpg', 'jpeg', 'png'])) {
                     $photoData = base64_decode($photoData);
-                    $filename = 'faces/' . $participant->id . '_' . time() . '.' . $type;
-                    \Illuminate\Support\Facades\Storage::disk('public')->put($filename, $photoData);
-                    
+                    $filename = 'faces/'.$participant->id.'_'.time().'.'.$type;
+                    Storage::disk('public')->put($filename, $photoData);
+
                     // delete old photo if exists
                     if ($participant->photo_path) {
-                        \Illuminate\Support\Facades\Storage::disk('public')->delete($participant->photo_path);
+                        Storage::disk('public')->delete($participant->photo_path);
                     }
-                    
+
                     $updateData['photo_path'] = $filename;
                 }
             }
@@ -114,7 +118,7 @@ class FaceRecognitionController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Data wajah berhasil didaftarkan untuk ' . $participant->nama,
+            'message' => 'Data wajah berhasil didaftarkan untuk '.$participant->nama,
         ]);
     }
 
@@ -130,12 +134,12 @@ class FaceRecognitionController extends Controller
 
         $request->validate([
             'descriptor' => 'required|array',
-            'photo' => 'nullable|string'
+            'photo' => 'nullable|string',
         ]);
 
         $updateData = [
             'face_descriptor' => $request->input('descriptor'),
-            'face_status' => 'pending'
+            'face_status' => 'pending',
         ];
 
         if ($request->has('photo')) {
@@ -145,14 +149,14 @@ class FaceRecognitionController extends Controller
                 $type = strtolower($type[1]);
                 if (in_array($type, ['jpg', 'jpeg', 'png'])) {
                     $photoData = base64_decode($photoData);
-                    $filename = 'faces/' . $participant->id . '_self_' . time() . '.' . $type;
-                    \Illuminate\Support\Facades\Storage::disk('public')->put($filename, $photoData);
-                    
+                    $filename = 'faces/'.$participant->id.'_self_'.time().'.'.$type;
+                    Storage::disk('public')->put($filename, $photoData);
+
                     // delete old photo if exists
                     if ($participant->photo_path) {
-                        \Illuminate\Support\Facades\Storage::disk('public')->delete($participant->photo_path);
+                        Storage::disk('public')->delete($participant->photo_path);
                     }
-                    
+
                     $updateData['photo_path'] = $filename;
                 }
             }
@@ -172,7 +176,8 @@ class FaceRecognitionController extends Controller
     public function approveFace(Participant $participant)
     {
         $participant->update(['face_status' => 'approved']);
-        return redirect()->back()->with('success', 'Wajah peserta ' . $participant->nama . ' berhasil disetujui.');
+
+        return redirect()->back()->with('success', 'Wajah peserta '.$participant->nama.' berhasil disetujui.');
     }
 
     /**
@@ -182,16 +187,16 @@ class FaceRecognitionController extends Controller
     {
         // Hapus foto jika ditolak
         if ($participant->photo_path) {
-            \Illuminate\Support\Facades\Storage::disk('public')->delete($participant->photo_path);
+            Storage::disk('public')->delete($participant->photo_path);
         }
 
         $participant->update([
             'face_status' => 'rejected',
             'face_descriptor' => null,
-            'photo_path' => null
+            'photo_path' => null,
         ]);
-        
-        return redirect()->back()->with('success', 'Wajah peserta ' . $participant->nama . ' ditolak dan data dihapus.');
+
+        return redirect()->back()->with('success', 'Wajah peserta '.$participant->nama.' ditolak dan data dihapus.');
     }
 
     /**
@@ -200,18 +205,18 @@ class FaceRecognitionController extends Controller
     public function deleteFace(Participant $participant)
     {
         if ($participant->photo_path) {
-            \Illuminate\Support\Facades\Storage::disk('public')->delete($participant->photo_path);
+            Storage::disk('public')->delete($participant->photo_path);
         }
 
         $participant->update([
             'face_descriptor' => null,
             'photo_path' => null,
-            'face_status' => 'none'
+            'face_status' => 'none',
         ]);
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Data wajah berhasil dihapus untuk ' . $participant->nama,
+            'message' => 'Data wajah berhasil dihapus untuk '.$participant->nama,
         ]);
     }
 
@@ -222,7 +227,7 @@ class FaceRecognitionController extends Controller
     {
         $activeWorkcode = Workcode::getActive();
 
-        if (!$activeWorkcode) {
+        if (! $activeWorkcode) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Belum ada Workcode yang aktif. Presensi saat ini ditutup.',
@@ -244,10 +249,10 @@ class FaceRecognitionController extends Controller
 
         // === Validasi GPS (Mirip Self Check-in) ===
         // Bypassed jika yang melakukan scan adalah Admin
-        if (!$isAdmin) {
+        if (! $isAdmin) {
             if ($request->has('accuracy')) {
                 $accuracy = (float) $request->input('accuracy');
-                
+
                 // Mock Location Injector sering menghasilkan accuracy 0 persis
                 if ($accuracy <= 0) {
                     return response()->json([
@@ -275,7 +280,7 @@ class FaceRecognitionController extends Controller
 
         // Cek batasan radius
         if ($activeWorkcode->latitude && $activeWorkcode->longitude) {
-            if (!$request->filled('latitude') || (!$request->filled('longitude'))) {
+            if (! $request->filled('latitude') || (! $request->filled('longitude'))) {
                 return response()->json([
                     'status' => 'error',
                     'message' => 'Gagal mendapatkan lokasi GPS dari perangkat.',
@@ -288,9 +293,10 @@ class FaceRecognitionController extends Controller
             );
 
             $radiusLimit = $activeWorkcode->radius_meters ?? 100;
-            
+
             if ($distance > $radiusLimit) {
                 $distanceFmt = number_format($distance, 0);
+
                 return response()->json([
                     'status' => 'error',
                     'message' => "Anda berada di luar radius presensi ({$distanceFmt} meter). Anda harus berada dalam radius {$radiusLimit} meter.",
@@ -303,11 +309,11 @@ class FaceRecognitionController extends Controller
         $participants = Participant::whereNotNull('face_descriptor')
             ->where('face_status', 'approved')
             ->get();
-        
+
         $bestMatch = null;
         // Standar dlib / face-api.js euclidean distance threshold: ~0.58
         // 0.45 sebelumnya terlalu ketat sehingga menolak wajah asli karena pencahayaan webcam.
-        $bestDistance = 0.58; 
+        $bestDistance = 0.58;
 
         // Jika user yang login adalah peserta terdaftar, cek wajah dirinya terlebih dahulu
         $loggedInParticipantId = auth()->check() ? auth()->user()->participant_id : null;
@@ -315,7 +321,7 @@ class FaceRecognitionController extends Controller
             $myParticipant = $participants->firstWhere('id', $loggedInParticipantId);
             if ($myParticipant && $myParticipant->face_descriptor) {
                 $myDist = $this->getMinDistance($inputDescriptor, $myParticipant->face_descriptor);
-                \Log::info("Distance computed for logged in user ({$myParticipant->nama}): " . $myDist);
+                \Log::info("Distance computed for logged in user ({$myParticipant->nama}): ".$myDist);
                 if ($myDist < $bestDistance) {
                     $bestDistance = $myDist;
                     $bestMatch = $myParticipant;
@@ -324,13 +330,13 @@ class FaceRecognitionController extends Controller
         }
 
         // Jika belum match atau bukan self-presensi, cari dari seluruh database
-        if (!$bestMatch) {
+        if (! $bestMatch) {
             foreach ($participants as $p) {
                 $dbDescriptor = $p->face_descriptor;
                 $dist = $this->getMinDistance($inputDescriptor, $dbDescriptor);
-                
-                \Log::info("Distance computed between input and " . $p->nama . ": " . $dist);
-                
+
+                \Log::info('Distance computed between input and '.$p->nama.': '.$dist);
+
                 if ($dist < $bestDistance) {
                     $bestDistance = $dist;
                     $bestMatch = $p;
@@ -338,7 +344,7 @@ class FaceRecognitionController extends Controller
             }
         }
 
-        if (!$bestMatch) {
+        if (! $bestMatch) {
             return response()->json([
                 'status' => 'not_recognized',
                 'message' => 'Wajah tidak dikenali dalam sistem. Pastikan pencahayaan cukup dan Anda sudah terdaftar.',
@@ -354,7 +360,7 @@ class FaceRecognitionController extends Controller
         if ($alreadyAttended) {
             return response()->json([
                 'status' => 'already',
-                'message' => 'Anda sudah melakukan presensi untuk workcode "' . $activeWorkcode->nama_workcode . '".',
+                'message' => 'Anda sudah melakukan presensi untuk workcode "'.$activeWorkcode->nama_workcode.'".',
                 'participant' => $bestMatch,
             ]);
         }
@@ -363,7 +369,7 @@ class FaceRecognitionController extends Controller
         $rawDeviceId = $request->input('device_id', '');
         $userAgent = $request->userAgent() ?? '';
         $ipAddress = $request->ip();
-        $deviceHash = hash('sha256', $rawDeviceId . '|' . $userAgent);
+        $deviceHash = hash('sha256', $rawDeviceId.'|'.$userAgent);
 
         // Lakukan penguncian 1 perangkat 1 presensi seperti Self Check-in
         // Bypassed jika yang melakukan scan adalah Admin (auth()->check() == true dan isAdmin() atau role tertentu)
@@ -371,7 +377,7 @@ class FaceRecognitionController extends Controller
         // Sebenarnya $request->user() bisa kita cek rolenya. Untuk amannya, kita anggap auth()->check() && auth()->user()->role === 'admin' bypass ini.
         $isAdmin = auth()->check() && (auth()->user()->role === 'admin' || auth()->user()->role === 'superadmin');
 
-        if (!$isAdmin) {
+        if (! $isAdmin) {
             $deviceAttendance = Attendance::where('workcode_id', $activeWorkcode->id)
                 ->where('device_hash', $deviceHash)
                 ->whereDate('created_at', now()->toDateString())
@@ -380,9 +386,10 @@ class FaceRecognitionController extends Controller
 
             if ($deviceAttendance && $deviceAttendance->participant && $deviceAttendance->participant_id !== $bestMatch->id) {
                 $lockedParticipant = $deviceAttendance->participant;
+
                 return response()->json([
                     'status' => 'device_locked',
-                    'message' => 'Perangkat ini sudah digunakan untuk presensi atas nama ' . $lockedParticipant->nama . '. 1 perangkat hanya diizinkan untuk 1 presensi.',
+                    'message' => 'Perangkat ini sudah digunakan untuk presensi atas nama '.$lockedParticipant->nama.'. 1 perangkat hanya diizinkan untuk 1 presensi.',
                 ], 403);
             }
         }
@@ -395,11 +402,11 @@ class FaceRecognitionController extends Controller
 
         // Ambil info shift
         $scanTimeStr = $waktuHadir->format('H:i');
-        
+
         // Logika sederhana: jika absen melebihi jam 07:00, dihitung terlambat
         // (Sama dengan AttendanceController)
-        $targetDatangSelesai = \Carbon\Carbon::createFromFormat('H:i', '07:00')->setDate($waktuHadir->year, $waktuHadir->month, $waktuHadir->day);
-        
+        $targetDatangSelesai = Carbon::createFromFormat('H:i', '07:00')->setDate($waktuHadir->year, $waktuHadir->month, $waktuHadir->day);
+
         if ($waktuHadir->greaterThan($targetDatangSelesai)) {
             $isLate = true;
             $diffInMinutes = $targetDatangSelesai->diffInMinutes($waktuHadir);
@@ -416,6 +423,7 @@ class FaceRecognitionController extends Controller
         $attendance = Attendance::create([
             'workcode_id' => $activeWorkcode->id,
             'participant_id' => $bestMatch->id,
+            'tanggal' => now()->toDateString(),
             'waktu_hadir' => $waktuHadir,
             'device_hash' => $deviceHash,
             'ip_address' => $ipAddress,

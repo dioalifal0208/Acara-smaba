@@ -3,48 +3,35 @@
 namespace App\Http\Controllers;
 
 use App\Models\Attendance;
-use App\Models\Workcode;
+use App\Models\LeaveRequest;
 use App\Models\Participant;
+use App\Models\Setting;
+use App\Models\Workcode;
+use App\Services\AttendanceValidationService;
+use App\Services\QrCodeService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class AttendanceController extends Controller
 {
+    // =========================================================================
+    //  WEB — Scanner Page & QR Scan Processing
+    // =========================================================================
+
     /**
-     * Hitung jarak dua titik dengan Haversine formula (dalam meter).
-     */
-    private function calculateDistance($lat1, $lon1, $lat2, $lon2)
-    {
-        $earthRadius = 6371000;
-        
-        $latFrom = deg2rad($lat1);
-        $lonFrom = deg2rad($lon1);
-        $latTo = deg2rad($lat2);
-        $lonTo = deg2rad($lon2);
-        
-        $latDelta = $latTo - $latFrom;
-        $lonDelta = $lonTo - $lonFrom;
-        
-        $angle = 2 * asin(sqrt(pow(sin($latDelta / 2), 2) +
-            cos($latFrom) * cos($latTo) * pow(sin($lonDelta / 2), 2)));
-            
-        return $angle * $earthRadius;
-    }
-    /**
-     * Tampilkan halaman scanner QR.
+     * Tampilkan halaman Scanner QR untuk Admin.
      */
     public function scanner()
     {
         $activeWorkcode = Workcode::getActive();
         $totalParticipants = Participant::count();
-
-        if ($activeWorkcode) {
-            $totalAttended = Attendance::where('workcode_id', $activeWorkcode->id)
+        $totalAttended = $activeWorkcode
+            ? Attendance::where('workcode_id', $activeWorkcode->id)
                 ->distinct('participant_id')
-                ->count('participant_id');
-        } else {
-            $totalAttended = 0;
-        }
+                ->count('participant_id')
+            : 0;
 
         return Inertia::render('Scanner/Index', [
             'activeWorkcode' => $activeWorkcode,
@@ -57,21 +44,15 @@ class AttendanceController extends Controller
     }
 
     /**
-     * Proses scan QR code — validasi & catat kehadiran per Workcode.
+     * Proses scan QR Code dari Scanner Admin (POST /scan).
+     * Mengembalikan JSON.
      */
-    public function scan(Request $request)
+    /**
+     * Proses scan QR Code dari Scanner Admin (POST /scan).
+     * Mengembalikan JSON.
+     */
+    public function scan(Request $request, AttendanceValidationService $validationService)
     {
-        $activeWorkcode = Workcode::getActive();
-
-        if (!$activeWorkcode) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Belum ada Workcode yang aktif! Admin wajib memilih/mengaktifkan Workcode terlebih dahulu di menu Kelola Workcode.',
-                'participant' => null,
-                'timestamp' => now()->format('H:i:s'),
-            ], 400);
-        }
-
         $request->validate([
             'qr_token' => 'required|string',
             'latitude' => 'nullable|numeric',
@@ -79,530 +60,318 @@ class AttendanceController extends Controller
             'accuracy' => 'nullable|numeric',
         ]);
 
-        if ($activeWorkcode->latitude && $activeWorkcode->longitude) {
-            if (!$request->filled('latitude') || !$request->filled('longitude')) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Gagal mendapatkan lokasi GPS dari Scanner Admin. Pastikan izin lokasi diaktifkan pada browser Admin.',
-                ], 400);
-            }
+        $activeWorkcode = Workcode::getActive();
 
-            $distance = $this->calculateDistance(
-                $activeWorkcode->latitude, $activeWorkcode->longitude,
-                $request->latitude, $request->longitude
-            );
-
-            $radiusLimit = $activeWorkcode->radius_meters ?? 100;
-            
-            if ($distance > $radiusLimit) {
-                $distanceFmt = number_format($distance, 0);
-                return response()->json([
-                    'status' => 'error',
-                    'message' => "Scanner Admin berada di luar radius presensi ({$distanceFmt} meter). Admin harus berada dalam radius {$radiusLimit} meter dari lokasi workcode.",
-                ], 403);
-            }
-        }
-
-        $token = trim($request->input('qr_token'));
-
-        // Cari peserta berdasarkan QR token
-        $participant = Participant::where('qr_token', $token)->first();
-
-        if (!$participant) {
+        if (! $activeWorkcode) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'QR Code tidak valid. Peserta tidak ditemukan.',
-                'participant' => null,
-                'timestamp' => now()->format('H:i:s'),
+                'message' => 'Belum ada Workcode yang aktif.',
+            ], 400);
+        }
+
+        try {
+            $validationService->validateWorkcodeActive($activeWorkcode, true);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->validator->errors()->first(),
+            ], $e->status);
+        }
+
+        // Cari peserta berdasarkan qr_token
+        $participant = Participant::where('qr_token', $request->input('qr_token'))->first();
+
+        if (! $participant) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'QR Code tidak dikenali. Peserta tidak ditemukan.',
             ], 404);
         }
 
-        if ($activeWorkcode->kategori === 'harian') {
-            // Cek hari aktif
-            $hariAktif = $activeWorkcode->hari_aktif ?? [];
-            $currentDay = now()->dayOfWeekIso; // 1 (Mon) - 7 (Sun)
-            if (!empty($hariAktif) && !in_array($currentDay, $hariAktif)) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Hari ini bukan hari kerja untuk presensi harian.',
-                    'participant' => null,
-                ], 403);
-            }
+        // Cek GPS radius jika workcode memiliki koordinat
+        if ($activeWorkcode->latitude && $activeWorkcode->longitude) {
+            if ($request->filled('latitude') && $request->filled('longitude')) {
+                try {
+                    $validationService->validateGpsAndRadius($activeWorkcode, $request->only(['latitude', 'longitude', 'accuracy']));
+                } catch (\Exception $e) {
+                    $errorData = json_decode($e->getMessage(), true);
 
-            $currentTime = now()->format('H:i:s');
-            
-            $jadwal = $activeWorkcode->jadwal_per_hari[$currentDay] ?? null;
-            
-            $formatTime = function($time, $default) {
-                $time = $time ?: $default;
-                return strlen($time) == 5 ? $time . ':00' : $time;
-            };
-
-            $jamDatangMulai = $formatTime($jadwal['jam_datang_mulai'] ?? $activeWorkcode->jam_datang_mulai, '06:00:00');
-            $jamDatangSelesai = $formatTime($jadwal['jam_datang_selesai'] ?? $activeWorkcode->jam_datang_selesai, '07:00:00');
-            $jamPulangMulai = $formatTime($jadwal['jam_pulang_mulai'] ?? $activeWorkcode->jam_pulang_mulai, '15:30:00');
-            $jamPulangSelesai = $formatTime($jadwal['jam_pulang_selesai'] ?? $activeWorkcode->jam_pulang_selesai, '22:00:00');
-
-            // Cek apakah sekarang sebelum jam datang mulai
-            if ($currentTime < $jamDatangMulai) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => "Presensi datang belum dibuka. Jadwal absen datang dimulai pukul " . substr($jamDatangMulai, 0, 5) . " WIB.",
-                    'participant' => null,
-                ], 403);
-            }
-
-            // Cek apakah sekarang sudah melewati batas jam pulang selesai
-            if ($currentTime > $jamPulangSelesai) {
-                return response()->json([
-                    'status' => 'error',
-                    'message' => "Sesi presensi harian hari ini telah ditutup (pukul " . substr($jamPulangSelesai, 0, 5) . " WIB).",
-                    'participant' => null,
-                ], 403);
-            }
-
-            // Cek data presensi hari ini
-            $attendance = Attendance::where('workcode_id', $activeWorkcode->id)
-                ->where('participant_id', $participant->id)
-                ->whereDate('created_at', now()->toDateString())
-                ->first();
-
-            // Sesi Pulang: Jika waktu saat ini berada di rentang [jam_pulang_mulai, jam_pulang_selesai]
-            if ($currentTime >= $jamPulangMulai && $currentTime <= $jamPulangSelesai) {
-                if ($attendance && $attendance->waktu_pulang) {
-                    return response()->json([
-                        'status' => 'already',
-                        'message' => $participant->nama . ' sudah absen pulang hari ini (pukul ' . $attendance->waktu_pulang->format('H:i:s') . ').',
-                        'participant' => [
-                            'id' => $participant->id,
-                            'nama' => $participant->nama,
-                            'nis_nip' => $participant->nis_nip,
-                            'waktu_hadir' => $attendance->waktu_pulang->format('H:i:s'),
-                        ],
-                        'timestamp' => now()->format('H:i:s'),
-                    ], 200);
+                    return response()->json($errorData, $e->getCode() ?: 400);
                 }
-
-                if ($attendance) {
-                    $attendance->update([
-                        'waktu_pulang' => now(),
-                        // Status tetap 'hadir' karena sudah ada waktu_hadir sebelumnya (jika bukan lupa absen/alpha).
-                        // Jika sebelumnya lupa absen masuk, kita tetap catat pulang dan biarkan status lupa absen/hadir?
-                        // Karena absen masuk wajib, jika absen masuk kosong dan absen pulang diisi, 
-                        // kita update status jadi 'lupa_absen' di cron nanti. Tapi sementara biarkan.
-                    ]);
-                } else {
-                    // Jika belum pernah absen datang, tapi langsung absen pulang:
-                    $attendance = Attendance::create([
-                        'workcode_id' => $activeWorkcode->id,
-                        'participant_id' => $participant->id,
-                        'waktu_pulang' => now(),
-                        'status' => 'lupa_absen' // lupa absen masuk
-                    ]);
-                }
-
-                $totalParticipants = Participant::count();
-                $totalAttended = Attendance::where('workcode_id', $activeWorkcode->id)
-                    ->distinct('participant_id')
-                    ->count('participant_id');
-
-                return response()->json([
-                    'status' => 'success',
-                    'message' => 'Absen pulang ' . $participant->nama . ' berhasil dicatat!',
-                    'participant' => [
-                        'id' => $participant->id,
-                        'nama' => $participant->nama,
-                        'nis_nip' => $participant->nis_nip,
-                        'waktu_hadir' => $attendance->waktu_pulang->format('d M Y H:i:s'),
-                    ],
-                    'stats' => [
-                        'total' => $totalParticipants,
-                        'hadir' => $totalAttended,
-                        'belum' => $totalParticipants - $totalAttended,
-                    ],
-                    'timestamp' => now()->format('H:i:s'),
-                ], 200);
             }
+        }
 
-            // Sesi Datang: Jika waktu saat ini berada di rentang [jam_datang_mulai, jam_pulang_mulai)
-            // Meliputi jam datang tepat waktu (06:00-07:00) dan jam kerja (07:00-15:30) sebagai Terlambat
-            if ($currentTime >= $jamDatangMulai && $currentTime < $jamPulangMulai) {
-                if ($attendance && $attendance->waktu_hadir) {
-                    return response()->json([
-                        'status' => 'already',
-                        'message' => $participant->nama . ' sudah absen datang hari ini (pukul ' . $attendance->waktu_hadir->format('H:i:s') . ').',
-                        'participant' => [
-                            'id' => $participant->id,
-                            'nama' => $participant->nama,
-                            'nis_nip' => $participant->nis_nip,
-                            'waktu_hadir' => $attendance->waktu_hadir->format('H:i:s'),
-                        ],
-                        'timestamp' => now()->format('H:i:s'),
-                    ], 200);
-                }
+        // Tentukan apakah workcode harian & sudah ada attendance hari ini
+        $existingAttendance = Attendance::where('workcode_id', $activeWorkcode->id)
+            ->where('participant_id', $participant->id)
+            ->when(
+                in_array($activeWorkcode->kategori, ['harian', '24_jam']),
+                fn ($q) => $q->whereDate('created_at', now()->toDateString())
+            )
+            ->first();
 
-                $isLate = false;
-                $lateMinutes = 0;
-                $lateFormatted = '';
+        $isPulang = ($existingAttendance && $activeWorkcode->kategori === 'harian');
 
-                // Cek keterlambatan jika scan setelah jam_datang_selesai (misal lewat dari 07:00)
-                if ($currentTime > $jamDatangSelesai) {
-                    $isLate = true;
-                    $targetDatangSelesai = \Carbon\Carbon::parse(now()->format('Y-m-d') . ' ' . $jamDatangSelesai);
-                    $lateMinutes = (int) max(1, round($targetDatangSelesai->diffInMinutes(now())));
+        try {
+            $validationService->validateTimeWindow($activeWorkcode, $isPulang);
+        } catch (\Exception $e) {
+            $errorData = json_decode($e->getMessage(), true);
 
+            return response()->json($errorData, $e->getCode() ?: 400);
+        }
+
+        // Cek duplikat untuk kategori non-harian
+        if ($existingAttendance && $activeWorkcode->kategori !== 'harian') {
+            return $this->scanJsonResponse('already', $participant, $activeWorkcode);
+        }
+
+        // Cek duplikat pulang
+        if ($existingAttendance && $existingAttendance->waktu_pulang !== null) {
+            return $this->scanJsonResponse('already', $participant, $activeWorkcode, 'Peserta sudah melakukan presensi pulang.');
+        }
+
+        // Proses pulang
+        if ($isPulang) {
+            $existingAttendance->update(['waktu_pulang' => now()]);
+
+            return $this->scanJsonResponse('success', $participant, $activeWorkcode, 'Presensi pulang berhasil dicatat.');
+        }
+
+        // Hitung keterlambatan
+        $waktuHadir = now();
+        $isLate = false;
+        $lateMinutes = 0;
+        $lateFormatted = '';
+
+        if ($activeWorkcode->kategori === 'harian' && $activeWorkcode->jam_datang_selesai) {
+            $batasJamDatang = Carbon::createFromTimeString($activeWorkcode->jam_datang_selesai)
+                ->setDate($waktuHadir->year, $waktuHadir->month, $waktuHadir->day);
+
+            if ($waktuHadir->greaterThan($batasJamDatang)) {
+                $isLate = true;
+                $lateMinutes = (int) $batasJamDatang->diffInMinutes($waktuHadir);
+                if ($lateMinutes >= 60) {
                     $hours = floor($lateMinutes / 60);
                     $mins = $lateMinutes % 60;
-                    if ($hours > 0) {
-                        $lateFormatted = $hours . ' jam' . ($mins > 0 ? ' ' . $mins . ' menit' : '');
-                    } else {
-                        $lateFormatted = $mins . ' menit';
-                    }
-                }
-
-                if ($attendance) {
-                    $attendance->update([
-                        'waktu_hadir' => now(),
-                        'status' => 'hadir'
-                    ]);
+                    $lateFormatted = $mins > 0 ? "{$hours} jam {$mins} menit" : "{$hours} jam";
                 } else {
-                    $attendance = Attendance::create([
-                        'workcode_id' => $activeWorkcode->id,
-                        'participant_id' => $participant->id,
-                        'waktu_hadir' => now(),
-                        'status' => 'hadir'
-                    ]);
+                    $lateFormatted = "{$lateMinutes} menit";
                 }
-
-                $totalParticipants = Participant::count();
-                $totalAttended = Attendance::where('workcode_id', $activeWorkcode->id)
-                    ->distinct('participant_id')
-                    ->count('participant_id');
-
-                $statusResponse = $isLate ? 'warning' : 'success';
-                $messageResponse = $isLate
-                    ? "Presensi datang {$participant->nama} berhasil dicatat! (Terlambat {$lateFormatted})"
-                    : "Presensi datang {$participant->nama} berhasil dicatat tepat waktu!";
-
-                return response()->json([
-                    'status' => $statusResponse,
-                    'is_late' => $isLate,
-                    'late_minutes' => $lateMinutes,
-                    'late_formatted' => $lateFormatted,
-                    'message' => $messageResponse,
-                    'participant' => [
-                        'id' => $participant->id,
-                        'nama' => $participant->nama,
-                        'nis_nip' => $participant->nis_nip,
-                        'waktu_hadir' => $attendance->waktu_hadir->format('d M Y H:i:s'),
-                    ],
-                    'stats' => [
-                        'total' => $totalParticipants,
-                        'hadir' => $totalAttended,
-                        'belum' => $totalParticipants - $totalAttended,
-                    ],
-                    'timestamp' => now()->format('H:i:s'),
-                ], 200);
             }
-        } else {
-            // Logika workcode workcode biasa (sekali scan)
-            $existingAttendance = Attendance::where('workcode_id', $activeWorkcode->id)
-                ->where('participant_id', $participant->id)
-                ->first();
-
-            if ($existingAttendance) {
-                return response()->json([
-                    'status' => 'already',
-                    'message' => $participant->nama . ' sudah absen pada workcode "' . $activeWorkcode->nama_workcode . '".',
-                    'participant' => [
-                        'id' => $participant->id,
-                        'nama' => $participant->nama,
-                        'nis_nip' => $participant->nis_nip,
-                        'waktu_hadir' => $existingAttendance->waktu_hadir ? $existingAttendance->waktu_hadir->format('d M Y H:i:s') : '-',
-                    ],
-                    'timestamp' => now()->format('H:i:s'),
-                ], 200);
-            }
-
-            // Catat kehadiran
-            $attendance = Attendance::create([
-                'workcode_id' => $activeWorkcode->id,
-                'participant_id' => $participant->id,
-                'waktu_hadir' => now(),
-            ]);
-
-            // Hitung stats terbaru untuk workcode ini
-            $totalParticipants = Participant::count();
-            $totalAttended = Attendance::where('workcode_id', $activeWorkcode->id)
-                ->distinct('participant_id')
-                ->count('participant_id');
-
-            return response()->json([
-                'status' => 'success',
-                'message' => 'Presensi ' . $participant->nama . ' berhasil dicatat untuk workcode "' . $activeWorkcode->nama_workcode . '"!',
-                'participant' => [
-                    'id' => $participant->id,
-                    'nama' => $participant->nama,
-                    'nis_nip' => $participant->nis_nip,
-                    'waktu_hadir' => $attendance->waktu_hadir->format('d M Y H:i:s'),
-                ],
-                'stats' => [
-                    'total' => $totalParticipants,
-                    'hadir' => $totalAttended,
-                    'belum' => $totalParticipants - $totalAttended,
-                ],
-                'timestamp' => now()->format('H:i:s'),
-            ], 200);
         }
+
+        // Catat presensi datang
+        $attendance = Attendance::create([
+            'workcode_id' => $activeWorkcode->id,
+            'participant_id' => $participant->id,
+            'tanggal' => now()->toDateString(),
+            'waktu_hadir' => $waktuHadir,
+            'status' => 'hadir',
+            'device_hash' => hash('sha256', $request->ip().'|'.$request->userAgent()),
+            'ip_address' => $request->ip(),
+        ]);
+
+        $status = $isLate ? 'warning' : 'success';
+        $message = $isLate
+            ? 'Presensi berhasil, tapi terlambat '.$lateFormatted.'.'
+            : 'Presensi berhasil dicatat!';
+
+        // Hitung stats terbaru
+        $totalParticipants = Participant::count();
+        $totalAttended = Attendance::where('workcode_id', $activeWorkcode->id)
+            ->distinct('participant_id')
+            ->count('participant_id');
+
+        return response()->json([
+            'status' => $status,
+            'message' => $message,
+            'participant' => [
+                'id' => $participant->id,
+                'nama' => $participant->nama,
+                'nis_nip' => $participant->nis_nip,
+            ],
+            'timestamp' => $waktuHadir->format('H:i:s'),
+            'is_late' => $isLate,
+            'late_minutes' => $lateMinutes,
+            'late_formatted' => $lateFormatted,
+            'stats' => [
+                'total' => $totalParticipants,
+                'hadir' => $totalAttended,
+                'belum' => $totalParticipants - $totalAttended,
+            ],
+        ]);
     }
 
     /**
-     * API endpoint untuk scan — accessible via /api/scan.
+     * Endpoint POST /api/scan — Alternatif scan QR tanpa CSRF (tetap
+     * memerlukan auth admin karena berada di web middleware group).
      */
-    public function apiScan(Request $request)
+    public function apiScan(Request $request, AttendanceValidationService $validationService)
     {
-        return $this->scan($request);
+        // Delegate ke method scan yang sama
+        return $this->scan($request, $validationService);
     }
 
+    // =========================================================================
+    //  WEB — Laporan / Report
+    // =========================================================================
+
     /**
-     * Tampilkan laporan kehadiran terkelompokkan per workcode.
+     * Halaman Laporan Presensi (Inertia).
      */
     public function report(Request $request)
     {
-        $workcodes = Workcode::withCount('attendances')
-            ->orderBy('is_active', 'desc')
-            ->orderBy('created_at', 'desc')
-            ->get();
+        $workcodes = Workcode::orderByDesc('created_at')->get();
 
-        $activeWorkcode = Workcode::getActive();
-        $selectedWorkcodeId = $request->input('workcode_id') ?? ($activeWorkcode ? $activeWorkcode->id : ($workcodes->first()->id ?? null));
+        $selectedWorkcodeId = $request->input('workcode_id');
+        $selectedWorkcode = $selectedWorkcodeId
+            ? Workcode::find($selectedWorkcodeId)
+            : $workcodes->first();
 
-        $selectedWorkcode = $workcodes->firstWhere('id', (int) $selectedWorkcodeId);
+        $attendances = [];
+        $stats = ['total' => 0, 'hadir' => 0, 'belum' => 0, 'izin' => 0, 'sakit' => 0, 'alpha' => 0];
+        $participants = [];
 
-        $totalParticipants = Participant::count();
+        if ($selectedWorkcode) {
+            $allParticipants = Participant::orderBy('nama')->get();
+            $participants = $allParticipants;
+            $stats['total'] = $allParticipants->count();
 
-        if ($selectedWorkcodeId) {
-            $attendancesRaw = Attendance::with('participant')
-                ->where('workcode_id', $selectedWorkcodeId)
-                ->orderBy('waktu_hadir', 'desc')
-                ->get();
-                
-            $totalHadir = $attendancesRaw->where('status', 'hadir')->count();
-            $totalAlpha = $attendancesRaw->where('status', 'alpha')->count();
-            $totalIzin = $attendancesRaw->where('status', 'izin')->count();
-            $totalSakit = $attendancesRaw->where('status', 'sakit')->count();
-            $totalLupaAbsen = $attendancesRaw->where('status', 'lupa_absen')->count();
-            $totalAttended = $attendancesRaw->count();
-
-            if ($selectedWorkcode && $selectedWorkcode->kategori === 'harian') {
-                $allParticipants = Participant::all();
-                $grouped = $attendancesRaw->groupBy('participant_id');
-                $attendances = $allParticipants->map(function ($participant) use ($grouped, $selectedWorkcode) {
-                    $participantAttendances = $grouped->get($participant->id) ?? collect();
-                    
-                    $totalMenitTerlambat = 0;
-                    
-                    foreach ($participantAttendances as $att) {
-                        if ($att->waktu_hadir) {
-                            $dayOfWeek = $att->waktu_hadir->dayOfWeekIso;
-                            $jadwal = $selectedWorkcode->jadwal_per_hari[$dayOfWeek] ?? null;
-                            $targetJam = $jadwal['jam_datang_selesai'] ?? $selectedWorkcode->jam_datang_selesai;
-                            
-                            if ($targetJam) {
-                                $targetJamFormatted = strlen($targetJam) == 5 ? $targetJam . ':00' : $targetJam;
-                                $waktuHadirTime = $att->waktu_hadir->format('H:i:s');
-                                if ($waktuHadirTime > $targetJamFormatted) {
-                                    $target = \Carbon\Carbon::parse($att->waktu_hadir->format('Y-m-d') . ' ' . $targetJamFormatted);
-                                    $diff = (int) max(1, round($target->diffInMinutes($att->waktu_hadir)));
-                                    $totalMenitTerlambat += $diff;
-                                }
-                            }
-                        }
-                    }
-
-                    return [
-                        'participant_id' => $participant->id,
-                        'nama' => $participant->nama,
-                        'nis_nip' => $participant->nis_nip ?? '-',
-                        'status_pegawai' => $participant->status ?? '-',
-                        'total_alpha' => $participantAttendances->where('status', 'alpha')->count(),
-                        'total_izin' => $participantAttendances->where('status', 'izin')->count(),
-                        'total_sakit' => $participantAttendances->where('status', 'sakit')->count(),
-                        'total_lupa_absen' => $participantAttendances->where('status', 'lupa_absen')->count(),
-                        'total_menit_terlambat' => $totalMenitTerlambat,
-                    ];
-                });
+            if ($selectedWorkcode->kategori === 'harian') {
+                // Rekap harian: hitung alpha, izin, sakit, lupa_absen, total terlambat per peserta
+                $attendances = $this->buildDailyRecap($selectedWorkcode, $allParticipants);
+                $stats['hadir'] = collect($attendances)->where('status', '!=', 'alpha')->count();
             } else {
-                $attendances = $attendancesRaw->map(function ($attendance) {
+                // Sekali / 24 jam: list presensi per peserta
+                $attendanceRecords = Attendance::where('workcode_id', $selectedWorkcode->id)
+                    ->with('participant')
+                    ->get()
+                    ->keyBy('participant_id');
+
+                $attendances = $allParticipants->map(function ($p) use ($attendanceRecords) {
+                    $att = $attendanceRecords->get($p->id);
+
                     return [
-                        'id' => $attendance->id,
-                        'participant_id' => $attendance->participant_id,
-                        'nama' => $attendance->participant->nama ?? 'Tidak Dikenal',
-                        'nis_nip' => $attendance->participant->nis_nip ?? '-',
-                        'status_pegawai' => $attendance->participant->status ?? '-',
-                        'status' => $attendance->status,
-                        'tanggal' => ($attendance->waktu_hadir ?? $attendance->created_at)->format('Y-m-d'),
-                        'jam_masuk' => $attendance->waktu_hadir ? $attendance->waktu_hadir->format('H:i') : '',
-                        'jam_pulang' => $attendance->waktu_pulang ? $attendance->waktu_pulang->format('H:i') : '',
-                        'waktu_hadir' => $attendance->waktu_hadir ? $attendance->waktu_hadir->format('d M Y H:i:s') : '-',
-                        'waktu_pulang' => $attendance->waktu_pulang ? $attendance->waktu_pulang->format('d M Y H:i:s') : '-',
+                        'id' => $att?->id,
+                        'participant_id' => $p->id,
+                        'nama' => $p->nama,
+                        'nis_nip' => $p->nis_nip,
+                        'status_pegawai' => $p->status ?? '',
+                        'waktu_hadir' => $att?->waktu_hadir?->format('H:i:s') ?? '-',
+                        'waktu_pulang' => $att?->waktu_pulang?->format('H:i:s') ?? '-',
+                        'status' => $att ? ($att->status ?? 'hadir') : 'alpha',
                     ];
-                });
+                })->values()->toArray();
+
+                $stats['hadir'] = $attendanceRecords->count();
             }
-        } else {
-            $totalHadir = 0;
-            $totalAlpha = 0;
-            $totalIzin = 0;
-            $totalSakit = 0;
-            $totalLupaAbsen = 0;
-            $totalAttended = 0;
-            $attendances = collect();
+
+            $stats['belum'] = $stats['total'] - $stats['hadir'];
         }
 
-        $totalNotAttended = $totalParticipants - $totalAttended;
-        $allParticipants = Participant::select('id', 'nama', 'nis_nip', 'status')
-            ->orderBy('nama', 'asc')
-            ->get();
+        $namaKepsek = Setting::get('kepala_sekolah_nama', 'Muhtarom, S.Pd., M.Si.');
+        $nipKepsek = Setting::get('kepala_sekolah_nip', '197205172006041015');
 
         return Inertia::render('Report/Index', [
             'workcodes' => $workcodes,
-            'selectedWorkcodeId' => $selectedWorkcodeId ? (int) $selectedWorkcodeId : null,
+            'selectedWorkcodeId' => $selectedWorkcode?->id,
             'selectedWorkcode' => $selectedWorkcode,
-            'participants' => $allParticipants,
-            'stats' => [
-                'total' => $totalParticipants,
-                'hadir' => $totalHadir,
-                'alpha' => $totalAlpha,
-                'izin' => $totalIzin,
-                'sakit' => $totalSakit,
-                'lupa_absen' => $totalLupaAbsen,
-                'belum' => $totalNotAttended,
-            ],
+            'stats' => $stats,
             'attendances' => $attendances,
-            'kepalaSekolahNama' => \App\Models\Setting::get('kepala_sekolah_nama', 'Muhtarom, S.Pd., M.Si.'),
-            'kepalaSekolahNip' => \App\Models\Setting::get('kepala_sekolah_nip', '197205172006041015'),
+            'participants' => $participants,
+            'kepalaSekolahNama' => $namaKepsek,
+            'kepalaSekolahNip' => $nipKepsek,
         ]);
     }
 
     /**
-     * Dapatkan detail presensi harian untuk 1 partisipan (untuk Cetak Rekap Individu & Kelola Log).
+     * JSON Rekap presensi individu (GET /report/individual/{workcode}/{participant}).
      */
-    public function getIndividualRecap(Request $request, $workcodeId, $participantId)
+    public function getIndividualRecap(Workcode $workcode, Participant $participant, Request $request)
     {
-        $workcode = Workcode::findOrFail($workcodeId);
-        $participant = Participant::findOrFail($participantId);
+        $year = $request->input('year', now()->year);
+        $month = $request->input('month', now()->month);
 
-        $attendanceQuery = Attendance::where('workcode_id', $workcodeId)
-            ->where('participant_id', $participantId)
-            ->orderBy('waktu_hadir', 'asc')
-            ->orderBy('created_at', 'asc');
-
-        if ($request->filled('year') && $request->filled('month')) {
-            $request->validate([
-                'year' => ['integer', 'between:2000,2100'],
-                'month' => ['integer', 'between:1,12'],
-            ]);
-
-            $attendanceQuery->where(function ($query) use ($request) {
-                $query->whereYear('waktu_hadir', $request->integer('year'))
-                    ->whereMonth('waktu_hadir', $request->integer('month'))
-                    ->orWhere(function ($fallbackQuery) use ($request) {
-                        $fallbackQuery->whereNull('waktu_hadir')
-                            ->whereYear('created_at', $request->integer('year'))
-                            ->whereMonth('created_at', $request->integer('month'));
-                    });
-            });
-        }
-
-        $attendances = $attendanceQuery->get()
+        $attendances = Attendance::where('workcode_id', $workcode->id)
+            ->where('participant_id', $participant->id)
+            ->when($workcode->kategori === 'harian', function ($q) use ($year, $month) {
+                $q->whereYear('created_at', $year)
+                    ->whereMonth('created_at', $month);
+            })
+            ->orderBy('created_at')
+            ->get()
             ->map(function ($att) {
-                $refDate = $att->waktu_hadir ?? $att->created_at;
                 return [
                     'id' => $att->id,
-                    'tanggal' => $refDate ? $refDate->format('Y-m-d') : null,
-                    'tanggal_formatted' => $refDate ? $refDate->translatedFormat('d M Y') : '-',
-                    'jam_masuk' => $att->waktu_hadir ? $att->waktu_hadir->format('H:i') : '',
-                    'jam_pulang' => $att->waktu_pulang ? $att->waktu_pulang->format('H:i') : '',
-                    'waktu_hadir' => $att->waktu_hadir ? $att->waktu_hadir->format('d M Y H:i:s') : '-',
-                    'waktu_pulang' => $att->waktu_pulang ? $att->waktu_pulang->format('d M Y H:i:s') : '-',
-                    'status' => $att->status,
-                    'leave_request_id' => $att->leave_request_id,
+                    'tanggal' => $att->created_at->format('Y-m-d'),
+                    'jam_masuk' => $att->waktu_hadir?->format('H:i'),
+                    'jam_pulang' => $att->waktu_pulang?->format('H:i') ?? '-',
+                    'waktu_hadir' => $att->waktu_hadir?->format('H:i') ?? '-',
+                    'waktu_pulang' => $att->waktu_pulang?->format('H:i') ?? '-',
+                    'status' => $att->status ?? 'hadir',
                 ];
             });
 
+        // Untuk workcode harian, isi hari-hari yang tidak ada presensi sebagai alpha/libur
+        if ($workcode->kategori === 'harian') {
+            $attendances = $this->fillMissingDays($workcode, $participant, $attendances, $year, $month);
+        }
+
         return response()->json([
+            'participant' => [
+                'id' => $participant->id,
+                'nama' => $participant->nama,
+                'nis_nip' => $participant->nis_nip,
+                'status' => $participant->status ?? '',
+            ],
             'workcode' => $workcode,
-            'participant' => $participant,
-            'attendances' => $attendances
+            'attendances' => $attendances->values(),
         ]);
     }
 
+    // =========================================================================
+    //  WEB — Manual Attendance Management (Admin)
+    // =========================================================================
+
     /**
-     * Tambah log presensi secara manual oleh Admin.
+     * Simpan presensi manual baru (Admin).
      */
     public function manualStore(Request $request)
     {
         $request->validate([
-            'workcode_id' => 'required|exists:workcodes,id',
             'participant_id' => 'required|exists:participants,id',
+            'workcode_id' => 'required|exists:workcodes,id',
             'tanggal' => 'required|date',
             'jam_masuk' => 'nullable|string',
             'jam_pulang' => 'nullable|string',
             'status' => 'required|in:hadir,izin,sakit,alpha,lupa_absen,libur',
         ]);
 
-        $workcode = Workcode::findOrFail($request->workcode_id);
-        $tanggal = $request->tanggal;
+        $tanggal = Carbon::parse($request->input('tanggal'));
         $waktuHadir = $request->filled('jam_masuk')
-            ? \Carbon\Carbon::parse($tanggal . ' ' . $request->jam_masuk)
-            : ($request->status === 'hadir' ? \Carbon\Carbon::parse($tanggal . ' 07:00:00') : null);
+            ? Carbon::parse($request->input('tanggal').' '.$request->input('jam_masuk'))
+            : $tanggal->copy()->startOfDay();
 
-        $waktuPulang = $workcode->kategori === 'harian' && $request->filled('jam_pulang')
-            ? \Carbon\Carbon::parse($tanggal . ' ' . $request->jam_pulang)
+        $workcode = Workcode::findOrFail($request->input('workcode_id'));
+        $waktuPulang = ($workcode->kategori === 'harian' && $request->filled('jam_pulang'))
+            ? Carbon::parse($request->input('tanggal').' '.$request->input('jam_pulang'))
             : null;
 
-        $createdAt = $waktuHadir ?? \Carbon\Carbon::parse($tanggal . ' 07:00:00');
+        Attendance::create([
+            'workcode_id' => $request->input('workcode_id'),
+            'participant_id' => $request->input('participant_id'),
+            'tanggal' => $tanggal->toDateString(),
+            'waktu_hadir' => $waktuHadir,
+            'waktu_pulang' => $waktuPulang,
+            'status' => $request->input('status'),
+            'ip_address' => $request->ip(),
+        ]);
 
-        $attendance = Attendance::where('workcode_id', $request->workcode_id)
-            ->where('participant_id', $request->participant_id)
-            ->where(function ($q) use ($tanggal) {
-                $q->whereDate('created_at', $tanggal)
-                  ->orWhereDate('waktu_hadir', $tanggal)
-                  ->orWhereDate('waktu_pulang', $tanggal);
-            })
-            ->first();
-
-        if ($attendance) {
-            $attendance->update([
-                'waktu_hadir' => $waktuHadir,
-                'waktu_pulang' => $waktuPulang,
-                'status' => $request->status,
-                'created_at' => $createdAt,
-            ]);
-        } else {
-            Attendance::create([
-                'workcode_id' => $request->workcode_id,
-                'participant_id' => $request->participant_id,
-                'waktu_hadir' => $waktuHadir,
-                'waktu_pulang' => $waktuPulang,
-                'status' => $request->status,
-                'created_at' => $createdAt,
-            ]);
-        }
-
-        if ($request->wantsJson() || $request->ajax()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Data presensi berhasil disimpan.',
-                'attendance' => $attendance,
-            ]);
-        }
-
-        return redirect()->back()->with('success', 'Data presensi berhasil disimpan.');
+        return redirect()->back()->with('success', 'Data presensi berhasil ditambahkan.');
     }
 
     /**
-     * Update log presensi secara manual oleh Admin.
+     * Update presensi manual (Admin).
      */
     public function manualUpdate(Request $request, Attendance $attendance)
     {
@@ -613,303 +382,320 @@ class AttendanceController extends Controller
             'status' => 'required|in:hadir,izin,sakit,alpha,lupa_absen,libur',
         ]);
 
-        $attendance->loadMissing('workcode');
-        $tanggal = $request->tanggal;
+        $tanggal = Carbon::parse($request->input('tanggal'));
+
         $waktuHadir = $request->filled('jam_masuk')
-            ? \Carbon\Carbon::parse($tanggal . ' ' . $request->jam_masuk)
-            : ($request->status === 'hadir' ? ($attendance->waktu_hadir ?? \Carbon\Carbon::parse($tanggal . ' 07:00:00')) : null);
+            ? Carbon::parse($request->input('tanggal').' '.$request->input('jam_masuk'))
+            : $tanggal->copy()->startOfDay();
 
-        $waktuPulang = $attendance->workcode?->kategori === 'harian' && $request->filled('jam_pulang')
-            ? \Carbon\Carbon::parse($tanggal . ' ' . $request->jam_pulang)
+        $workcode = $attendance->workcode;
+        $waktuPulang = ($workcode->kategori === 'harian' && $request->filled('jam_pulang'))
+            ? Carbon::parse($request->input('tanggal').' '.$request->input('jam_pulang'))
             : null;
-
-        $createdAt = $waktuHadir ?? \Carbon\Carbon::parse($tanggal . ' 07:00:00');
 
         $attendance->update([
             'waktu_hadir' => $waktuHadir,
             'waktu_pulang' => $waktuPulang,
-            'status' => $request->status,
-            'created_at' => $createdAt,
+            'status' => $request->input('status'),
         ]);
-
-        if ($request->wantsJson() || $request->ajax()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Data presensi berhasil diperbarui.',
-                'attendance' => $attendance,
-            ]);
-        }
 
         return redirect()->back()->with('success', 'Data presensi berhasil diperbarui.');
     }
 
     /**
-     * Hapus log presensi oleh Admin (misal reset Alpha / Izin).
+     * Hapus presensi (Admin).
      */
-    public function manualDestroy(Request $request, Attendance $attendance)
+    public function manualDestroy(Attendance $attendance)
     {
         $attendance->delete();
-
-        if ($request->wantsJson() || $request->ajax()) {
-            return response()->json([
-                'success' => true,
-                'message' => 'Data presensi berhasil dihapus.',
-            ]);
-        }
 
         return redirect()->back()->with('success', 'Data presensi berhasil dihapus.');
     }
 
+    // =========================================================================
+    //  WEB — Export & QR Signature
+    // =========================================================================
+
     /**
-     * Export bukti daftar hadir workcode ke Excel (.xlsx / fallback .csv).
+     * Export data presensi ke CSV.
      */
     public function exportAttendance(Workcode $workcode)
     {
-        $attendances = Attendance::with('participant')
-            ->where('workcode_id', $workcode->id)
-            ->orderBy('waktu_hadir', 'asc')
-            ->get();
+        $allParticipants = Participant::orderBy('nama')->get();
+        $filename = 'rekap_presensi_'.str_replace(' ', '_', $workcode->nama_workcode).'_'.now()->format('Ymd_His').'.csv';
 
-        $totalParticipants = Participant::count();
-        $totalAttended = $attendances->count();
+        $headers = [
+            'Content-Type' => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
+        ];
 
-        try {
-            if (class_exists('PhpOffice\PhpSpreadsheet\Spreadsheet')) {
-                $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
-                $sheet = $spreadsheet->getActiveSheet();
-                $sheet->setTitle('Bukti Kehadiran');
+        $callback = function () use ($workcode, $allParticipants) {
+            $file = fopen('php://output', 'w');
+            // UTF-8 BOM for Excel compatibility
+            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
 
-                $lastColumn = $workcode->kategori === 'harian' ? 'I' : 'F';
-
-                // Header Kop Surat
-                $sheet->mergeCells('A1:' . $lastColumn . '1');
-                $sheet->setCellValue('A1', 'REKAP PRESENSI ' . mb_strtoupper($workcode->nama_workcode));
-                $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(14)->getColor()->setRGB('166534');
-                $sheet->getStyle('A1')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-
-                $sheet->mergeCells('A2:' . $lastColumn . '2');
-                $sheet->setCellValue('A2', 'SMA NEGERI 1 BABAT');
-                $sheet->getStyle('A2')->getFont()->setBold(true)->setSize(12);
-                $sheet->getStyle('A2')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-
-                // Workcode Metadata Info
-                $sheet->setCellValue('A4', 'Nama Workcode / Workcode');
-                $sheet->setCellValue('B4', ': ' . $workcode->nama_workcode);
-                $sheet->getStyle('A4')->getFont()->setBold(true);
-
-                $sheet->setCellValue('A5', 'Tanggal Workcode');
-                $sheet->setCellValue('B5', ': ' . $workcode->created_at->format('d F Y'));
-                $sheet->getStyle('A5')->getFont()->setBold(true);
-
-                $sheet->setCellValue('A6', 'Total Kehadiran');
-                $sheet->setCellValue('B6', ': ' . $totalAttended . ' dari ' . $totalParticipants . ' peserta');
-                $sheet->getStyle('A6')->getFont()->setBold(true);
-
-                $sheet->setCellValue('A7', 'Waktu Unduh');
-                $sheet->setCellValue('B7', ': ' . now()->format('d F Y H:i:s') . ' WIB');
-                $sheet->getStyle('A7')->getFont()->setBold(true);
-
-                // Table Headers (Row 9)
-                if ($workcode->kategori === 'harian') {
-                    $headers = ['No', 'Nama Lengkap', 'NIP', 'Alpha', 'Izin', 'Sakit', 'Lupa Absen', 'Total Telat', 'Status'];
-                    $columns = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I'];
-                } else {
-                    $headers = ['No', 'Nama Lengkap', 'NIP', 'Status Pegawai', 'Waktu Presensi', 'Status'];
-                    $columns = ['A', 'B', 'C', 'D', 'E', 'F'];
-                }
-
-                foreach ($headers as $index => $header) {
-                    $sheet->setCellValue($columns[$index] . '9', $header);
-                }
-
-                // Header Styling
-                $headerStyle = [
-                    'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
-                    'fill' => [
-                        'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
-                        'startColor' => ['rgb' => '15803D'],
-                    ],
-                    'alignment' => [
-                        'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
-                        'vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER,
-                    ],
-                ];
-                $sheet->getStyle('A9:' . $lastColumn . '9')->applyFromArray($headerStyle);
-                $sheet->getRowDimension(9)->setRowHeight(24);
-
-                // Format column C (NIP) as Text
-                $sheet->getStyle('C:C')->getNumberFormat()->setFormatCode('@');
-
-                // Data Rows
-                $row = 10;
-                foreach ($attendances as $idx => $att) {
-                    $sheet->setCellValue('A' . $row, $idx + 1);
-                    $sheet->setCellValue('B' . $row, $att->participant->nama ?? 'Tidak Dikenal');
-                    $sheet->setCellValueExplicit('C' . $row, $att->participant->nis_nip ?? '-', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-                    if ($workcode->kategori === 'harian') {
-                        $sheet->setCellValue('D' . $row, $att->status === 'alpha' ? '1' : '-');
-                        $sheet->setCellValue('E' . $row, $att->status === 'izin' ? '1' : '-');
-                        $sheet->setCellValue('F' . $row, $att->status === 'sakit' ? '1' : '-');
-                        $sheet->setCellValue('G' . $row, $att->status === 'lupa_absen' ? '1' : '-');
-                        $sheet->setCellValue('H' . $row, '-');
-                        $sheet->setCellValue('I' . $row, ucwords(str_replace('_', ' ', $att->status)));
-
-                        $sheet->getStyle('A' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-                        $sheet->getStyle('C' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-                        $sheet->getStyle('D' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-                        $sheet->getStyle('E' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-                        $sheet->getStyle('F' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-                        $sheet->getStyle('G' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-                        $sheet->getStyle('H' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-                        $sheet->getStyle('I' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-                    } else {
-                        $sheet->setCellValue('D' . $row, $att->participant->status ?? '-');
-                        $sheet->setCellValue('E' . $row, $att->waktu_hadir ? $att->waktu_hadir->format('d/m/Y H:i:s') : '-');
-                        $sheet->setCellValue('F' . $row, ucwords(str_replace('_', ' ', $att->status)));
-
-                        $sheet->getStyle('A' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-                        $sheet->getStyle('C' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-                        $sheet->getStyle('E' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-                        $sheet->getStyle('F' . $row)->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-                    }
-
-                    $row++;
-                }
-
-                if ($attendances->isEmpty()) {
-                    $sheet->mergeCells('A10:' . $lastColumn . '10');
-                    $sheet->setCellValue('A10', 'Belum ada data presensi untuk workcode ini.');
-                    $sheet->getStyle('A10')->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-                    $row = 11;
-                }
-
-                // Table Borders
-                $tableStyle = [
-                    'borders' => [
-                        'allBorders' => [
-                            'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
-                            'color' => ['rgb' => 'CBD5E1'],
-                        ],
-                    ],
-                ];
-                $sheet->getStyle('A9:' . $lastColumn . ($row - 1))->applyFromArray($tableStyle);
-
-                // Width dimensions
-                $sheet->getColumnDimension('A')->setWidth(8);
-                $sheet->getColumnDimension('B')->setWidth(32);
-                $sheet->getColumnDimension('C')->setWidth(26);
-                if ($workcode->kategori === 'harian') {
-                    $sheet->getColumnDimension('D')->setWidth(10);
-                    $sheet->getColumnDimension('E')->setWidth(10);
-                    $sheet->getColumnDimension('F')->setWidth(10);
-                    $sheet->getColumnDimension('G')->setWidth(12);
-                    $sheet->getColumnDimension('H')->setWidth(26);
-                    $sheet->getColumnDimension('I')->setWidth(14);
-                } else {
-                    $sheet->getColumnDimension('D')->setWidth(24);
-                    $sheet->getColumnDimension('E')->setWidth(22);
-                    $sheet->getColumnDimension('F')->setWidth(14);
-                }
-
-                $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
-                $slug = \Illuminate\Support\Str::slug($workcode->nama_workcode);
-                $filename = 'Bukti_Hadir_' . $slug . '_' . date('Ymd_His') . '.xlsx';
-
-                return response()->streamDownload(function () use ($writer) {
-                    $writer->save('php://output');
-                }, $filename, [
-                    'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                    'Cache-Control' => 'max-age=0',
-                ]);
-            }
-        } catch (\Throwable $e) {
-            // Fallback
-        }
-
-        // CSV Fallback
-        $slug = \Illuminate\Support\Str::slug($workcode->nama_workcode);
-        $csvFilename = 'Bukti_Hadir_' . $slug . '_' . date('Ymd_His') . '.csv';
-        return response()->streamDownload(function () use ($workcode, $attendances, $totalAttended, $totalParticipants) {
-            $handle = fopen('php://output', 'w');
-            fputs($handle, "\xEF\xBB\xBF"); // UTF-8 BOM
-            fputcsv($handle, ['REKAP PRESENSI ' . mb_strtoupper($workcode->nama_workcode) . ' - SMA NEGERI 1 BABAT']);
-            fputcsv($handle, ['Nama Workcode', $workcode->nama_workcode]);
-            fputcsv($handle, ['Tanggal', $workcode->created_at->format('d/m/Y')]);
-            fputcsv($handle, ['Total Kehadiran', $totalAttended . ' dari ' . $totalParticipants . ' peserta']);
-            fputcsv($handle, []);
-            
             if ($workcode->kategori === 'harian') {
-                fputcsv($handle, ['No', 'Nama Lengkap', 'NIP', 'Alpha', 'Izin', 'Sakit', 'Lupa Absen', 'Total Telat', 'Status']);
-                foreach ($attendances as $idx => $att) {
-                    fputcsv($handle, [
-                        $idx + 1,
-                        $att->participant->nama ?? 'Tidak Dikenal',
-                        $att->participant->nis_nip ?? '-',
-                        $att->status === 'alpha' ? '1' : '-',
-                        $att->status === 'izin' ? '1' : '-',
-                        $att->status === 'sakit' ? '1' : '-',
-                        $att->status === 'lupa_absen' ? '1' : '-',
-                        '-',
-                        ucwords(str_replace('_', ' ', $att->status)),
+                fputcsv($file, ['No', 'Nama', 'NIS/NIP', 'Status Pegawai', 'Alpha', 'Izin', 'Sakit', 'Lupa Absen', 'Total Terlambat (Menit)']);
+
+                $recaps = $this->buildDailyRecap($workcode, $allParticipants);
+                $no = 1;
+                foreach ($recaps as $r) {
+                    fputcsv($file, [
+                        $no++,
+                        $r['nama'],
+                        $r['nis_nip'],
+                        $r['status_pegawai'] ?? '',
+                        $r['total_alpha'] ?? 0,
+                        $r['total_izin'] ?? 0,
+                        $r['total_sakit'] ?? 0,
+                        $r['total_lupa_absen'] ?? 0,
+                        $r['total_menit_terlambat'] ?? 0,
                     ]);
                 }
             } else {
-                fputcsv($handle, ['No', 'Nama Lengkap', 'NIP', 'Status Pegawai', 'Waktu Presensi', 'Status']);
-                foreach ($attendances as $idx => $att) {
-                    fputcsv($handle, [
-                        $idx + 1,
-                        $att->participant->nama ?? 'Tidak Dikenal',
-                        $att->participant->nis_nip ?? '-',
-                        $att->participant->status ?? '-',
-                        $att->waktu_hadir ? $att->waktu_hadir->format('d/m/Y H:i:s') : '-',
-                        ucwords(str_replace('_', ' ', $att->status)),
+                fputcsv($file, ['No', 'Nama', 'NIS/NIP', 'Status Pegawai', 'Waktu Presensi', 'Status']);
+
+                $attendanceRecords = Attendance::where('workcode_id', $workcode->id)
+                    ->with('participant')
+                    ->get()
+                    ->keyBy('participant_id');
+
+                $no = 1;
+                foreach ($allParticipants as $p) {
+                    $att = $attendanceRecords->get($p->id);
+                    fputcsv($file, [
+                        $no++,
+                        $p->nama,
+                        $p->nis_nip,
+                        $p->status ?? '',
+                        $att?->waktu_hadir?->format('H:i:s') ?? '-',
+                        $att ? ($att->status ?? 'hadir') : 'alpha',
                     ]);
                 }
             }
-            fclose($handle);
-        }, $csvFilename, [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'Cache-Control' => 'max-age=0',
-        ]);
+
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
     }
 
     /**
-     * Generate TTD Digital QR Code untuk Kepala Sekolah pada Bukti Hadir Workcode.
+     * Generate QR Signature image (SVG) untuk tanda tangan digital pada laporan.
      */
-    public function qrSignature(Workcode $workcode)
+    public function qrSignature(Workcode $workcode, QrCodeService $qrCodeService)
     {
-        $verificationUrl = route('signature.verify', $workcode->id);
-
-        $size = 160;
-        $svg = \SimpleSoftwareIO\QrCode\Facades\QrCode::format('svg')
-            ->size($size)
-            ->errorCorrection('M')
-            ->margin(2)
-            ->style('round')
-            ->eye('circle')
-            ->color(0, 0, 0)
-            ->generate($verificationUrl);
-
-        $logoSize = 36;
-        $logoPos = ($size - $logoSize) / 2;
-        $circleRadius = ($logoSize / 2) + 4;
-        $circleCenter = $size / 2;
-
-        $logoBase64 = base64_encode(file_get_contents(public_path('images/logo.png')));
-        
-        $centerLogoSvg = <<<SVG
-        <g id="center-school-logo">
-            <circle cx="{$circleCenter}" cy="{$circleCenter}" r="{$circleRadius}" fill="#ffffff" />
-            <image href="data:image/png;base64,{$logoBase64}" x="{$logoPos}" y="{$logoPos}" width="{$logoSize}" height="{$logoSize}" preserveAspectRatio="xMidYMid meet"/>
-        </g>
-        </svg>
-        SVG;
-
-        $svg = str_replace('</svg>', $centerLogoSvg, $svg);
+        // URL verifikasi tanda tangan digital
+        $verifyUrl = route('signature.verify', $workcode->id);
+        $svg = $qrCodeService->generate($verifyUrl, 200);
 
         return response($svg, 200, [
             'Content-Type' => 'image/svg+xml',
             'Cache-Control' => 'public, max-age=86400',
         ]);
+    }
+
+    /**
+     * Helper: format respons JSON untuk scan.
+     */
+    private function scanJsonResponse(string $status, Participant $participant, Workcode $workcode, ?string $message = null)
+    {
+        $totalParticipants = Participant::count();
+        $totalAttended = Attendance::where('workcode_id', $workcode->id)
+            ->distinct('participant_id')
+            ->count('participant_id');
+
+        $defaultMessages = [
+            'already' => 'Peserta sudah melakukan presensi.',
+            'success' => 'Presensi berhasil dicatat!',
+            'error' => 'Gagal memproses presensi.',
+        ];
+
+        return response()->json([
+            'status' => $status,
+            'message' => $message ?? ($defaultMessages[$status] ?? ''),
+            'participant' => [
+                'id' => $participant->id,
+                'nama' => $participant->nama,
+                'nis_nip' => $participant->nis_nip,
+            ],
+            'timestamp' => now()->format('H:i:s'),
+            'stats' => [
+                'total' => $totalParticipants,
+                'hadir' => $totalAttended,
+                'belum' => $totalParticipants - $totalAttended,
+            ],
+        ]);
+    }
+
+    /**
+     * Build daily recap data per participant.
+     */
+    private function buildDailyRecap(Workcode $workcode, $allParticipants): array
+    {
+        $attendanceRecords = Attendance::where('workcode_id', $workcode->id)
+            ->get()
+            ->groupBy('participant_id');
+
+        // Ambil leave requests yang disetujui untuk workcode ini
+        $leaveRecords = LeaveRequest::where('workcode_id', $workcode->id)
+            ->where('status_approval', 'approved')
+            ->get()
+            ->groupBy('participant_id');
+
+        $batasJamDatang = $workcode->jam_datang_selesai
+            ? Carbon::createFromTimeString($workcode->jam_datang_selesai)
+            : Carbon::createFromTimeString('07:00:00');
+
+        return $allParticipants->map(function ($p) use ($attendanceRecords, $leaveRecords, $batasJamDatang) {
+            $participantAttendances = $attendanceRecords->get($p->id, collect());
+            $participantLeaves = $leaveRecords->get($p->id, collect());
+
+            $totalAlpha = 0;
+            $totalIzin = 0;
+            $totalSakit = 0;
+            $totalLupaAbsen = 0;
+            $totalMenitTerlambat = 0;
+
+            foreach ($participantAttendances as $att) {
+                $status = $att->status ?? 'hadir';
+
+                switch ($status) {
+                    case 'alpha':
+                        $totalAlpha++;
+                        break;
+                    case 'izin':
+                        $totalIzin++;
+                        break;
+                    case 'sakit':
+                        $totalSakit++;
+                        break;
+                    case 'lupa_absen':
+                        $totalLupaAbsen++;
+                        break;
+                    case 'hadir':
+                    default:
+                        if ($att->waktu_hadir) {
+                            $jamHadir = Carbon::parse($att->waktu_hadir);
+                            $batas = $batasJamDatang->copy()->setDate($jamHadir->year, $jamHadir->month, $jamHadir->day);
+                            if ($jamHadir->greaterThan($batas)) {
+                                $totalMenitTerlambat += (int) $batas->diffInMinutes($jamHadir);
+                            }
+                        }
+                        break;
+                }
+            }
+
+            // Tambahkan izin/sakit dari leave requests yang tidak ada attendance record-nya
+            foreach ($participantLeaves as $leave) {
+                $jenis = $leave->jenis_izin ?? $leave->tipe_izin ?? '';
+                if (str_contains($jenis, 'sakit')) {
+                    $totalSakit++;
+                } else {
+                    $totalIzin++;
+                }
+            }
+
+            $hasAnyAttendance = $participantAttendances->isNotEmpty();
+
+            return [
+                'id' => $participantAttendances->first()?->id,
+                'participant_id' => $p->id,
+                'nama' => $p->nama,
+                'nis_nip' => $p->nis_nip,
+                'status_pegawai' => $p->status ?? '',
+                'status' => $hasAnyAttendance ? 'hadir' : 'alpha',
+                'total_alpha' => $totalAlpha,
+                'total_izin' => $totalIzin,
+                'total_sakit' => $totalSakit,
+                'total_lupa_absen' => $totalLupaAbsen,
+                'total_menit_terlambat' => $totalMenitTerlambat,
+            ];
+        })->values()->toArray();
+    }
+
+    /**
+     * Fill missing days for harian workcode (alpha/libur).
+     */
+    private function fillMissingDays(Workcode $workcode, Participant $participant, $existingAttendances, int $year, int $month)
+    {
+        $startDate = Carbon::create($year, $month, 1)->startOfDay();
+        $endDate = $startDate->copy()->endOfMonth();
+        $today = now()->startOfDay();
+
+        // Jangan isi hari-hari di masa depan
+        if ($endDate->greaterThan($today)) {
+            $endDate = $today;
+        }
+
+        $attendedDates = $existingAttendances->pluck('tanggal')->toArray();
+
+        // Ambil leave requests untuk bulan ini
+        $leaveRequests = LeaveRequest::where('participant_id', $participant->id)
+            ->where('workcode_id', $workcode->id)
+            ->where('status_approval', 'approved')
+            ->where(function ($q) use ($startDate, $endDate) {
+                $q->whereBetween('tanggal', [$startDate, $endDate]);
+            })
+            ->get();
+
+        $leaveDates = [];
+        foreach ($leaveRequests as $leave) {
+            $leaveStart = Carbon::parse($leave->tanggal);
+            $leaveEnd = $leave->tanggal_selesai ? Carbon::parse($leave->tanggal_selesai) : $leaveStart;
+            $current = $leaveStart->copy();
+            while ($current->lte($leaveEnd)) {
+                $jenis = ($leave->jenis_izin && str_contains($leave->jenis_izin, 'sakit')) ? 'sakit' : 'izin';
+                $leaveDates[$current->format('Y-m-d')] = $jenis;
+                $current->addDay();
+            }
+        }
+
+        $result = collect($existingAttendances->toArray());
+
+        $current = $startDate->copy();
+        while ($current->lte($endDate)) {
+            $dateStr = $current->format('Y-m-d');
+            $dayOfWeek = $current->dayOfWeek; // 0 = Sunday, 6 = Saturday
+
+            if (! in_array($dateStr, $attendedDates)) {
+                // Sabtu/Minggu = libur
+                if ($dayOfWeek === 0 || $dayOfWeek === 6) {
+                    $result->push([
+                        'id' => null,
+                        'tanggal' => $dateStr,
+                        'jam_masuk' => '-',
+                        'jam_pulang' => '-',
+                        'waktu_hadir' => '-',
+                        'waktu_pulang' => '-',
+                        'status' => 'libur',
+                    ]);
+                } elseif (isset($leaveDates[$dateStr])) {
+                    $result->push([
+                        'id' => null,
+                        'tanggal' => $dateStr,
+                        'jam_masuk' => '-',
+                        'jam_pulang' => '-',
+                        'waktu_hadir' => '-',
+                        'waktu_pulang' => '-',
+                        'status' => $leaveDates[$dateStr],
+                    ]);
+                } else {
+                    $result->push([
+                        'id' => null,
+                        'tanggal' => $dateStr,
+                        'jam_masuk' => '-',
+                        'jam_pulang' => '-',
+                        'waktu_hadir' => '-',
+                        'waktu_pulang' => '-',
+                        'status' => 'alpha',
+                    ]);
+                }
+            }
+
+            $current->addDay();
+        }
+
+        return $result->sortBy('tanggal');
     }
 }

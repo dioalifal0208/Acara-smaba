@@ -6,6 +6,7 @@ import { useConfirm } from '@/Components/ConfirmDialog';
 import ImportModal from '@/Components/ImportModal';
 import FaceRegistrationModal from '@/Components/FaceRegistrationModal';
 import ApproveFaceModal from '@/Components/ApproveFaceModal';
+import ApprovePhotoChangeRequestModal from '@/Components/ApprovePhotoChangeRequestModal';
 
 const NON_PERMANENT_STATUSES = ['GTT', 'PTT'];
 
@@ -25,6 +26,7 @@ export default function ParticipantsIndex({ participants }) {
     const [editParticipant, setEditParticipant] = useState(null);
     const [faceRegistrationParticipant, setFaceRegistrationParticipant] = useState(null);
     const [approveFaceParticipant, setApproveFaceParticipant] = useState(null);
+    const [approvePhotoChangeRequestParticipant, setApprovePhotoChangeRequestParticipant] = useState(null);
 
     const { data, setData, post, processing, errors, reset } = useForm({
         nama: '',
@@ -462,7 +464,9 @@ export default function ParticipantsIndex({ participants }) {
                                     </div>
                                     {/* Face status */}
                                     <div className="text-[10px]">
-                                        {participant.face_status === 'approved' ? (
+                                        {participant.pending_photo_change_request ? (
+                                            <span className="font-semibold text-amber-600">⏳ Foto baru menunggu verifikasi</span>
+                                        ) : participant.face_status === 'approved' ? (
                                             <span className="font-semibold text-emerald-600">✓ Wajah Disetujui</span>
                                         ) : participant.face_status === 'pending' ? (
                                             <span className="font-semibold text-amber-600">⏳ Menunggu Persetujuan</span>
@@ -474,6 +478,14 @@ export default function ParticipantsIndex({ participants }) {
                                     </div>
                                     {/* Actions */}
                                     <div className="flex flex-wrap items-center gap-2">
+                                        {participant.pending_photo_change_request && (
+                                            <button
+                                                onClick={() => setApprovePhotoChangeRequestParticipant(participant)}
+                                                className="inline-flex items-center gap-1.5 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-white hover:bg-amber-600 shadow-sm"
+                                            >
+                                                Verifikasi Foto
+                                            </button>
+                                        )}
                                         {participant.face_status === 'pending' && (
                                             <button
                                                 onClick={() => setApproveFaceParticipant(participant)}
@@ -583,7 +595,12 @@ export default function ParticipantsIndex({ participants }) {
                                                         </div>
                                                         <div className="flex flex-col">
                                                             <span className="text-sm font-bold text-slate-800">{participant.nama}</span>
-                                                            {participant.face_status === 'approved' ? (
+                                                            {participant.pending_photo_change_request ? (
+                                                                <span className="mt-0.5 flex items-center gap-1 text-[10px] font-semibold text-amber-600">
+                                                                    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                                    Foto baru menunggu verifikasi
+                                                                </span>
+                                                            ) : participant.face_status === 'approved' ? (
                                                                 <span className="text-[10px] font-semibold text-emerald-600 flex items-center gap-1 mt-0.5">
                                                                     <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
                                                                     Wajah Disetujui
@@ -615,6 +632,16 @@ export default function ParticipantsIndex({ participants }) {
 
                                                 <td className="whitespace-nowrap px-6 py-3.5 text-center">
                                                     <div className="flex items-center justify-center gap-2">
+                                                        {participant.pending_photo_change_request && (
+                                                            <button
+                                                                onClick={() => setApprovePhotoChangeRequestParticipant(participant)}
+                                                                className="inline-flex items-center gap-1 rounded-lg bg-amber-500 px-2.5 py-1 text-xs font-bold text-white transition-colors hover:bg-amber-600 shadow-md shadow-amber-500/20"
+                                                                title="Verifikasi foto baru"
+                                                            >
+                                                                <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                                                Foto
+                                                            </button>
+                                                        )}
                                                         {participant.face_status === 'pending' && (
                                                             <button
                                                                 onClick={() => setApproveFaceParticipant(participant)}
@@ -930,6 +957,17 @@ export default function ParticipantsIndex({ participants }) {
                     onClose={() => setApproveFaceParticipant(null)}
                     onSuccess={() => {
                         setApproveFaceParticipant(null);
+                        router.reload({ only: ['participants'] });
+                    }}
+                />
+            )}
+
+            {approvePhotoChangeRequestParticipant && (
+                <ApprovePhotoChangeRequestModal
+                    participant={approvePhotoChangeRequestParticipant}
+                    onClose={() => setApprovePhotoChangeRequestParticipant(null)}
+                    onSuccess={() => {
+                        setApprovePhotoChangeRequestParticipant(null);
                         router.reload({ only: ['participants'] });
                     }}
                 />

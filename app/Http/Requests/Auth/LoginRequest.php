@@ -44,7 +44,7 @@ class LoginRequest extends FormRequest
 
         $login = trim($this->input('login'));
         $password = $this->input('password');
-        
+
         // Coba login dengan username (NIS/NIP) terlebih dahulu, jika gagal coba dengan email
         if (! Auth::attempt(['username' => $login, 'password' => $password], $this->boolean('remember')) &&
             ! Auth::attempt(['email' => $login, 'password' => $password], $this->boolean('remember'))) {

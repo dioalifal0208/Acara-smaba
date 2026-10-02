@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Workcode;
+use App\Services\FcmService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -26,7 +28,7 @@ class WorkcodeController extends Controller
     /**
      * Simpan workcode baru.
      */
-    public function store(Request $request)
+    public function store(Request $request, FcmService $fcmService)
     {
         $validated = $request->validate([
             'nama_workcode' => 'required|string|max:255',
@@ -46,12 +48,12 @@ class WorkcodeController extends Controller
         ]);
 
         $isFutureDate = false;
-        if (($validated['kategori'] ?? 'workcode') === 'workcode' && !empty($validated['tanggal'])) {
-            $isFutureDate = \Carbon\Carbon::parse($validated['tanggal'])->startOfDay()->isFuture();
+        if (($validated['kategori'] ?? 'workcode') === 'workcode' && ! empty($validated['tanggal'])) {
+            $isFutureDate = Carbon::parse($validated['tanggal'])->startOfDay()->isFuture();
         }
 
         $setActive = $request->boolean('set_active') || Workcode::count() === 0;
-        
+
         if ($isFutureDate) {
             $setActive = false;
         }
@@ -79,6 +81,9 @@ class WorkcodeController extends Controller
             'jadwal_per_hari' => $isDaily ? ($validated['jadwal_per_hari'] ?? null) : null,
         ]);
 
+        // Kirim FCM notification ke semua subscriber
+        $fcmService->sendWorkcodeUpdate('created', $workcode);
+
         $message = $setActive
             ? "Workcode '{$workcode->nama_workcode}' berhasil dibuat dan diaktifkan!"
             : "Workcode '{$workcode->nama_workcode}' berhasil dibuat.";
@@ -89,10 +94,13 @@ class WorkcodeController extends Controller
     /**
      * Aktifkan workcode tertentu.
      */
-    public function activate(Workcode $workcode)
+    public function activate(Workcode $workcode, FcmService $fcmService)
     {
         Workcode::query()->update(['is_active' => false]);
         $workcode->update(['is_active' => true]);
+
+        // Kirim FCM notification ke semua subscriber
+        $fcmService->sendWorkcodeUpdate('activated', $workcode);
 
         return redirect()->back()->with('success', "Workcode '{$workcode->nama_workcode}' sekarang aktif.");
     }
@@ -100,9 +108,12 @@ class WorkcodeController extends Controller
     /**
      * Nonaktifkan workcode aktif.
      */
-    public function deactivate(Workcode $workcode)
+    public function deactivate(Workcode $workcode, FcmService $fcmService)
     {
         $workcode->update(['is_active' => false]);
+
+        // Kirim FCM notification ke semua subscriber
+        $fcmService->sendWorkcodeUpdate('deactivated', $workcode);
 
         return redirect()->back()->with('success', "Workcode '{$workcode->nama_workcode}' telah dinonaktifkan.");
     }
@@ -110,9 +121,13 @@ class WorkcodeController extends Controller
     /**
      * Hapus workcode.
      */
-    public function destroy(Workcode $workcode)
+    public function destroy(Workcode $workcode, FcmService $fcmService)
     {
         $nama = $workcode->nama_workcode;
+
+        // Kirim FCM notification sebelum delete (masih punya ID)
+        $fcmService->sendWorkcodeUpdate('deleted', $workcode);
+
         $workcode->delete();
 
         return redirect()->back()->with('success', "Workcode '{$nama}' berhasil dihapus.");
@@ -121,7 +136,7 @@ class WorkcodeController extends Controller
     /**
      * Update workcode.
      */
-    public function update(Request $request, Workcode $workcode)
+    public function update(Request $request, Workcode $workcode, FcmService $fcmService)
     {
         $validated = $request->validate([
             'nama_workcode' => 'required|string|max:255',
@@ -156,6 +171,9 @@ class WorkcodeController extends Controller
             'radius_meters' => $validated['radius_meters'] ?? 50,
             'jadwal_per_hari' => $isDaily ? ($validated['jadwal_per_hari'] ?? null) : null,
         ]);
+
+        // Kirim FCM notification ke semua subscriber
+        $fcmService->sendWorkcodeUpdate('updated', $workcode);
 
         return redirect()->back()->with('success', "Workcode '{$workcode->nama_workcode}' berhasil diperbarui.");
     }

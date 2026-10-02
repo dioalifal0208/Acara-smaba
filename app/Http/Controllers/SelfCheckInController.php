@@ -2,13 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Participant;
 use App\Models\Attendance;
+use App\Models\Participant;
 use App\Models\Workcode;
+use App\Services\AttendanceValidationService;
 use App\Services\QrCodeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class SelfCheckInController extends Controller
@@ -30,10 +32,10 @@ class SelfCheckInController extends Controller
     {
         $activeWorkcode = Workcode::getActive();
         $token = $this->getWorkcodeToken();
-        
+
         // Buat URL check-in menggunakan host saat ini
         $checkInUrl = url("/self-checkin/{$token}");
-        
+
         // Generate QR code SVG untuk URL tersebut dengan Logo Sekolah di tengahnya
         $qrCodeSvg = $qrCodeService->generateWithLogo($checkInUrl, 400);
 
@@ -51,6 +53,7 @@ class SelfCheckInController extends Controller
     public function regenerateToken()
     {
         Cache::forget('active_workcode_token');
+
         return redirect()->route('admin.master-qr')
             ->with('success', 'Token workcode berhasil diregenerasi! URL absen telah diperbarui.');
     }
@@ -91,12 +94,10 @@ class SelfCheckInController extends Controller
         ]);
     }
 
-
-
     /**
      * Proses input NIS/NIP untuk absen mandiri per Workcode.
      */
-    public function submitForm(Request $request, $token, \App\Services\AttendanceValidationService $validationService)
+    public function submitForm(Request $request, $token, AttendanceValidationService $validationService)
     {
         $activeToken = $this->getWorkcodeToken();
 
@@ -111,7 +112,7 @@ class SelfCheckInController extends Controller
 
         try {
             $validationService->validateWorkcodeActive($activeWorkcode);
-        } catch (\Illuminate\Validation\ValidationException $e) {
+        } catch (ValidationException $e) {
             return response()->json([
                 'status' => 'error',
                 'message' => $e->validator->errors()->first(),
@@ -147,7 +148,7 @@ class SelfCheckInController extends Controller
             ? Participant::find($request->integer('participant_id'))
             : Participant::where('nis_nip', trim($request->input('nis_nip')))->first();
 
-        if (!$participant) {
+        if (! $participant) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Data peserta tidak terdaftar. Hubungi panitia.',
@@ -157,7 +158,7 @@ class SelfCheckInController extends Controller
         if ($validationService->checkAlreadyAttended($activeWorkcode, $participant)) {
             return response()->json([
                 'status' => 'already',
-                'message' => 'Anda sudah melakukan presensi untuk workcode "' . $activeWorkcode->nama_workcode . '".',
+                'message' => 'Anda sudah melakukan presensi untuk workcode "'.$activeWorkcode->nama_workcode.'".',
                 'participant' => $participant,
             ]);
         }
@@ -166,6 +167,7 @@ class SelfCheckInController extends Controller
         $attendance = Attendance::create([
             'workcode_id' => $activeWorkcode->id,
             'participant_id' => $participant->id,
+            'tanggal' => now()->toDateString(),
             'waktu_hadir' => now(),
             'device_hash' => $deviceHash,
             'ip_address' => $ipAddress,
@@ -173,7 +175,7 @@ class SelfCheckInController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Presensi berhasil dicatat untuk workcode "' . $activeWorkcode->nama_workcode . '"!',
+            'message' => 'Presensi berhasil dicatat untuk workcode "'.$activeWorkcode->nama_workcode.'"!',
             'participant' => $participant,
             'timestamp' => $attendance->waktu_hadir->format('H:i:s'),
         ]);

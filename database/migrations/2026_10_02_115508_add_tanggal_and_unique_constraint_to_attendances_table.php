@@ -1,0 +1,37 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::table('attendances', function (Blueprint $table) {
+            $table->date('tanggal')->nullable()->after('waktu_hadir');
+        });
+
+        // Backfill tanggal
+        DB::statement('UPDATE attendances SET tanggal = DATE(created_at)');
+
+        Schema::table('attendances', function (Blueprint $table) {
+            $table->date('tanggal')->nullable(false)->change();
+            $table->unique(['workcode_id', 'participant_id', 'tanggal'], 'unique_attendance');
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::table('attendances', function (Blueprint $table) {
+            $table->dropUnique('unique_attendance');
+            $table->dropColumn('tanggal');
+        });
+    }
+};

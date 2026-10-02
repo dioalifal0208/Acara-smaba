@@ -2,6 +2,8 @@
 
 namespace App\Console\Commands;
 
+use App\Models\Workcode;
+use App\Services\FcmService;
 use Illuminate\Console\Command;
 
 class AutoActivateWorkcode extends Command
@@ -12,29 +14,35 @@ class AutoActivateWorkcode extends Command
      * @var string
      */
     protected $signature = 'workcode:auto-activate';
+
     protected $description = 'Automatically activate scheduled workcodes that fall on today.';
 
-    public function handle()
+    public function handle(FcmService $fcmService)
     {
         $today = now()->toDateString();
-        
+
         // Cari workcode yang kategorinya 'workcode', tidak aktif, dan tanggalnya hari ini
-        $workcodesToActivate = \App\Models\Workcode::where('kategori', 'workcode')
+        $workcodesToActivate = Workcode::where('kategori', 'workcode')
             ->whereDate('tanggal', $today)
             ->where('is_active', false)
             ->get();
 
         if ($workcodesToActivate->isNotEmpty()) {
             // Nonaktifkan semua workcode yang sedang aktif
-            \App\Models\Workcode::query()->update(['is_active' => false]);
-            
+            Workcode::query()->update(['is_active' => false]);
+
             // Aktifkan salah satu workcode (yang terbaru atau bebas)
             $targetWorkcode = $workcodesToActivate->first();
             $targetWorkcode->update(['is_active' => true]);
 
+            // Kirim FCM notification ke semua subscriber
+            $fcmService->sendWorkcodeUpdate('activated', $targetWorkcode, [
+                'auto_activated' => '1',
+            ]);
+
             $this->info("Berhasil mengaktifkan workcode: {$targetWorkcode->nama_workcode}");
         } else {
-            $this->info("Tidak ada jadwal workcode yang perlu diaktifkan hari ini.");
+            $this->info('Tidak ada jadwal workcode yang perlu diaktifkan hari ini.');
         }
     }
 }

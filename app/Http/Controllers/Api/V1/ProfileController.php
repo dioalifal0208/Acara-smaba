@@ -14,7 +14,7 @@ class ProfileController extends Controller
     public function me(Request $request)
     {
         $user = $request->user();
-        
+
         // Eager load the participant relation only
         $user->load('participant');
 

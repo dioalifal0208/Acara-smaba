@@ -2,9 +2,9 @@
 
 namespace Tests\Feature;
 
+use App\Models\Attendance;
 use App\Models\Participant;
 use App\Models\Workcode;
-use App\Models\Attendance;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
@@ -19,7 +19,7 @@ class SelfCheckInWebTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        
+
         $this->token = Str::random(16);
         Cache::put('active_workcode_token', $this->token, now()->endOfDay());
     }
@@ -31,7 +31,7 @@ class SelfCheckInWebTest extends TestCase
         ]);
 
         $response->assertStatus(400)
-                 ->assertJson(['message' => 'Belum ada Workcode yang aktif. Presensi mandiri saat ini ditutup.']);
+            ->assertJson(['message' => 'Belum ada Workcode yang aktif. Presensi mandiri saat ini ditutup.']);
     }
 
     public function test_fails_if_workcode_is_harian()
@@ -47,7 +47,7 @@ class SelfCheckInWebTest extends TestCase
         ]);
 
         $response->assertStatus(403)
-                 ->assertJson(['message' => 'Presensi harian hanya dapat dilakukan melalui scan QR Code Pribadi oleh petugas/admin.']);
+            ->assertJson(['message' => 'Presensi harian hanya dapat dilakukan melalui scan QR Code Pribadi oleh petugas/admin.']);
     }
 
     public function test_successful_check_in()
@@ -71,7 +71,7 @@ class SelfCheckInWebTest extends TestCase
         ], ['User-Agent' => 'TestAgent']);
 
         $response->assertStatus(200)
-                 ->assertJson(['status' => 'success']);
+            ->assertJson(['status' => 'success']);
 
         $this->assertDatabaseHas('attendances', [
             'participant_id' => $participant->id,
@@ -141,6 +141,7 @@ class SelfCheckInWebTest extends TestCase
         Attendance::create([
             'workcode_id' => $workcode->id,
             'participant_id' => $participant->id,
+            'tanggal' => now()->toDateString(),
             'waktu_hadir' => now(),
             'device_hash' => hash('sha256', 'dev1|TestAgent'),
             'ip_address' => '127.0.0.1',
@@ -153,7 +154,7 @@ class SelfCheckInWebTest extends TestCase
         ], ['User-Agent' => 'TestAgent2']);
 
         $response->assertStatus(200)
-                 ->assertJson(['status' => 'already']);
+            ->assertJson(['status' => 'already']);
     }
 
     public function test_device_locked_for_another_user()
@@ -170,6 +171,7 @@ class SelfCheckInWebTest extends TestCase
         Attendance::create([
             'workcode_id' => $workcode->id,
             'participant_id' => $p1->id,
+            'tanggal' => now()->toDateString(),
             'waktu_hadir' => now(),
             'device_hash' => hash('sha256', 'dev1|TestAgent'),
             'ip_address' => '127.0.0.1',
@@ -182,7 +184,7 @@ class SelfCheckInWebTest extends TestCase
         ], ['User-Agent' => 'TestAgent']);
 
         $response->assertStatus(403)
-                 ->assertJson(['status' => 'device_locked']);
+            ->assertJson(['status' => 'device_locked']);
     }
 
     public function test_mock_location_is_rejected()
@@ -199,7 +201,7 @@ class SelfCheckInWebTest extends TestCase
         ]);
 
         $response->assertStatus(403)
-                 ->assertJson(['message' => 'Peringatan Keamanan: Terdeteksi manipulasi lokasi (Mock Location). Matikan aplikasi Fake GPS pada perangkat Anda.']);
+            ->assertJson(['message' => 'Peringatan Keamanan: Terdeteksi manipulasi lokasi (Mock Location). Matikan aplikasi Fake GPS pada perangkat Anda.']);
     }
 
     public function test_low_accuracy_is_rejected()
@@ -216,7 +218,7 @@ class SelfCheckInWebTest extends TestCase
         ]);
 
         $response->assertStatus(400)
-                 ->assertJson(['message' => 'Akurasi sinyal GPS perangkat Anda terlalu rendah (±121m). Pastikan fitur Lokasi Akurasi Tinggi diaktifkan dan Anda berada di area terbuka.']);
+            ->assertJson(['message' => 'Akurasi sinyal GPS perangkat Anda terlalu rendah (±121m). Pastikan fitur Lokasi Akurasi Tinggi diaktifkan dan Anda berada di area terbuka.']);
     }
 
     public function test_clock_skew_is_rejected()
@@ -233,7 +235,7 @@ class SelfCheckInWebTest extends TestCase
         ]);
 
         $response->assertStatus(400)
-                 ->assertJson(['message' => 'Waktu pada perangkat Anda tidak sinkron dengan server (selisih > 2 menit). Mohon atur jam perangkat ke otomatis/WIB.']);
+            ->assertJson(['message' => 'Waktu pada perangkat Anda tidak sinkron dengan server (selisih > 2 menit). Mohon atur jam perangkat ke otomatis/WIB.']);
     }
 
     public function test_out_of_radius_is_rejected()
@@ -255,8 +257,8 @@ class SelfCheckInWebTest extends TestCase
         ]);
 
         $response->assertStatus(403)
-                 ->assertJsonFragment(['status' => 'error']);
-        
+            ->assertJsonFragment(['status' => 'error']);
+
         $this->assertStringContainsString('Anda berada di luar radius presensi', $response->json('message'));
     }
 }

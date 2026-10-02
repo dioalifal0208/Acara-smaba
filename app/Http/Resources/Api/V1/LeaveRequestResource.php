@@ -16,11 +16,24 @@ class LeaveRequestResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'tipe' => $this->tipe,
+            'kategori' => 'izin',
+            'tipe_izin' => $this->tipe_izin,
+            'jenis_izin' => $this->jenis_izin,
             'tanggal' => $this->tanggal ? $this->tanggal->format('Y-m-d') : null,
-            'alasan' => $this->alasan,
+            'izin_lebih_dari_satu_hari' => $this->tanggal_selesai !== null,
+            'tanggal_selesai' => $this->tanggal_selesai ? $this->tanggal_selesai->format('Y-m-d') : null,
+            'keterangan' => $this->keterangan ?? $this->alasan,
             'status_approval' => $this->status_approval,
-            'has_proof' => !empty($this->bukti_path),
+            'has_dokumen' => ! empty($this->bukti_path),
+            'participant' => $this->when($this->relationLoaded('participant') && $this->participant, [
+                'id' => $this->participant->id,
+                'nama' => $this->participant->nama,
+                'nis_nip' => $this->participant->nis_nip,
+            ]),
+            'workcode' => $this->when($this->relationLoaded('workcode') && $this->workcode, [
+                'id' => $this->workcode->id,
+                'nama_workcode' => $this->workcode->nama_workcode,
+            ]),
         ];
     }
 }

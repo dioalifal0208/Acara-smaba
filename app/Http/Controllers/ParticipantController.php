@@ -3,19 +3,22 @@
 namespace App\Http\Controllers;
 
 use App\Models\Participant;
+use App\Models\User;
 use App\Services\QrCodeService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
-use Inertia\Inertia;
-use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
+use Inertia\Inertia;
+use PhpOffice\PhpSpreadsheet\Cell\Cell;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\Cell\StringValueBinder;
 use PhpOffice\PhpSpreadsheet\IOFactory;
-use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class ParticipantController extends Controller
 {
@@ -29,9 +32,12 @@ class ParticipantController extends Controller
     public function index()
     {
         $participants = Participant::withCount('attendances')
+            ->with(['photoChangeRequests' => fn ($query) => $query->where('status', 'pending')->latest()])
             ->orderBy('created_at', 'desc')
             ->get()
             ->map(function ($participant) {
+                $pendingPhotoChangeRequest = $participant->photoChangeRequests->first();
+
                 return [
                     'id' => $participant->id,
                     'nama' => $participant->nama,
@@ -41,6 +47,13 @@ class ParticipantController extends Controller
                     'has_face' => $participant->face_descriptor !== null,
                     'face_status' => $participant->face_status,
                     'photo_url' => $participant->photo_url,
+                    'pending_photo_change_request' => $pendingPhotoChangeRequest ? [
+                        'id' => $pendingPhotoChangeRequest->id,
+                        'photo_url' => $pendingPhotoChangeRequest->photo_path
+                            ? url('/storage/'.$pendingPhotoChangeRequest->photo_path)
+                            : null,
+                        'created_at' => $pendingPhotoChangeRequest->created_at->toIso8601String(),
+                    ] : null,
                     'has_attended' => $participant->attendances_count > 0,
                     'created_at' => $participant->created_at->format('d M Y H:i'),
                 ];
@@ -56,14 +69,17 @@ class ParticipantController extends Controller
      */
     private function cleanNisNip($val): string
     {
-        if (empty($val)) return '';
-        $val = trim((string)$val);
+        if (empty($val)) {
+            return '';
+        }
+        $val = trim((string) $val);
         // Hapus tanda petik tunggal/ganda di awal (contoh: '1980... atau "1980...)
         $val = preg_replace('/^[\'"]+/', '', $val);
         // Hapus desimal .00 / .0 di akhir jika terbaca sebagai float oleh Excel
         if (preg_match('/^(\d+)\.0+$/', $val, $m)) {
             $val = $m[1];
         }
+
         return trim($val);
     }
 
@@ -72,13 +88,26 @@ class ParticipantController extends Controller
      */
     private function normalizeStatus($status): ?string
     {
-        if (empty($status)) return null;
+        if (empty($status)) {
+            return null;
+        }
         $norm = strtolower(preg_replace('/\s+/', ' ', trim($status)));
-        if ($norm === 'pns') return 'PNS';
-        if ($norm === 'pppk') return 'PPPK';
-        if ($norm === 'gtt') return 'GTT';
-        if ($norm === 'ptt') return 'PTT';
-        if ($norm === 'pppk paruh waktu' || str_contains($norm, 'paruh waktu')) return 'PPPK Paruh Waktu';
+        if ($norm === 'pns') {
+            return 'PNS';
+        }
+        if ($norm === 'pppk') {
+            return 'PPPK';
+        }
+        if ($norm === 'gtt') {
+            return 'GTT';
+        }
+        if ($norm === 'ptt') {
+            return 'PTT';
+        }
+        if ($norm === 'pppk paruh waktu' || str_contains($norm, 'paruh waktu')) {
+            return 'PPPK Paruh Waktu';
+        }
+
         return trim($status);
     }
 
@@ -145,7 +174,7 @@ class ParticipantController extends Controller
      */
     public function store(Request $request)
     {
-        $cleanNama = trim((string)$request->input('nama'));
+        $cleanNama = trim((string) $request->input('nama'));
         $cleanStatus = $this->normalizeStatus($request->input('status'));
         $cleanNip = $this->normalizeNisNipForStatus($request->input('nis_nip'), $cleanStatus);
         $nipIsRequired = ! $this->isNonPermanentStatus($cleanStatus);
@@ -191,7 +220,7 @@ class ParticipantController extends Controller
      */
     public function update(Request $request, Participant $participant)
     {
-        $cleanNama = trim((string)$request->input('nama'));
+        $cleanNama = trim((string) $request->input('nama'));
         $cleanStatus = $this->normalizeStatus($request->input('status'));
         $cleanNip = $this->normalizeNisNipForStatus($request->input('nis_nip'), $cleanStatus);
         $nipIsRequired = ! $this->isNonPermanentStatus($cleanStatus);
@@ -302,11 +331,11 @@ class ParticipantController extends Controller
             400
         );
 
-        $filename = 'QR_' . Str::slug($participant->nama) . '_' . $participant->nis_nip . '.svg';
+        $filename = 'QR_'.Str::slug($participant->nama).'_'.$participant->nis_nip.'.svg';
 
         return response($svg, 200, [
             'Content-Type' => 'image/svg+xml',
-            'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
         ]);
     }
 
@@ -319,11 +348,11 @@ class ParticipantController extends Controller
         $png = $qrCodeService->generatePng($participant->qr_token, 400);
 
         if ($png) {
-            $filename = 'QR_' . Str::slug($participant->nama) . '_' . $participant->nis_nip . '.png';
+            $filename = 'QR_'.Str::slug($participant->nama).'_'.$participant->nis_nip.'.png';
 
             return response($png, 200, [
                 'Content-Type' => 'image/png',
-                'Content-Disposition' => 'attachment; filename="' . $filename . '"',
+                'Content-Disposition' => 'attachment; filename="'.$filename.'"',
             ]);
         }
 
@@ -343,10 +372,10 @@ class ParticipantController extends Controller
         }
 
         $participant = Participant::where('nis_nip', $query)
-            ->orWhere('nama', 'like', '%' . $query . '%')
+            ->orWhere('nama', 'like', '%'.$query.'%')
             ->first();
 
-        if (!$participant) {
+        if (! $participant) {
             return response()->json(['participant' => null]);
         }
 
@@ -356,7 +385,7 @@ class ParticipantController extends Controller
                 'nama' => $participant->nama,
                 'nis_nip' => $participant->nis_nip,
                 'qr_token' => $participant->qr_token,
-            ]
+            ],
         ]);
     }
 
@@ -371,8 +400,8 @@ class ParticipantController extends Controller
             return response()->json([]);
         }
 
-        $participants = Participant::where('nis_nip', 'like', $query . '%')
-            ->orWhere('nama', 'like', '%' . $query . '%')
+        $participants = Participant::where('nis_nip', 'like', $query.'%')
+            ->orWhere('nama', 'like', '%'.$query.'%')
             ->limit(5)
             ->get(['id', 'nama', 'nis_nip', 'status']);
 
@@ -393,7 +422,7 @@ class ParticipantController extends Controller
 
         try {
             // Gunakan StringValueBinder agar angka panjang (seperti NIP) tidak diubah menjadi float dan kehilangan presisi
-            \PhpOffice\PhpSpreadsheet\Cell\Cell::setValueBinder(new \PhpOffice\PhpSpreadsheet\Cell\StringValueBinder());
+            Cell::setValueBinder(new StringValueBinder);
             $spreadsheet = IOFactory::load($filePath);
             $sheet = $spreadsheet->getActiveSheet();
             $rows = $sheet->toArray(null, true, true, true);
@@ -423,9 +452,15 @@ class ParticipantController extends Controller
                 }
             }
 
-            if (!$namaColKey) $namaColKey = 'A';
-            if (!$nisNipColKey) $nisNipColKey = 'B';
-            if (!$statusColKey) $statusColKey = 'C';
+            if (! $namaColKey) {
+                $namaColKey = 'A';
+            }
+            if (! $nisNipColKey) {
+                $nisNipColKey = 'B';
+            }
+            if (! $statusColKey) {
+                $statusColKey = 'C';
+            }
 
             $conflicts = [];
             $cleanData = [];
@@ -435,9 +470,9 @@ class ParticipantController extends Controller
 
             foreach ($rows as $row) {
                 $rowIndex++;
-                $rawNama = trim((string)($row[$namaColKey] ?? ''));
-                $rawNip = trim((string)($row[$nisNipColKey] ?? ''));
-                $rawStatus = isset($row[$statusColKey]) ? trim((string)$row[$statusColKey]) : null;
+                $rawNama = trim((string) ($row[$namaColKey] ?? ''));
+                $rawNip = trim((string) ($row[$nisNipColKey] ?? ''));
+                $rawStatus = isset($row[$statusColKey]) ? trim((string) $row[$statusColKey]) : null;
                 $cleanStatus = $this->normalizeStatus($rawStatus);
 
                 if (empty($rawNama) || (empty($rawNip) && ! $this->isNonPermanentStatus($cleanStatus))) {
@@ -540,7 +575,7 @@ class ParticipantController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Gagal memproses file Excel: ' . $e->getMessage()], 422);
+            return response()->json(['error' => 'Gagal memproses file Excel: '.$e->getMessage()], 422);
         }
     }
 
@@ -615,9 +650,13 @@ class ParticipantController extends Controller
         }
 
         $summary = "Impor selesai! {$newCount} data baru ditambahkan";
-        if ($updatedCount > 0) $summary .= ", {$updatedCount} data diperbarui";
-        if ($skippedCount > 0) $summary .= ", {$skippedCount} data dilewati";
-        $summary .= ".";
+        if ($updatedCount > 0) {
+            $summary .= ", {$updatedCount} data diperbarui";
+        }
+        if ($skippedCount > 0) {
+            $summary .= ", {$skippedCount} data dilewati";
+        }
+        $summary .= '.';
 
         return redirect()->route('participants.index')->with('success', $summary);
     }
@@ -636,18 +675,18 @@ class ParticipantController extends Controller
 
         try {
             // Gunakan StringValueBinder agar angka panjang (seperti NIP) tidak diubah menjadi float dan kehilangan presisi
-            \PhpOffice\PhpSpreadsheet\Cell\Cell::setValueBinder(new \PhpOffice\PhpSpreadsheet\Cell\StringValueBinder());
-            $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($filePath);
+            Cell::setValueBinder(new StringValueBinder);
+            $spreadsheet = IOFactory::load($filePath);
             $sheet = $spreadsheet->getActiveSheet();
             $rows = $sheet->toArray(null, true, true, true); // Dapatkan baris ber-key kolom A, B, C...
-            
+
             if (empty($rows)) {
                 return redirect()->back()->with('error', 'File Excel/CSV kosong.');
             }
 
             // Dapatkan header dari baris pertama
             $firstRow = array_shift($rows);
-            $headers = array_map(function($h) {
+            $headers = array_map(function ($h) {
                 return strtolower(trim($h ?? ''));
             }, $firstRow);
 
@@ -669,16 +708,22 @@ class ParticipantController extends Controller
             }
 
             // Fallback default jika header tidak terdeteksi
-            if (!$namaColKey) $namaColKey = 'A';
-            if (!$nisNipColKey) $nisNipColKey = 'B';
-            if (!$statusColKey) $statusColKey = 'C';
+            if (! $namaColKey) {
+                $namaColKey = 'A';
+            }
+            if (! $nisNipColKey) {
+                $nisNipColKey = 'B';
+            }
+            if (! $statusColKey) {
+                $statusColKey = 'C';
+            }
 
             $successCount = 0;
 
             foreach ($rows as $row) {
-                $rawNama = trim((string)($row[$namaColKey] ?? ''));
-                $rawNip = trim((string)($row[$nisNipColKey] ?? ''));
-                $rawStatus = isset($row[$statusColKey]) ? trim((string)$row[$statusColKey]) : null;
+                $rawNama = trim((string) ($row[$namaColKey] ?? ''));
+                $rawNip = trim((string) ($row[$nisNipColKey] ?? ''));
+                $rawStatus = isset($row[$statusColKey]) ? trim((string) $row[$statusColKey]) : null;
                 $cleanStatus = $this->normalizeStatus($rawStatus);
 
                 if (empty($rawNama) || (empty($rawNip) && ! $this->isNonPermanentStatus($cleanStatus))) {
@@ -707,10 +752,10 @@ class ParticipantController extends Controller
             }
 
             return redirect()->route('participants.index')
-                ->with('success', $successCount . ' data peserta berhasil diproses (diimpor/diperbarui).');
+                ->with('success', $successCount.' data peserta berhasil diproses (diimpor/diperbarui).');
 
         } catch (\Exception $e) {
-            return redirect()->back()->with('error', 'Gagal memproses file Excel: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Gagal memproses file Excel: '.$e->getMessage());
         }
     }
 
@@ -721,7 +766,7 @@ class ParticipantController extends Controller
     {
         try {
             if (class_exists('PhpOffice\PhpSpreadsheet\Spreadsheet')) {
-                $spreadsheet = new Spreadsheet();
+                $spreadsheet = new Spreadsheet;
                 $sheet = $spreadsheet->getActiveSheet();
                 $sheet->setTitle('Data Peserta');
 
@@ -734,25 +779,25 @@ class ParticipantController extends Controller
                 $sheet->getStyle('B:B')->getNumberFormat()->setFormatCode('@');
 
                 // Contoh baris data terpisah per kolom
-                $sheet->setCellValueExplicit('A2', 'Drs. H. Ahmad Fauzi, M.Pd', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-                $sheet->setCellValueExplicit('B2', '197503122000031002', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-                $sheet->setCellValueExplicit('C2', 'PNS', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('A2', 'Drs. H. Ahmad Fauzi, M.Pd', DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('B2', '197503122000031002', DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('C2', 'PNS', DataType::TYPE_STRING);
 
-                $sheet->setCellValueExplicit('A3', 'Siti Nurhaliza, S.Pd', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-                $sheet->setCellValueExplicit('B3', '198504152010012004', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-                $sheet->setCellValueExplicit('C3', 'PPPK', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('A3', 'Siti Nurhaliza, S.Pd', DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('B3', '198504152010012004', DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('C3', 'PPPK', DataType::TYPE_STRING);
 
-                $sheet->setCellValueExplicit('A4', 'Bambang Sudarsono, S.T', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-                $sheet->setCellValueExplicit('B4', '198207182008011007', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-                $sheet->setCellValueExplicit('C4', 'PPPK Paruh Waktu', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('A4', 'Bambang Sudarsono, S.T', DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('B4', '198207182008011007', DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('C4', 'PPPK Paruh Waktu', DataType::TYPE_STRING);
 
-                $sheet->setCellValueExplicit('A5', 'Contoh Guru Tidak Tetap, S.Pd', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-                $sheet->setCellValueExplicit('B5', '-', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-                $sheet->setCellValueExplicit('C5', 'GTT', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('A5', 'Contoh Guru Tidak Tetap, S.Pd', DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('B5', '-', DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('C5', 'GTT', DataType::TYPE_STRING);
 
-                $sheet->setCellValueExplicit('A6', 'Contoh Pegawai Tidak Tetap', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-                $sheet->setCellValueExplicit('B6', '-', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-                $sheet->setCellValueExplicit('C6', 'PTT', \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('A6', 'Contoh Pegawai Tidak Tetap', DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('B6', '-', DataType::TYPE_STRING);
+                $sheet->setCellValueExplicit('C6', 'PTT', DataType::TYPE_STRING);
 
                 // Styling header
                 $headerStyle = [
@@ -786,9 +831,10 @@ class ParticipantController extends Controller
 
         // Native CSV Fallback with UTF-8 BOM
         $csvFilename = 'template_import_peserta.csv';
+
         return response()->streamDownload(function () {
             $handle = fopen('php://output', 'w');
-            fputs($handle, "\xEF\xBB\xBF"); // UTF-8 BOM for Excel
+            fwrite($handle, "\xEF\xBB\xBF"); // UTF-8 BOM for Excel
             fputcsv($handle, ['Nama', 'NIP', 'Status']);
             fputcsv($handle, ['Drs. H. Ahmad Fauzi, M.Pd', '197503122000031002', 'PNS']);
             fputcsv($handle, ['Siti Nurhaliza, S.Pd', '198504152010012004', 'PPPK']);

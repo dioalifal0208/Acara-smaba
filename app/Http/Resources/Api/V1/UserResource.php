@@ -35,8 +35,8 @@ class UserResource extends JsonResource
                 'face_status' => $participant->face_status,
             ];
 
-            if ($participant->photo_path && Storage::disk('public')->exists($participant->photo_path)) {
-                $participantData['photo_url'] = url('/storage/' . $participant->photo_path);
+            if ($participant->face_status === 'approved' && $participant->photo_path && Storage::disk('public')->exists($participant->photo_path)) {
+                $participantData['photo_url'] = url('/storage/'.$participant->photo_path);
             } else {
                 $participantData['photo_url'] = null;
             }

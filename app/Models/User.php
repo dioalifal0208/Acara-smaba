@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -10,7 +11,7 @@ use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
+    /** @use HasFactory<UserFactory> */
     use HasApiTokens, HasFactory, Notifiable;
 
     /**
@@ -25,6 +26,7 @@ class User extends Authenticatable
         'role',
         'username',
         'participant_id',
+        'fcm_token',
     ];
 
     /**
@@ -35,6 +37,7 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'fcm_token',
     ];
 
     /**
@@ -48,14 +51,11 @@ class User extends Authenticatable
 
     /**
      * Determine if the user is an admin.
-     *
-     * @return bool
      */
     public function getIsAdminAttribute(): bool
     {
         return $this->isAdmin();
     }
-
 
     /**
      * Get the attributes that should be cast.

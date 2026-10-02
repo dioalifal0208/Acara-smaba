@@ -28,8 +28,8 @@ class PhaseCAuthTest extends TestCase
         ]);
 
         $response->assertStatus(200)
-                 ->assertJsonStructure(['status', 'data' => ['token']]);
-        
+            ->assertJsonStructure(['status', 'data' => ['token']]);
+
         $this->assertEquals('success', $response->json('status'));
         $this->assertCount(1, $user->tokens);
         $this->assertTrue($user->tokens->first()->can('role:participant'));
@@ -49,8 +49,8 @@ class PhaseCAuthTest extends TestCase
         ]);
 
         $response->assertStatus(200)
-                 ->assertJsonStructure(['status', 'data' => ['token']]);
-        
+            ->assertJsonStructure(['status', 'data' => ['token']]);
+
         $this->assertTrue($user->tokens->first()->can('role:admin'));
     }
 
@@ -68,11 +68,11 @@ class PhaseCAuthTest extends TestCase
         ]);
 
         $response->assertStatus(401)
-                 ->assertJson([
-                     'status' => 'error',
-                     'message' => __('auth.failed')
-                 ]);
-        
+            ->assertJson([
+                'status' => 'error',
+                'message' => __('auth.failed'),
+            ]);
+
         $this->assertCount(0, $user->tokens);
     }
 
@@ -85,11 +85,11 @@ class PhaseCAuthTest extends TestCase
 
         // Login using the token directly (Sanctum::actingAs doesn't set a real PersonalAccessToken in the DB for the current request sometimes, but we can just use the token in header)
         $response = $this->withHeaders([
-            'Authorization' => 'Bearer ' . $token,
+            'Authorization' => 'Bearer '.$token,
         ])->postJson('/api/v1/auth/logout');
 
         $response->assertStatus(200)
-                 ->assertJson(['status' => 'success', 'message' => 'Berhasil logout.']);
+            ->assertJson(['status' => 'success', 'message' => 'Berhasil logout.']);
 
         $this->assertCount(0, $user->tokens);
     }
@@ -106,7 +106,7 @@ class PhaseCAuthTest extends TestCase
             'username' => 'testuser',
             'name' => 'Test Name',
             'email' => 'test@test.com',
-            'role' => 'participant'
+            'role' => 'participant',
         ]);
 
         $participant = Participant::create([
@@ -116,7 +116,7 @@ class PhaseCAuthTest extends TestCase
             'face_descriptor' => '{"some":"data"}',
             'face_status' => 'approved',
         ]);
-        
+
         $user->participant_id = $participant->id;
         $user->save();
 
@@ -125,24 +125,24 @@ class PhaseCAuthTest extends TestCase
         $response = $this->getJson('/api/v1/me');
 
         $response->assertStatus(200)
-                 ->assertJson([
-                     'status' => 'success',
-                     'data' => [
-                         'user' => [
-                             'id' => $user->id,
-                             'username' => 'testuser',
-                             'email' => 'test@test.com',
-                             'role' => 'participant',
-                             'name' => 'Test Name',
-                             'participant' => [
-                                 'nis_nip' => '12345',
-                                 'nama' => 'Test Name',
-                                 'face_status' => 'approved',
-                                 'photo_url' => null, // Assuming no file actually exists in storage for this test
-                             ]
-                         ]
-                     ]
-                 ]);
+            ->assertJson([
+                'status' => 'success',
+                'data' => [
+                    'user' => [
+                        'id' => $user->id,
+                        'username' => 'testuser',
+                        'email' => 'test@test.com',
+                        'role' => 'participant',
+                        'name' => 'Test Name',
+                        'participant' => [
+                            'nis_nip' => '12345',
+                            'nama' => 'Test Name',
+                            'face_status' => 'approved',
+                            'photo_url' => null, // Assuming no file actually exists in storage for this test
+                        ],
+                    ],
+                ],
+            ]);
 
         // Ensure sensitive data is not returned
         $json = $response->json();

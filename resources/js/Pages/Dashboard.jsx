@@ -203,7 +203,7 @@ export default function Dashboard({ stats, activeWorkcode: propActiveWorkcode, p
                                 </svg>
                                 Akses Cepat
                             </h3>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 flex-none lg:flex-1">
+                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 flex-none lg:flex-1">
                                 
                                 {/* Item 1 */}
                                 <Link
@@ -274,6 +274,29 @@ export default function Dashboard({ stats, activeWorkcode: propActiveWorkcode, p
                                         </div>
                                         <h3 className="font-extrabold text-slate-800 text-sm mb-1 group-hover:text-purple-700 transition-colors">Workcode</h3>
                                         <p className="text-[11px] text-slate-500 font-medium">Konfigurasi</p>
+                                    </div>
+                                </Link>
+
+                                {/* Item 5 */}
+                                <Link
+                                    href={route('admin.leave.index')}
+                                    className={`group relative overflow-hidden rounded-2xl bg-white p-3 sm:p-4 border border-slate-100 shadow-sm transition-all duration-500 hover:shadow-xl hover:shadow-rose-500/10 hover:border-rose-200 hover:-translate-y-1.5 flex flex-col items-center justify-center text-center transform ${mounted ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
+                                    style={{ transitionDelay: '550ms' }}
+                                >
+                                    <div className="absolute inset-0 bg-gradient-to-br from-rose-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                                    {pendingLeaveCount > 0 && (
+                                        <span className="absolute right-3 top-3 z-10 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-rose-500 px-1 text-[10px] font-black text-white shadow-sm">
+                                            {pendingLeaveCount > 99 ? '99+' : pendingLeaveCount}
+                                        </span>
+                                    )}
+                                    <div className="relative z-10">
+                                        <div className="mx-auto mb-2 h-10 w-10 sm:h-12 sm:w-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center shadow-inner group-hover:bg-rose-600 group-hover:text-white transition-colors duration-300">
+                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                            </svg>
+                                        </div>
+                                        <h3 className="font-extrabold text-slate-800 text-sm mb-1 group-hover:text-rose-700 transition-colors">Perizinan</h3>
+                                        <p className="text-[11px] text-slate-500 font-medium">Riwayat & verifikasi</p>
                                     </div>
                                 </Link>
                             </div>

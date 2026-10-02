@@ -103,6 +103,7 @@ class AttendanceManagementTest extends TestCase
         return Attendance::create([
             'workcode_id' => $workcode->id,
             'participant_id' => $this->createParticipant()->id,
+            'tanggal' => '2026-09-25',
             'waktu_hadir' => '2026-09-25 08:00:00',
             'waktu_pulang' => '2026-09-25 16:00:00',
             'status' => 'hadir',

@@ -1,20 +1,32 @@
 <?php
 
+use App\Http\Controllers\AdminLeaveController;
 use App\Http\Controllers\AttendanceController;
-use App\Http\Controllers\WorkcodeController;
+use App\Http\Controllers\FaceRecognitionController;
+use App\Http\Controllers\HolidayController;
+use App\Http\Controllers\LeaveRequestController;
 use App\Http\Controllers\ParticipantController;
+use App\Http\Controllers\PhotoChangeRequestController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SelfCheckInController;
+use App\Http\Controllers\SettingController;
+use App\Http\Controllers\VerificationController;
+use App\Http\Controllers\WorkcodeController;
+use App\Models\Attendance;
+use App\Models\LeaveRequest;
+use App\Models\Participant;
+use App\Models\Workcode;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 Route::get('/', function () {
     $user = auth()->user();
-    
+
     // Live Stats untuk Guest & Admin
-    $totalParticipants = \App\Models\Participant::count();
-    $totalAttended = \App\Models\Attendance::distinct('participant_id')->count('participant_id');
+    $totalParticipants = Participant::count();
+    $totalAttended = Attendance::distinct('participant_id')->count('participant_id');
     $stats = [
         'total' => $totalParticipants,
         'hadir' => $totalAttended,
@@ -22,7 +34,7 @@ Route::get('/', function () {
     ];
 
     // Ambil 5 aktivitas presensi terbaru (disensor namanya untuk privasi)
-    $recentScans = \App\Models\Attendance::with('participant')
+    $recentScans = Attendance::with('participant')
         ->orderBy('created_at', 'desc')
         ->take(5)
         ->get()
@@ -32,8 +44,9 @@ Route::get('/', function () {
             $parts = explode(' ', $name);
             $maskedName = $parts[0];
             if (count($parts) > 1) {
-                $maskedName .= ' ' . substr($parts[count($parts)-1], 0, 1) . '.';
+                $maskedName .= ' '.substr($parts[count($parts) - 1], 0, 1).'.';
             }
+
             return [
                 'id' => $attendance->id,
                 'nama' => $maskedName,
@@ -59,13 +72,13 @@ Route::get('/participants/{participant}/download-png', [ParticipantController::c
 Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     // Dashboard route
     Route::get('/dashboard', function () {
-        $activeWorkcode = \App\Models\Workcode::getActive();
-        $totalParticipants = \App\Models\Participant::count();
+        $activeWorkcode = Workcode::getActive();
+        $totalParticipants = Participant::count();
         $totalAttended = $activeWorkcode
-            ? \App\Models\Attendance::where('workcode_id', $activeWorkcode->id)->distinct('participant_id')->count('participant_id')
+            ? Attendance::where('workcode_id', $activeWorkcode->id)->distinct('participant_id')->count('participant_id')
             : 0;
-            
-        $pendingLeaveCount = \App\Models\LeaveRequest::where('status_approval', 'pending')->count();
+
+        $pendingLeaveCount = LeaveRequest::where('status_approval', 'pending')->count();
 
         return Inertia::render('Dashboard', [
             'activeWorkcode' => $activeWorkcode,
@@ -79,9 +92,9 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     })->name('dashboard');
 
     // Leave Approvals
-    Route::get('/admin/leaves', [\App\Http\Controllers\AdminLeaveController::class, 'index'])->name('admin.leave.index');
-    Route::post('/admin/leaves/{leaveRequest}/approve', [\App\Http\Controllers\AdminLeaveController::class, 'approve'])->name('admin.leave.approve');
-    Route::post('/admin/leaves/{leaveRequest}/reject', [\App\Http\Controllers\AdminLeaveController::class, 'reject'])->name('admin.leave.reject');
+    Route::get('/admin/leaves', [AdminLeaveController::class, 'index'])->name('admin.leave.index');
+    Route::post('/admin/leaves/{leaveRequest}/approve', [AdminLeaveController::class, 'approve'])->name('admin.leave.approve');
+    Route::post('/admin/leaves/{leaveRequest}/reject', [AdminLeaveController::class, 'reject'])->name('admin.leave.reject');
 
     // Event management routes
     Route::get('/workcodes', [WorkcodeController::class, 'index'])->name('workcodes.index');
@@ -103,12 +116,16 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::delete('/participants/{participant}', [ParticipantController::class, 'destroy'])->name('participants.destroy');
 
     // Face Registration routes (Admin)
-    Route::post('/api/participants/{participant}/face', [\App\Http\Controllers\FaceRecognitionController::class, 'register'])->name('participants.face.register');
-    Route::delete('/api/participants/{participant}/face', [\App\Http\Controllers\FaceRecognitionController::class, 'deleteFace'])->name('participants.face.delete');
-    
+    Route::post('/api/participants/{participant}/face', [FaceRecognitionController::class, 'register'])->name('participants.face.register');
+    Route::delete('/api/participants/{participant}/face', [FaceRecognitionController::class, 'deleteFace'])->name('participants.face.delete');
+
     // Face Approval routes (Admin)
-    Route::post('/admin/participants/{participant}/face/approve', [\App\Http\Controllers\FaceRecognitionController::class, 'approveFace'])->name('participants.face.approve');
-    Route::post('/admin/participants/{participant}/face/reject', [\App\Http\Controllers\FaceRecognitionController::class, 'rejectFace'])->name('participants.face.reject');
+    Route::post('/admin/participants/{participant}/face/approve', [FaceRecognitionController::class, 'approveFace'])->name('participants.face.approve');
+    Route::post('/admin/participants/{participant}/face/reject', [FaceRecognitionController::class, 'rejectFace'])->name('participants.face.reject');
+
+    // Photo change request verification (Admin)
+    Route::post('/admin/photo-change-requests/{photoChangeRequest}/approve', [PhotoChangeRequestController::class, 'approve'])->name('photo-change-requests.approve');
+    Route::post('/admin/photo-change-requests/{photoChangeRequest}/reject', [PhotoChangeRequestController::class, 'reject'])->name('photo-change-requests.reject');
 
     // Master QR routes
     Route::get('/admin/master-qr', [SelfCheckInController::class, 'masterQr'])->name('admin.master-qr');
@@ -129,16 +146,17 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::get('/scanner', [AttendanceController::class, 'scanner'])->name('scanner');
     Route::post('/scan', [AttendanceController::class, 'scan'])->name('scan');
     Route::post('/api/scan', [AttendanceController::class, 'apiScan'])->name('api.scan');
-    
+
     // Settings routes
-    Route::get('/admin/settings', [\App\Http\Controllers\SettingController::class, 'edit'])->name('admin.settings');
-    Route::post('/admin/settings', [\App\Http\Controllers\SettingController::class, 'update'])->name('admin.settings.update');
+    Route::get('/admin/settings', [SettingController::class, 'edit'])->name('admin.settings');
+    Route::post('/admin/settings', [SettingController::class, 'update'])->name('admin.settings.update');
 });
 
 Route::middleware(['auth', 'verified', 'role:participant'])->group(function () {
     // Participant Dashboard
     Route::get('/participant/dashboard', function () {
-        $activeWorkcode = \App\Models\Workcode::getActive();
+        $activeWorkcode = Workcode::getActive();
+
         return Inertia::render('Participant/Dashboard', [
             'activeWorkcode' => $activeWorkcode,
             'participant' => auth()->user()->participant,
@@ -151,11 +169,12 @@ Route::middleware(['auth', 'verified', 'role:participant'])->group(function () {
             'participant' => auth()->user()->participant,
         ]);
     })->name('participant.face-registration');
-    
-    Route::post('/api/participants/{participant}/face/self', [\App\Http\Controllers\FaceRecognitionController::class, 'registerSelf'])->name('participants.face.self-register');
+
+    Route::post('/api/participants/{participant}/face/self', [FaceRecognitionController::class, 'registerSelf'])->name('participants.face.self-register');
 
     // Leave request submission
-    Route::post('/participant/leave', [\App\Http\Controllers\LeaveRequestController::class, 'store'])->name('leave.store');
+    Route::post('/participant/leave', [LeaveRequestController::class, 'store'])->name('leave.store');
+    Route::get('/participant/leave-history', [LeaveRequestController::class, 'history'])->name('leave.history');
 });
 
 Route::middleware('auth')->group(function () {
@@ -171,22 +190,23 @@ Route::get('/self-checkin/{token}', [SelfCheckInController::class, 'showForm'])-
 Route::post('/self-checkin/{token}', [SelfCheckInController::class, 'submitForm'])->name('self-checkin.submit');
 
 // Public Holidays API
-Route::get('/api/holidays', [\App\Http\Controllers\HolidayController::class, 'index'])->name('api.holidays');
+Route::get('/api/holidays', [HolidayController::class, 'index'])->name('api.holidays');
 
 // Public Face Recognition routes
-Route::post('/api/face/match', [\App\Http\Controllers\FaceRecognitionController::class, 'match'])->name('face.match');
+Route::post('/api/face/match', [FaceRecognitionController::class, 'match'])->name('face.match');
 
 // Fallback & direct handler for public storage files (works even if storage:link is missing/broken on hosting/cPanel)
 Route::get('/storage/{path}', function ($path) {
-    if (!\Illuminate\Support\Facades\Storage::disk('public')->exists($path)) {
+    if (! Storage::disk('public')->exists($path)) {
         abort(404);
     }
-    return \Illuminate\Support\Facades\Storage::disk('public')->response($path, null, [
+
+    return Storage::disk('public')->response($path, null, [
         'Cache-Control' => 'public, max-age=31536000',
     ]);
 })->where('path', '.*')->name('storage.file');
 
 // Verification route
-Route::get('/verify-signature/{workcode}', [\App\Http\Controllers\VerificationController::class, 'verify'])->name('signature.verify');
+Route::get('/verify-signature/{workcode}', [VerificationController::class, 'verify'])->name('signature.verify');
 
 require __DIR__.'/auth.php';

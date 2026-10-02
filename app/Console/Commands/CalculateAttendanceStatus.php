@@ -2,28 +2,29 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
-use App\Models\Workcode;
-use App\Models\Participant;
 use App\Models\Attendance;
+use App\Models\Participant;
+use App\Models\Workcode;
 use Carbon\Carbon;
+use Illuminate\Console\Command;
 
 class CalculateAttendanceStatus extends Command
 {
     protected $signature = 'attendance:calculate-alpha';
+
     protected $description = 'Hitung status Alpha dan Lupa Absen untuk event secara berkala';
 
     public function handle()
     {
         $today = Carbon::today();
         $currentTime = now()->format('H:i:s');
-        
+
         // Cari workcode harian yang aktif
         $workcodes = Workcode::where('is_active', true)->where('kategori', 'harian')->get();
 
         foreach ($workcodes as $workcode) {
             $hariAktif = $workcode->hari_aktif ?? [];
-            if (!empty($hariAktif) && !in_array($today->dayOfWeekIso, $hariAktif)) {
+            if (! empty($hariAktif) && ! in_array($today->dayOfWeekIso, $hariAktif)) {
                 continue; // Tidak aktif hari ini
             }
 
@@ -36,14 +37,16 @@ class CalculateAttendanceStatus extends Command
                 $attendance = Attendance::where('workcode_id', $workcode->id)
                     ->where('participant_id', $participant->id)
                     ->whereDate('created_at', $today)
+                    ->with('leaveRequest')
                     ->first();
 
                 // Skenario 1: Sudah lewat batas absen DATANG, belum ada record sama sekali
                 if ($jamDatangSelesai && $currentTime > $jamDatangSelesai) {
-                    if (!$attendance) {
+                    if (! $attendance) {
                         $attendance = Attendance::create([
                             'workcode_id' => $workcode->id,
                             'participant_id' => $participant->id,
+                            'tanggal' => $today,
                             'status' => 'lupa_absen', // Lupa absen masuk
                             'created_at' => now(),
                             'updated_at' => now(),
@@ -54,6 +57,14 @@ class CalculateAttendanceStatus extends Command
                 // Skenario 2: Sudah lewat batas absen PULANG (akhir hari)
                 if ($jamPulangSelesai && $currentTime > $jamPulangSelesai) {
                     if ($attendance) {
+                        $hasApprovedPulangPermission = $attendance->leaveRequest
+                            && $attendance->leaveRequest->status_approval === 'approved'
+                            && $attendance->leaveRequest->tipe_izin === 'tidak_absen_pulang';
+
+                        if ($hasApprovedPulangPermission) {
+                            continue;
+                        }
+
                         // Jangan ubah jika status sudah izin/sakit
                         if (in_array($attendance->status, ['izin', 'sakit'])) {
                             continue;
@@ -64,9 +75,9 @@ class CalculateAttendanceStatus extends Command
                             if ($attendance->status !== 'alpha') {
                                 $attendance->update(['status' => 'alpha']);
                             }
-                        } 
+                        }
                         // Jika dia absen masuk tapi tidak absen pulang
-                        else if (!is_null($attendance->waktu_hadir) && is_null($attendance->waktu_pulang)) {
+                        elseif (! is_null($attendance->waktu_hadir) && is_null($attendance->waktu_pulang)) {
                             if ($attendance->status !== 'lupa_absen') {
                                 $attendance->update(['status' => 'lupa_absen']);
                             }
@@ -76,6 +87,7 @@ class CalculateAttendanceStatus extends Command
                         Attendance::create([
                             'workcode_id' => $workcode->id,
                             'participant_id' => $participant->id,
+                            'tanggal' => $today,
                             'status' => 'alpha',
                             'created_at' => now(),
                             'updated_at' => now(),

@@ -31,7 +31,7 @@ class PhaseAScaffoldingTest extends TestCase
     public function test_api_route_file_is_loaded()
     {
         // Simple test to ensure the framework registers the /api route prefix
-        // Since we didn't define endpoints, we just check if the prefix exists or wait, 
+        // Since we didn't define endpoints, we just check if the prefix exists or wait,
         // we can check if it returns 404 (meaning router knows it) vs something else.
         $response = $this->getJson('/api/non-existent-route-should-be-404');
         $response->assertStatus(404);
