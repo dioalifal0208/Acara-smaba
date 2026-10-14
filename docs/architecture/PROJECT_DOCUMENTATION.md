@@ -175,6 +175,7 @@ Catatan kebersihan repository:
 |---|---|
 | `attendance:calculate-alpha` | Setiap 5 menit; menghitung status alpha setelah sesi selesai. |
 | `workcode:auto-activate` | Setiap menit; mengaktifkan dan menonaktifkan workcode kegiatan sesuai tanggal/jam aktif serta mengirim FCM. |
+| `user:make-admin {username}` | Membuat akun admin atau menaikkan akun yang ada; password diminta interaktif. |
 | `face:update-descriptor --id=` | Utility pemeliharaan descriptor wajah peserta. |
 | `fcm:test [--token=]` | Pengujian push ke topic atau token tertentu. |
 
@@ -324,7 +325,7 @@ erDiagram
 - `POST /api/face/match`;
 - `GET /verify-signature/{workcode}`;
 - fallback `GET /storage/{path}` untuk hosting tanpa symlink;
-- route registrasi/login/reset password dari `routes/auth.php`.
+- route login dan reset password dari `routes/auth.php` (registrasi publik sudah ditutup).
 
 ### 9.2 Route admin
 
@@ -463,7 +464,7 @@ Production harus memakai `APP_ENV=production`, `APP_DEBUG=false`, HTTPS, databas
 
 ### Kritis
 
-1. **Registrasi publik dapat menghasilkan akun admin.** Route `GET/POST /register` terbuka untuk guest. `RegisteredUserController` membuat user tanpa menentukan role, sedangkan schema database memberi default role `admin`. User kemudian login dan diarahkan ke dashboard admin. Tutup registrasi publik atau tetapkan role aman secara eksplisit; audit seluruh user yang pernah dibuat.
+1. ~~**Registrasi publik dapat menghasilkan akun admin.**~~ **Selesai 14 Oktober 2026.** Route `/register` dan `RegisteredUserController` dihapus, `role` dikeluarkan dari `$fillable`, default kolom `role` menjadi `participant`, dan admin baru dibuat lewat `php artisan user:make-admin`. Audit produksi saat perbaikan: hanya 1 admin, semuanya memiliki username, sehingga tidak ada tanda akun hasil registrasi publik.
 
 2. **Kredensial SSH plaintext berada di `deploy/test.ps1`.** Segera rotasi password/kunci terkait, hapus kredensial dari file, gunakan `deploy/.env.deploy` atau secret manager, dan bersihkan history Git bila file pernah di-commit. Jangan hanya menghapus baris pada commit terbaru.
 

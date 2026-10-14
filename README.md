@@ -218,6 +218,12 @@ npm run build
 
 Akun admin awal dibuat oleh [DatabaseSeeder](database/seeders/DatabaseSeeder.php). Password bawaannya **hanya untuk lokal**; segera ganti di instance yang bisa diakses orang lain.
 
+Registrasi publik ditutup, dan akun baru otomatis ber-role `participant`. Admin tambahan dibuat lewat terminal server (password diminta secara interaktif):
+
+```bash
+php artisan user:make-admin operator1 --name="Operator TU"
+```
+
 > **Kamera** (scanner QR dan wajah) hanya berjalan di *secure context*, yaitu `localhost` atau HTTPS. Untuk uji coba di HP, jalankan lewat HTTPS (SSL Laragon atau tunnel).
 
 ---
@@ -242,6 +248,7 @@ Variabel penting di `.env`:
 |---|---|---|
 | `attendance:calculate-alpha` | tiap 5 menit | Menandai peserta alpha setelah jendela sesi ditutup |
 | `workcode:auto-activate` | tiap menit | Mengaktifkan/menonaktifkan workcode kegiatan sesuai jendela tanggal/jam, lalu kirim FCM |
+| `user:make-admin {username}` | manual | Membuat akun admin, atau menaikkan akun yang ada menjadi admin |
 | `face:update-descriptor --id=` | manual | Menghitung ulang descriptor wajah peserta |
 | `fcm:test [--token=]` | manual | Uji kirim push ke topic default atau satu perangkat |
 
