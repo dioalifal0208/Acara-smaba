@@ -233,15 +233,14 @@ php artisan package:discover --ansi
 php artisan migrate --force
 php artisan optimize:clear
 php artisan config:cache
-php artisan route:cache
+# route:cache dilewati: cache route hasil server rusak (GET / -> 405), route dimuat langsung dari file
 php artisan view:cache
 chmod -R 775 storage bootstrap/cache
 
 mkdir -p "`$PUBLIC_DIR"
 cp -a public/. "`$PUBLIC_DIR/"
-sed -i "s|__DIR__.'/../storage/framework/maintenance.php'|__DIR__.'/../../presensi-app/storage/framework/maintenance.php'|" "`$PUBLIC_DIR/index.php"
-sed -i "s|__DIR__.'/../vendor/autoload.php'|__DIR__.'/../../presensi-app/vendor/autoload.php'|" "`$PUBLIC_DIR/index.php"
-sed -i "s|__DIR__.'/../bootstrap/app.php'|__DIR__.'/../../presensi-app/bootstrap/app.php'|" "`$PUBLIC_DIR/index.php"
+sed -i -e 's#/\.\./storage/framework/#/../../presensi-app/storage/framework/#' -e 's#/\.\./vendor/#/../../presensi-app/vendor/#' -e 's#/\.\./bootstrap/#/../../presensi-app/bootstrap/#' `$PUBLIC_DIR/index.php
+grep -q presensi-app/vendor/autoload.php `$PUBLIC_DIR/index.php
 if [ ! -e "`$PUBLIC_DIR/storage" ]; then
     ln -s "`$APP_DIR/storage/app/public" "`$PUBLIC_DIR/storage"
 fi
