@@ -11,5 +11,5 @@ Artisan::command('inspire', function () {
 // Jadwalkan pengecekan status absensi secara rutin (setiap 5 menit)
 Schedule::command('attendance:calculate-alpha')->everyFiveMinutes()->withoutOverlapping();
 
-// Aktivasi otomatis workcode yang dijadwalkan pada hari ini
-Schedule::command('workcode:auto-activate')->dailyAt('00:01')->withoutOverlapping();
+// Sinkronkan aktivasi kegiatan berdasarkan tanggal dan jam aktifnya.
+Schedule::command('workcode:auto-activate')->everyMinute()->withoutOverlapping();

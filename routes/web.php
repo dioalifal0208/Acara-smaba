@@ -186,6 +186,7 @@ Route::middleware('auth')->group(function () {
 
 // Public Self Check-In routes (no login required)
 Route::get('/api/participants/search', [ParticipantController::class, 'search'])->name('participants.search');
+Route::get('/self-checkin/{token}/participants', [SelfCheckInController::class, 'searchParticipants'])->name('self-checkin.participants');
 Route::get('/self-checkin/{token}', [SelfCheckInController::class, 'showForm'])->name('self-checkin.show');
 Route::post('/self-checkin/{token}', [SelfCheckInController::class, 'submitForm'])->name('self-checkin.submit');
 

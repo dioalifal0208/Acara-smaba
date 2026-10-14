@@ -12,7 +12,7 @@ class AttendanceValidationService
 {
     public function validateWorkcodeActive(?Workcode $workcode, bool $isMobileApi = false)
     {
-        if (! $workcode) {
+        if (! $workcode || ! $workcode->isEffectivelyActive()) {
             throw ValidationException::withMessages([
                 'workcode' => 'Belum ada Workcode yang aktif. Presensi mandiri saat ini ditutup.',
             ])->status(400);
@@ -27,7 +27,7 @@ class AttendanceValidationService
 
     public function validateTimeWindow(Workcode $workcode, bool $isPulang): void
     {
-        if (in_array($workcode->kategori, ['kegiatan', '24_jam'])) {
+        if ($workcode->kategori === 'workcode') {
             return;
         }
 
@@ -153,7 +153,7 @@ class AttendanceValidationService
         $attendanceQuery = Attendance::where('workcode_id', $workcode->id)
             ->where('participant_id', $participant->id)
             ->when(
-                in_array($workcode->kategori, ['harian', '24_jam']),
+                $workcode->kategori === 'harian',
                 fn ($query) => $query->whereDate('created_at', now()->toDateString())
             );
 

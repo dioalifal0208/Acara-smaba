@@ -26,6 +26,8 @@ Thumbs.db
 # Deploy credentials (NEVER commit)
 deploy/.env.deploy
 deploy/.env.staging
+deploy/*.key
+deploy/*.pem
 
 # Firebase service account (NEVER commit)
 storage/app/firebase-credentials.json

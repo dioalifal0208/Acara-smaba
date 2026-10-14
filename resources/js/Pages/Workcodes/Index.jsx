@@ -1,27 +1,11 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, useForm, router, usePage } from '@inertiajs/react';
-import React, { useState, useEffect, useRef } from 'react';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
-
-import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
-import markerIcon from 'leaflet/dist/images/marker-icon.png';
-import markerShadow from 'leaflet/dist/images/marker-shadow.png';
-
-delete L.Icon.Default.prototype._getIconUrl;
-
-L.Icon.Default.mergeOptions({
-    iconRetinaUrl: markerIcon2x,
-    iconUrl: markerIcon,
-    shadowUrl: markerShadow
-});
-import { MapContainer, TileLayer, Marker, Circle, useMapEvents, useMap } from 'react-leaflet';
+import React, { useState, useEffect } from 'react';
 import { useToast } from '@/Components/Toast';
 import { useConfirm } from '@/Components/ConfirmDialog';
+import GoogleMap from '@/Components/GoogleMap';
 
 const DEFAULT_MAP_POSITION = { lat: -6.2088, lng: 106.8456 };
-const HIGH_ACCURACY_TARGET_METERS = 100;
-const LOCATION_SEARCH_TIMEOUT_MS = 20000;
 const INDONESIA_BOUNDS = {
     south: -11.5,
     north: 6.5,
@@ -50,339 +34,6 @@ const isWithinIndonesia = (coordinate) => (
     && coordinate.lng <= INDONESIA_BOUNDS.east
 );
 
-function MapModalCenter({ center }) {
-    const map = useMap();
-    useEffect(() => {
-        if (center) {
-            const timer = setTimeout(() => {
-                map.invalidateSize();
-                map.setView(center, 17);
-            }, 150);
-            return () => clearTimeout(timer);
-        }
-    }, [center, map]);
-    return null;
-}
-
-function MapRecenter({ center }) {
-    const map = useMap();
-    useEffect(() => {
-        if (center) {
-            const timer = setTimeout(() => {
-                map.invalidateSize();
-                map.setView([center.lat, center.lng], map.getZoom());
-            }, 200);
-            return () => clearTimeout(timer);
-        }
-    }, [center, map]);
-    return null;
-}
-
-function LocationMarker({ position, setPosition, radius, setLocationStatus }) {
-    const locateButtonRef = useRef(null);
-    const locationWatchRef = useRef(null);
-    const locationTimeoutRef = useRef(null);
-    const bestLocationRef = useRef(null);
-    const setPositionRef = useRef(setPosition);
-    setPositionRef.current = setPosition;
-    const setLocationStatusRef = useRef(setLocationStatus);
-    setLocationStatusRef.current = setLocationStatus;
-    const radiusRef = useRef(radius);
-    radiusRef.current = radius;
-
-    // Calculate zoom level that fits the radius nicely on screen
-    const getZoomForRadius = (radiusMeters) => {
-        // Zoom lebih dekat (lebih besar nilainya) agar radius terlihat besar di layar
-        const z = 19 - Math.log2(Math.max(radiusMeters, 20) / 50);
-        return Math.min(19, Math.max(14, Math.round(z * 2) / 2));
-    };
-
-    const setLocateButtonState = (state) => {
-        const btn = locateButtonRef.current;
-        if (!btn) return;
-
-        // Reset all states
-        btn.disabled = false;
-        btn.style.cursor = 'pointer';
-        btn.style.backgroundColor = 'white';
-        btn.style.boxShadow = '';
-        btn.style.transform = '';
-        btn.style.transition = 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)';
-        btn.setAttribute('aria-busy', 'false');
-
-        const svgEl = btn.querySelector('svg');
-        if (svgEl) {
-            svgEl.style.animation = '';
-            svgEl.style.color = '#4f46e5'; // indigo-600
-        }
-
-        if (state === 'loading') {
-            btn.disabled = true;
-            btn.style.cursor = 'wait';
-            btn.style.backgroundColor = '#eef2ff'; // indigo-50
-            btn.style.boxShadow = '0 0 0 3px rgba(99,102,241,0.15)';
-            btn.setAttribute('aria-busy', 'true');
-            if (svgEl) {
-                svgEl.style.color = '#4f46e5';
-            }
-        } else if (state === 'success') {
-            btn.style.backgroundColor = '#dcfce7'; // green-100
-            btn.style.boxShadow = '0 0 0 3px rgba(34,197,94,0.25)';
-            btn.style.animation = 'locatePulse 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)';
-            if (svgEl) svgEl.style.color = '#16a34a'; // green-600
-            setTimeout(() => {
-                if (!locateButtonRef.current) return;
-                locateButtonRef.current.style.backgroundColor = 'white';
-                locateButtonRef.current.style.boxShadow = '';
-                locateButtonRef.current.style.animation = '';
-                const s = locateButtonRef.current.querySelector('svg');
-                if (s) s.style.color = '#4f46e5';
-            }, 2500);
-        } else if (state === 'error') {
-            btn.style.backgroundColor = '#fef2f2'; // red-50
-            btn.style.boxShadow = '0 0 0 3px rgba(239,68,68,0.2)';
-            if (svgEl) svgEl.style.color = '#dc2626'; // red-600
-            setTimeout(() => {
-                if (!locateButtonRef.current) return;
-                locateButtonRef.current.style.backgroundColor = 'white';
-                locateButtonRef.current.style.boxShadow = '';
-                const s = locateButtonRef.current.querySelector('svg');
-                if (s) s.style.color = '#4f46e5';
-            }, 2000);
-        }
-    };
-
-    const stopLocationSearch = () => {
-        if (locationWatchRef.current !== null && navigator.geolocation) {
-            navigator.geolocation.clearWatch(locationWatchRef.current);
-            locationWatchRef.current = null;
-        }
-        if (locationTimeoutRef.current !== null) {
-            clearTimeout(locationTimeoutRef.current);
-            locationTimeoutRef.current = null;
-        }
-        setLocateButtonState('idle');
-    };
-
-    // Ripple effect on map when position found (berjalan terus-menerus)
-    const triggerLocationFoundEffect = (latlng) => {
-        // Hapus ripple sebelumnya jika ada
-        if (map._rippleInterval) cancelAnimationFrame(map._rippleInterval);
-        if (map._ripple1) map.removeLayer(map._ripple1);
-        if (map._ripple2) map.removeLayer(map._ripple2);
-
-        const ripple1 = L.circleMarker(latlng, {
-            radius: 5, color: '#4f46e5', fillColor: '#4f46e5',
-            fillOpacity: 0.4, opacity: 0.8, weight: 2,
-            className: 'locate-ripple',
-        }).addTo(map);
-        const ripple2 = L.circleMarker(latlng, {
-            radius: 5, color: '#4f46e5', fillColor: 'transparent',
-            fillOpacity: 0, opacity: 0.6, weight: 2,
-            className: 'locate-ripple-2',
-        }).addTo(map);
-
-        map._ripple1 = ripple1;
-        map._ripple2 = ripple2;
-
-        let frame = 0;
-        const animate = () => {
-            frame++;
-            if (frame > 60) frame = 0; // Loop kembali ke awal
-            const r1 = 5 + frame * 1.5;
-            const r2 = 5 + frame * 2.5;
-            const op1 = Math.max(0, 0.8 - (frame / 60) * 0.8);
-            const op2 = Math.max(0, 0.6 - (frame / 60) * 0.6);
-            try {
-                ripple1.setRadius(r1).setStyle({ opacity: op1, fillOpacity: op1 * 0.5 });
-                ripple2.setRadius(r2).setStyle({ opacity: op2 });
-                map._rippleInterval = requestAnimationFrame(animate);
-            } catch (_) {}
-        };
-        map._rippleInterval = requestAnimationFrame(animate);
-    };
-
-    const map = useMapEvents({
-        click(e) {
-            stopLocationSearch();
-            const selectedPosition = { lat: e.latlng.lat, lng: e.latlng.lng };
-            setPositionRef.current(selectedPosition);
-            setLocationStatusRef.current({
-                type: 'manual',
-                message: 'Titik lokasi dipilih secara manual pada peta.',
-            });
-        },
-    });
-
-    useEffect(() => {
-        // Inject CSS keyframes for button animations
-        const styleId = 'locate-btn-styles';
-        if (!document.getElementById(styleId)) {
-            const style = document.createElement('style');
-            style.id = styleId;
-            style.textContent = `
-                @keyframes locateSpin {
-                    0%   { transform: rotate(0deg); }
-                    100% { transform: rotate(360deg); }
-                }
-                @keyframes locatePulse {
-                    0%   { transform: scale(1); box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
-                    50%  { transform: scale(1.15); box-shadow: 0 0 0 8px rgba(34,197,94,0); }
-                    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(34,197,94,0); }
-                }
-                .leaflet-control-custom button { border-radius: 8px !important; }
-            `;
-            document.head.appendChild(style);
-        }
-
-        const locateControl = L.control({ position: 'topright' });
-        locateControl.onAdd = function () {
-            const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-custom');
-            const button = L.DomUtil.create('button', '', container);
-            button.type = 'button';
-            button.style.backgroundColor = 'white';
-            button.style.width = '34px';
-            button.style.height = '34px';
-            button.style.cursor = 'pointer';
-            button.style.display = 'flex';
-            button.style.alignItems = 'center';
-            button.style.justifyContent = 'center';
-            button.style.borderRadius = '8px';
-            button.style.border = 'none';
-            button.style.transition = 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)';
-            button.title = 'Gunakan Lokasi Saya Saat Ini';
-            button.setAttribute('aria-label', 'Gunakan Lokasi Saya Saat Ini');
-            // MAP PIN icon (lebih intuitif dari globe)
-            button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#4f46e5;display:block;transition:color 0.3s ease"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>';
-            locateButtonRef.current = button;
-            L.DomEvent.disableClickPropagation(container);
-
-            L.DomEvent.on(button, 'click', (event) => {
-                L.DomEvent.preventDefault(event);
-
-                if (!navigator.geolocation) {
-                    setLocationStatusRef.current({ type: 'error', message: 'Browser ini tidak mendukung deteksi lokasi.' });
-                    return;
-                }
-
-                stopLocationSearch();
-                bestLocationRef.current = null;
-                setLocateButtonState('loading');
-                setLocationStatusRef.current({ type: 'locating', message: 'Mencari lokasi GPS Anda...' });
-
-                const applyGpsPosition = (geolocationPosition) => {
-                    const accuracy = Number(geolocationPosition.coords.accuracy);
-                    const candidate = {
-                        lat: Number(geolocationPosition.coords.latitude),
-                        lng: Number(geolocationPosition.coords.longitude),
-                    };
-
-                    // Validasi: koordinat harus valid dan berada di wilayah Indonesia
-                    if (!isValidCoordinate(candidate)) return;
-                    if (!isWithinIndonesia(candidate)) return;
-                    if (!Number.isFinite(accuracy) || accuracy <= 0) return;
-
-                    const existingBest = bestLocationRef.current;
-                    const isBetter = existingBest === null || accuracy < existingBest.accuracy;
-                    if (!isBetter) return;
-
-                    const isFirst = existingBest === null;
-                    bestLocationRef.current = { ...candidate, accuracy };
-                    setPositionRef.current(candidate);
-
-                    const finalZoom = getZoomForRadius(radiusRef.current);
-
-                    // Animasi map menyeret (bergeser) secara perlahan tanpa loncat (zoom out)
-                    map.panTo([candidate.lat, candidate.lng], { animate: true, duration: 1.5 });
-                    setTimeout(() => {
-                        map.setZoom(finalZoom, { animate: true });
-                    }, 500); // Zoom disesuaikan sedikit setelah mulai bergeser
-
-                    // Mempercepat loading: Langsung terima koordinat GPS valid pertama tanpa harus menunggu akurasi tertinggi
-                    setTimeout(() => {
-                        triggerLocationFoundEffect([candidate.lat, candidate.lng]);
-                        setLocateButtonState('success');
-                    }, 1000);
-                    stopLocationSearch();
-                    setLocationStatusRef.current({ type: 'success', message: `Lokasi ditemukan (akurasi ${Math.round(accuracy)} m).` });
-                    return;
-                };
-
-                const handleError = (error) => {
-                    const best = bestLocationRef.current;
-                    stopLocationSearch();
-                    setLocateButtonState(best ? 'success' : 'error');
-                    if (best) {
-                        triggerLocationFoundEffect([best.lat, best.lng]);
-                        setLocationStatusRef.current({ type: 'success', message: `Lokasi terbaik diterapkan (akurasi ${Math.round(best.accuracy)} m).` });
-                        return;
-                    }
-                    const msgs = {
-                        1: 'Akses lokasi ditolak. Izinkan akses lokasi di browser, lalu coba lagi.',
-                        2: 'Posisi tidak dapat ditentukan. Silakan coba lagi.',
-                        3: 'Waktu habis. Pastikan GPS/lokasi perangkat aktif.',
-                    };
-                    setLocationStatusRef.current({ type: 'error', message: msgs[error.code] || 'Lokasi tidak dapat diperoleh.' });
-                };
-
-                // IP geolocation API sebagai fallback cepat (jika GPS lambat/gagal)
-                fetch('https://ipapi.co/json/')
-                    .then(r => r.json())
-                    .then(ipData => {
-                        if (ipData && ipData.latitude && ipData.longitude && !bestLocationRef.current) {
-                            const ipCandidate = { lat: Number(ipData.latitude), lng: Number(ipData.longitude) };
-                            if (isValidCoordinate(ipCandidate)) {
-                                bestLocationRef.current = { ...ipCandidate, accuracy: 5000 };
-                                setPositionRef.current(ipCandidate);
-                                map.panTo([ipCandidate.lat, ipCandidate.lng], { animate: true, duration: 1.5 });
-                                setTimeout(() => map.setZoom(15, { animate: true }), 500);
-                                setLocationStatusRef.current({ type: 'locating', message: 'Posisi awal dari jaringan. Menunggu GPS untuk lokasi presisi...' });
-                            }
-                        }
-                    })
-                    .catch(() => {});
-
-                // Browser GPS: langsung watchPosition untuk hasil real-time
-                locationWatchRef.current = navigator.geolocation.watchPosition(
-                    applyGpsPosition,
-                    handleError,
-                    { enableHighAccuracy: true, maximumAge: 0, timeout: LOCATION_SEARCH_TIMEOUT_MS }
-                );
-
-                // Fallback timeout
-                locationTimeoutRef.current = setTimeout(() => {
-                    const best = bestLocationRef.current;
-                    stopLocationSearch();
-                    if (best) {
-                        setLocateButtonState('success');
-                        triggerLocationFoundEffect([best.lat, best.lng]);
-                        setLocationStatusRef.current({ type: 'success', message: `Lokasi terbaik diterapkan (akurasi ${Math.round(best.accuracy)} m).` });
-                    } else {
-                        setLocateButtonState('error');
-                        setLocationStatusRef.current({ type: 'error', message: 'Lokasi GPS tidak dapat diperoleh. Pastikan izin lokasi browser diaktifkan.' });
-                    }
-                }, LOCATION_SEARCH_TIMEOUT_MS);
-            });
-
-            return container;
-        };
-        locateControl.addTo(map);
-        return () => {
-            stopLocationSearch();
-            locateButtonRef.current = null;
-            map.removeControl(locateControl);
-        };
-    }, [map]);
-
-    return position === null ? null : (
-        <React.Fragment>
-            <Marker position={position}></Marker>
-            <Circle center={position} pathOptions={{ fillColor: 'blue' }} radius={radius} />
-        </React.Fragment>
-    );
-}
-
-
 class MapErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -409,6 +60,13 @@ const normalizeTimeForInput = (value, fallback) => {
     return typeof value === 'string' && value.length >= 5
         ? value.substring(0, 5)
         : fallback;
+};
+
+const getTodayForInput = () => {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+
+    return now.toISOString().slice(0, 10);
 };
 
 const normalizeDailySchedule = (schedule) => {
@@ -440,7 +98,9 @@ export default function WorkcodesIndex({ workcodes }) {
         nama_workcode: '',
         deskripsi: '',
         kategori: 'workcode',
-        tanggal: '',
+        tanggal: getTodayForInput(),
+        jam_aktif_mulai: '07:00',
+        jam_aktif_selesai: '10:00',
         hari_aktif: [1,2,3,4,5],
         jam_datang_mulai: '06:00',
         jam_datang_selesai: '07:00',
@@ -505,15 +165,11 @@ export default function WorkcodesIndex({ workcodes }) {
     const handleSubmit = (e) => {
         e.preventDefault();
 
-        const isFutureWorkcode = data.kategori === 'workcode'
-            && data.tanggal
-            && new Date(data.tanggal) > new Date(new Date().setHours(0, 0, 0, 0));
-
         transform((formData) => ({
             ...formData,
             latitude: mapPosition?.lat ?? formData.latitude,
             longitude: mapPosition?.lng ?? formData.longitude,
-            set_active: isFutureWorkcode ? false : formData.set_active,
+            set_active: formData.kategori === 'workcode' ? false : formData.set_active,
         }));
 
         const showSubmissionError = (submissionErrors) => {
@@ -556,6 +212,8 @@ export default function WorkcodesIndex({ workcodes }) {
             deskripsi: workcode.deskripsi || '',
             kategori: workcode.kategori || 'workcode',
             tanggal: workcode.tanggal || '',
+            jam_aktif_mulai: normalizeTimeForInput(workcode.jam_aktif_mulai, '07:00'),
+            jam_aktif_selesai: normalizeTimeForInput(workcode.jam_aktif_selesai, '10:00'),
             hari_aktif: workcode.hari_aktif || [1,2,3,4,5],
             jam_datang_mulai: normalizeTimeForInput(workcode.jam_datang_mulai, '06:00'),
             jam_datang_selesai: normalizeTimeForInput(workcode.jam_datang_selesai, '07:00'),
@@ -717,10 +375,6 @@ export default function WorkcodesIndex({ workcodes }) {
                                                         <span className="inline-flex items-center rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[10px] font-bold text-blue-700">
                                                             Harian
                                                         </span>
-                                                    ) : workcode.kategori === '24_jam' ? (
-                                                        <span className="inline-flex items-center rounded-full bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[10px] font-bold text-emerald-700">
-                                                            24 Jam
-                                                        </span>
                                                     ) : (
                                                         <span className="inline-flex items-center rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-600">
                                                             Kegiatan
@@ -753,6 +407,15 @@ export default function WorkcodesIndex({ workcodes }) {
                                             <p className="text-xs text-slate-500 mt-1 line-clamp-2 min-h-[32px]">
                                                 {workcode.deskripsi || 'Tidak ada deskripsi.'}
                                             </p>
+
+                                            {workcode.kategori === 'workcode' && workcode.jam_aktif_mulai && workcode.jam_aktif_selesai && (
+                                                <div className="mt-2.5 flex items-center justify-between gap-3 rounded-lg border border-indigo-100 bg-indigo-50/60 p-2 text-[11px] text-indigo-900">
+                                                    <span className="font-bold">Aktif Otomatis</span>
+                                                    <span className="font-mono font-extrabold text-indigo-700">
+                                                        {workcode.jam_aktif_mulai.substring(0, 5)}–{workcode.jam_aktif_selesai.substring(0, 5)} WIB
+                                                    </span>
+                                                </div>
+                                            )}
 
                                             {workcode.kategori === 'harian' && (
                                                 <div className="mt-2.5 flex flex-col gap-1 rounded-lg bg-blue-50/60 border border-blue-100 p-2 text-[11px] text-blue-900 font-medium">
@@ -847,7 +510,11 @@ export default function WorkcodesIndex({ workcodes }) {
                                             </div>
 
                                             <div className="flex items-center gap-2">
-                                                {workcode.is_active ? (
+                                                {workcode.kategori === 'workcode' && workcode.jam_aktif_mulai && workcode.jam_aktif_selesai ? (
+                                                    <span className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700">
+                                                        Dikelola Otomatis
+                                                    </span>
+                                                ) : workcode.is_active ? (
                                                     <button
                                                         onClick={() => handleDeactivate(workcode.id, workcode.nama_workcode)}
                                                         className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-1.5 text-xs font-bold text-amber-700 transition hover:bg-amber-100"
@@ -897,7 +564,7 @@ export default function WorkcodesIndex({ workcodes }) {
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 md:p-8 overflow-y-auto">
                     <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowCreateModal(false)} />
 
-                    <div className="relative w-full max-w-5xl overflow-hidden rounded-2xl bg-white shadow-2xl transition-all border border-slate-200/80 animate-[fadeIn_0.2s_ease-out] flex flex-col my-auto">
+                    <div className="relative my-auto flex h-[680px] max-h-[calc(100dvh-2rem)] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xl transition-all animate-[fadeIn_0.2s_ease-out] sm:max-h-[calc(100dvh-3rem)] md:max-h-[calc(100dvh-4rem)]">
                         {/* Header */}
                         <div className="flex shrink-0 items-center justify-between border-b border-slate-100 bg-slate-50/90 px-6 py-3">
                             <div className="flex items-center gap-2.5">
@@ -923,10 +590,10 @@ export default function WorkcodesIndex({ workcodes }) {
                         </div>
 
                         {/* Body */}
-                        <div className="p-5 sm:p-6">
-                            <form id="create-workcode-form" onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
+                        <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-6">
+                            <form id="create-workcode-form" onSubmit={handleSubmit} className="grid grid-cols-1 gap-5 items-stretch lg:h-full lg:min-h-0 lg:grid-cols-12">
                                 {/* Left Column (7 cols) */}
-                                <div className="lg:col-span-7 flex flex-col gap-4">
+                                <div className="flex flex-col gap-4 lg:col-span-7 lg:h-full lg:min-h-0">
                                     {/* Nama Workcode */}
                                     <div>
                                         <label className="block text-[10px] font-extrabold text-slate-700 uppercase tracking-wider mb-1">
@@ -943,18 +610,62 @@ export default function WorkcodesIndex({ workcodes }) {
                                         {errors.nama_workcode && <p className="mt-1 text-[10px] text-red-600 font-bold">{errors.nama_workcode}</p>}
                                     </div>
 
-                                    {/* Tanggal Terjadwal */}
+                                    {/* Jadwal aktif otomatis untuk kegiatan */}
                                     {data.kategori === 'workcode' && (
-                                        <div className="animate-[fadeIn_0.15s_ease-out]">
-                                            <label className="block text-[10px] font-extrabold text-slate-700 uppercase tracking-wider mb-1">
-                                                Tanggal Terjadwal <span className="text-slate-400 font-normal">(Opsional)</span>
-                                            </label>
-                                            <input
-                                                type="date"
-                                                value={data.tanggal}
-                                                onChange={(e) => setData('tanggal', e.target.value)}
-                                                className="w-full rounded-xl border border-slate-200 px-3.5 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 font-medium shadow-2xs transition-all"
-                                            />
+                                        <div className="animate-[fadeIn_0.15s_ease-out] rounded-xl border border-indigo-100 bg-indigo-50/40 p-3">
+                                            <div className="mb-2 flex items-center justify-between gap-3">
+                                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-900">
+                                                    Jadwal Aktif Otomatis
+                                                </span>
+                                                <span className="rounded-md bg-indigo-100 px-2 py-0.5 text-[9px] font-bold text-indigo-700">
+                                                    WIB
+                                                </span>
+                                            </div>
+                                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                                                <div>
+                                                    <label className="mb-1 block text-[9px] font-bold uppercase tracking-wider text-slate-600">
+                                                        Tanggal <span className="text-red-500">*</span>
+                                                    </label>
+                                                    <input
+                                                        type="date"
+                                                        required
+                                                        value={data.tanggal}
+                                                        onChange={(e) => setData('tanggal', e.target.value)}
+                                                        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-800 shadow-2xs focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10"
+                                                    />
+                                                    {errors.tanggal && <p className="mt-1 text-[9px] font-bold text-red-600">{errors.tanggal}</p>}
+                                                </div>
+                                                <div>
+                                                    <label className="mb-1 block text-[9px] font-bold uppercase tracking-wider text-slate-600">
+                                                        Jam Mulai <span className="text-red-500">*</span>
+                                                    </label>
+                                                    <input
+                                                        type="time"
+                                                        required
+                                                        value={data.jam_aktif_mulai}
+                                                        onChange={(e) => setData('jam_aktif_mulai', e.target.value)}
+                                                        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-800 shadow-2xs focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10"
+                                                    />
+                                                    {errors.jam_aktif_mulai && <p className="mt-1 text-[9px] font-bold text-red-600">{errors.jam_aktif_mulai}</p>}
+                                                </div>
+                                                <div>
+                                                    <label className="mb-1 block text-[9px] font-bold uppercase tracking-wider text-slate-600">
+                                                        Jam Selesai <span className="text-red-500">*</span>
+                                                    </label>
+                                                    <input
+                                                        type="time"
+                                                        required
+                                                        value={data.jam_aktif_selesai}
+                                                        min={data.jam_aktif_mulai || undefined}
+                                                        onChange={(e) => setData('jam_aktif_selesai', e.target.value)}
+                                                        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-800 shadow-2xs focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10"
+                                                    />
+                                                    {errors.jam_aktif_selesai && <p className="mt-1 text-[9px] font-bold text-red-600">{errors.jam_aktif_selesai}</p>}
+                                                </div>
+                                            </div>
+                                            <p className="mt-2 text-[10px] leading-snug text-indigo-700">
+                                                Workcode menyala otomatis pada jam mulai dan langsung ditutup pada jam selesai.
+                                            </p>
                                         </div>
                                     )}
 
@@ -963,7 +674,7 @@ export default function WorkcodesIndex({ workcodes }) {
                                         <label className="block text-[10px] font-extrabold text-slate-700 uppercase tracking-wider mb-1">
                                             Kategori Presensi <span className="text-red-500">*</span>
                                         </label>
-                                        <div className="grid grid-cols-1 gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/80 sm:grid-cols-3">
+                                        <div className="grid grid-cols-1 gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/80 sm:grid-cols-2">
                                             <button
                                                 type="button"
                                                 onClick={() => setData('kategori', 'workcode')}
@@ -988,23 +699,11 @@ export default function WorkcodesIndex({ workcodes }) {
                                                 <span>⏰</span>
                                                 <span>Presensi Harian</span>
                                             </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => setData('kategori', '24_jam')}
-                                                className={`flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-bold transition-all ${
-                                                    data.kategori === '24_jam'
-                                                        ? 'bg-emerald-600 text-white shadow-sm'
-                                                        : 'text-slate-600 hover:text-slate-900'
-                                                }`}
-                                            >
-                                                <span>24/7</span>
-                                                <span>Presensi 24 Jam</span>
-                                            </button>
                                         </div>
                                     </div>
 
                                     {/* Seamless Configuration Box */}
-                                    <div className="flex flex-col min-h-[148px]">
+                                    <div className="flex min-h-[148px] flex-col lg:min-h-0 lg:flex-1">
                                         {data.kategori === 'workcode' ? (
                                             <div className="rounded-xl border border-indigo-200/80 bg-indigo-50/40 p-3 flex-1 flex flex-col justify-center gap-3 animate-[fadeIn_0.15s_ease-out]">
                                                 <div className="flex items-center justify-between">
@@ -1035,38 +734,8 @@ export default function WorkcodesIndex({ workcodes }) {
                                                     </div>
                                                 </div>
                                             </div>
-                                        ) : data.kategori === '24_jam' ? (
-                                            <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/50 p-3 flex-1 flex flex-col justify-center gap-3 animate-[fadeIn_0.15s_ease-out]">
-                                                <div className="flex items-center justify-between">
-                                                    <span className="text-[10px] font-extrabold text-emerald-900 uppercase tracking-wider flex items-center gap-1.5">
-                                                        <span>24/7</span> Mode Presensi 24 Jam
-                                                    </span>
-                                                    <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100/70 px-2 py-0.5 rounded-md">
-                                                        Tanpa Batas Jam
-                                                    </span>
-                                                </div>
-
-                                                <div className="grid grid-cols-1 gap-2 flex-1 mt-1.5 sm:grid-cols-2">
-                                                    <div className="bg-white rounded-lg p-2 border border-emerald-100/80 shadow-2xs flex flex-col justify-center">
-                                                        <span className="block text-[10px] font-bold text-emerald-700 uppercase tracking-wider mb-0.5">
-                                                            Mekanisme
-                                                        </span>
-                                                        <p className="text-[11px] text-slate-600 leading-snug">
-                                                            Peserta dapat melakukan presensi kapan saja selama Workcode ini aktif.
-                                                        </p>
-                                                    </div>
-                                                    <div className="bg-white rounded-lg p-2 border border-emerald-100/80 shadow-2xs flex flex-col justify-center">
-                                                        <span className="block text-[10px] font-bold text-emerald-700 uppercase tracking-wider mb-0.5">
-                                                            Ketentuan
-                                                        </span>
-                                                        <p className="text-[11px] text-slate-600 leading-snug">
-                                                            Tidak memakai tanggal atau rentang jam. Setiap peserta cukup presensi 1 kali.
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            </div>
                                         ) : (
-                                            <div className="rounded-xl border border-blue-200/80 bg-blue-50/50 p-3 flex-1 flex flex-col gap-3 animate-[fadeIn_0.15s_ease-out]">
+                                            <div className="flex min-h-0 flex-1 flex-col gap-3 rounded-xl border border-blue-200/80 bg-blue-50/50 p-3 animate-[fadeIn_0.15s_ease-out]">
                                                 {/* Hari Aktif Buttons */}
                                                 <div>
                                                     <div className="flex items-center justify-between mb-2">
@@ -1103,7 +772,7 @@ export default function WorkcodesIndex({ workcodes }) {
                                                 </div>
 
                                                 {/* Jam Datang & Pulang Dinamis Per Hari */}
-                                                <div className="flex flex-col gap-2 max-h-[150px] overflow-y-auto pr-1">
+                                                <div className="flex max-h-[150px] flex-col gap-2 overflow-y-auto pr-1 lg:min-h-0 lg:flex-1 lg:max-h-none">
                                                     {data.hari_aktif.sort().map(hariId => {
                                                         const dayName = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'][hariId - 1];
                                                         const jadwal = data.jadwal_per_hari[hariId] || { jam_datang_mulai: '06:00', jam_datang_selesai: '07:00', jam_pulang_mulai: '15:30', jam_pulang_selesai: '22:00' };
@@ -1166,7 +835,7 @@ export default function WorkcodesIndex({ workcodes }) {
                                     </div>
 
                                     {/* Activate Checkbox */}
-                                    {!editingWorkcode && !(data.kategori === 'workcode' && data.tanggal && new Date(data.tanggal) > new Date(new Date().setHours(0,0,0,0))) && (
+                                    {!editingWorkcode && data.kategori === 'harian' && (
                                         <label className="flex items-center gap-2 cursor-pointer pt-0.5 select-none">
                                             <input
                                                 type="checkbox"
@@ -1180,7 +849,7 @@ export default function WorkcodesIndex({ workcodes }) {
                                 </div>
 
                                 {/* Right Column: Map (5 cols) */}
-                                <div className="lg:col-span-5 flex flex-col justify-between bg-slate-50/80 p-3 rounded-2xl border border-slate-200 gap-2">
+                                <div className="flex flex-col justify-between gap-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 lg:col-span-5 lg:h-full lg:min-h-0">
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2">
                                             <span className="flex items-center gap-1.5 text-[10px] font-extrabold text-slate-700 uppercase tracking-wider">
@@ -1210,21 +879,15 @@ export default function WorkcodesIndex({ workcodes }) {
                                         )}
                                     </div>
 
-                                    <div className="w-full h-[260px] sm:h-[300px] rounded-xl overflow-hidden border border-slate-200 relative shadow-inner bg-slate-100">
+                                    <div className="relative h-[260px] w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-100 shadow-inner sm:h-[300px] lg:h-auto lg:min-h-[260px] lg:flex-1">
                                         <MapErrorBoundary>
-                                            <MapContainer center={[mapPosition.lat, mapPosition.lng]} zoom={17} scrollWheelZoom={true} attributionControl={false} style={{ height: '100%', width: '100%' }}>
-                                                <TileLayer
-                                                    attribution='&copy; OpenStreetMap contributors'
-                                                    url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                                                />
-                                                <MapRecenter center={mapPosition} />
-                                                <LocationMarker
-                                                    position={mapPosition}
-                                                    setPosition={setMapPosition}
-                                                    radius={data.radius_meters || 100}
-                                                    setLocationStatus={setLocationStatus}
-                                                />
-                                            </MapContainer>
+                                            <GoogleMap
+                                                position={mapPosition}
+                                                radius={data.radius_meters || 100}
+                                                interactive
+                                                onPositionChange={setMapPosition}
+                                                onLocationStatusChange={setLocationStatus}
+                                            />
                                         </MapErrorBoundary>
                                     </div>
 
@@ -1239,7 +902,7 @@ export default function WorkcodesIndex({ workcodes }) {
                                                         ? 'text-slate-600'
                                                         : 'text-slate-400'
                                     }`}>
-                                        {locationStatus?.message || 'Klik ikon globe untuk memakai GPS, atau klik peta untuk memilih titik secara manual.'}
+                                        {locationStatus?.message || 'Klik ikon lokasi untuk memakai GPS, klik peta, atau geser marker untuk memilih titik.'}
                                     </p>
                                 </div>
                             </form>
@@ -1261,8 +924,8 @@ export default function WorkcodesIndex({ workcodes }) {
                                 className="inline-flex items-center justify-center rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-bold text-white shadow-md shadow-indigo-500/20 hover:bg-indigo-700 disabled:opacity-50 transition"
                             >
                                 {processing ? 'Menyimpan...' : editingWorkcode ? 'Simpan Perubahan' : (
-                                    data.kategori === 'workcode' && data.tanggal && new Date(data.tanggal) > new Date(new Date().setHours(0,0,0,0))
-                                        ? 'Simpan'
+                                    data.kategori === 'workcode'
+                                        ? 'Simpan Jadwal'
                                         : 'Simpan & Aktifkan'
                                 )}
                             </button>
@@ -1311,30 +974,13 @@ export default function WorkcodesIndex({ workcodes }) {
                         {/* Map Body */}
                         <div className="relative w-full h-[360px] sm:h-[400px] bg-slate-100">
                             <MapErrorBoundary>
-                                <MapContainer 
-                                    center={[Number(previewMapWorkcode.latitude), Number(previewMapWorkcode.longitude)]} 
-                                    zoom={17} 
-                                    style={{ height: '100%', width: '100%' }}
-                                    className="z-0"
-                                >
-                                    <MapModalCenter center={[Number(previewMapWorkcode.latitude), Number(previewMapWorkcode.longitude)]} />
-                                    <TileLayer
-                                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-                                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                                    />
-                                    <Marker position={[Number(previewMapWorkcode.latitude), Number(previewMapWorkcode.longitude)]} />
-                                    <Circle 
-                                        center={[Number(previewMapWorkcode.latitude), Number(previewMapWorkcode.longitude)]} 
-                                        radius={Number(previewMapWorkcode.radius_meters) || 100}
-                                        pathOptions={{ 
-                                            fillColor: '#6366f1', 
-                                            fillOpacity: 0.25, 
-                                            color: '#4f46e5', 
-                                            weight: 2.5,
-                                            dashArray: '4, 4'
-                                        }} 
-                                    />
-                                </MapContainer>
+                                <GoogleMap
+                                    position={{
+                                        lat: Number(previewMapWorkcode.latitude),
+                                        lng: Number(previewMapWorkcode.longitude),
+                                    }}
+                                    radius={Number(previewMapWorkcode.radius_meters) || 100}
+                                />
                             </MapErrorBoundary>
                         </div>
 

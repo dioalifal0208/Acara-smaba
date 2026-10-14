@@ -15,34 +15,63 @@ class AutoActivateWorkcode extends Command
      */
     protected $signature = 'workcode:auto-activate';
 
-    protected $description = 'Automatically activate scheduled workcodes that fall on today.';
+    protected $description = 'Synchronize scheduled workcodes with their configured active time window.';
 
     public function handle(FcmService $fcmService)
     {
-        $today = now()->toDateString();
+        $now = now();
 
-        // Cari workcode yang kategorinya 'workcode', tidak aktif, dan tanggalnya hari ini
-        $workcodesToActivate = Workcode::where('kategori', 'workcode')
-            ->whereDate('tanggal', $today)
-            ->where('is_active', false)
+        $expiredWorkcodes = Workcode::where('kategori', 'workcode')
+            ->where('is_active', true)
+            ->get()
+            ->filter(fn (Workcode $workcode) => $workcode->hasScheduledActiveWindow()
+                && ! $workcode->isWithinActiveWindow($now));
+
+        foreach ($expiredWorkcodes as $workcode) {
+            $workcode->update(['is_active' => false]);
+            $fcmService->sendWorkcodeUpdate('deactivated', $workcode, [
+                'auto_deactivated' => '1',
+            ]);
+            $this->info("Workcode otomatis dinonaktifkan: {$workcode->nama_workcode}");
+        }
+
+        $targetWorkcode = Workcode::where('kategori', 'workcode')
+            ->whereDate('tanggal', $now->toDateString())
+            ->whereNotNull('jam_aktif_mulai')
+            ->whereNotNull('jam_aktif_selesai')
+            ->orderByDesc('jam_aktif_mulai')
+            ->orderByDesc('id')
+            ->get()
+            ->first(fn (Workcode $workcode) => $workcode->isWithinActiveWindow($now));
+
+        if (! $targetWorkcode) {
+            $this->info('Tidak ada workcode terjadwal yang sedang berada dalam jam aktif.');
+
+            return self::SUCCESS;
+        }
+
+        $otherActiveWorkcodes = Workcode::where('is_active', true)
+            ->where('id', '!=', $targetWorkcode->id)
             ->get();
 
-        if ($workcodesToActivate->isNotEmpty()) {
-            // Nonaktifkan semua workcode yang sedang aktif
-            Workcode::query()->update(['is_active' => false]);
+        foreach ($otherActiveWorkcodes as $workcode) {
+            $workcode->update(['is_active' => false]);
+            $fcmService->sendWorkcodeUpdate('deactivated', $workcode, [
+                'auto_deactivated' => '1',
+            ]);
+        }
 
-            // Aktifkan salah satu workcode (yang terbaru atau bebas)
-            $targetWorkcode = $workcodesToActivate->first();
+        if (! $targetWorkcode->is_active) {
             $targetWorkcode->update(['is_active' => true]);
-
-            // Kirim FCM notification ke semua subscriber
             $fcmService->sendWorkcodeUpdate('activated', $targetWorkcode, [
                 'auto_activated' => '1',
             ]);
 
-            $this->info("Berhasil mengaktifkan workcode: {$targetWorkcode->nama_workcode}");
+            $this->info("Workcode otomatis diaktifkan: {$targetWorkcode->nama_workcode}");
         } else {
-            $this->info('Tidak ada jadwal workcode yang perlu diaktifkan hari ini.');
+            $this->info("Workcode tetap aktif sesuai jadwal: {$targetWorkcode->nama_workcode}");
         }
+
+        return self::SUCCESS;
     }
 }

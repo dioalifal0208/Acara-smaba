@@ -7,6 +7,7 @@ use App\Models\Participant;
 use App\Models\User;
 use App\Models\Workcode;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class AttendanceManagementTest extends TestCase
@@ -50,7 +51,7 @@ class AttendanceManagementTest extends TestCase
         $response = $this->actingAs($admin)
             ->from(route('report', ['workcode_id' => $workcode->id]))
             ->put(route('admin.attendances.update', $attendance), [
-                'tanggal' => '2026-09-25',
+                'tanggal' => '2026-09-26',
                 'jam_masuk' => '09:15',
                 'jam_pulang' => '17:00',
                 'status' => 'hadir',
@@ -61,8 +62,27 @@ class AttendanceManagementTest extends TestCase
 
         $attendance->refresh();
 
-        $this->assertSame('2026-09-25 09:15', $attendance->waktu_hadir->format('Y-m-d H:i'));
+        $this->assertSame('2026-09-26 09:15', $attendance->waktu_hadir->format('Y-m-d H:i'));
+        $this->assertSame('2026-09-26', $attendance->tanggal);
         $this->assertNull($attendance->waktu_pulang);
+    }
+
+    public function test_single_attendance_report_provides_date_and_checkin_time_for_edit_form(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $workcode = $this->createWorkcode('workcode');
+        $attendance = $this->createAttendance($workcode);
+
+        $this->actingAs($admin)
+            ->get(route('report', ['workcode_id' => $workcode->id]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Report/Index')
+                ->where('attendances.0.id', $attendance->id)
+                ->where('attendances.0.tanggal', '2026-09-25')
+                ->where('attendances.0.jam_masuk', '08:00')
+                ->where('attendances.0.attendance_method', 'Wajah')
+            );
     }
 
     public function test_admin_updates_daily_workcode_with_checkin_and_checkout_times(): void

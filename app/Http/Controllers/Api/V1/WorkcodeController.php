@@ -40,8 +40,8 @@ class WorkcodeController extends Controller
             $attendanceQuery = Attendance::where('workcode_id', $activeWorkcode->id)
                 ->where('participant_id', $user->participant_id);
 
-            // Jika kategori harian atau 24_jam, filter hanya presensi di hari ini saja
-            if (in_array($activeWorkcode->kategori, ['harian', '24_jam'])) {
+            // Presensi harian hanya melihat catatan pada tanggal berjalan.
+            if ($activeWorkcode->kategori === 'harian') {
                 $attendanceQuery->whereDate('created_at', now()->toDateString());
             }
 

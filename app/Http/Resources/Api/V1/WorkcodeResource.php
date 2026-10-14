@@ -19,6 +19,8 @@ class WorkcodeResource extends JsonResource
             'nama_workcode' => $this->nama_workcode,
             'kategori' => $this->kategori,
             'tanggal' => $this->tanggal,
+            'jam_aktif_mulai' => $this->jam_aktif_mulai,
+            'jam_aktif_selesai' => $this->jam_aktif_selesai,
             'hari_aktif' => $this->hari_aktif,
             'jam_datang_mulai' => $this->jam_datang_mulai,
             'jam_datang_selesai' => $this->jam_datang_selesai,

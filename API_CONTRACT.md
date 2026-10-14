@@ -50,6 +50,8 @@ Digunakan oleh aplikasi Mobile (Android) untuk mengecek Workcode mana yang saat 
       "nama_workcode": "Acara Pagi",
       "kategori": "workcode",
       "tanggal": "2026-10-02",
+      "jam_aktif_mulai": "07:00:00",
+      "jam_aktif_selesai": "10:00:00",
       "latitude": -6.1234,
       "longitude": 106.1234,
       "radius_meters": 150,

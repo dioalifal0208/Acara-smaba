@@ -105,7 +105,7 @@ class AttendanceController extends Controller
         $existingAttendance = Attendance::where('workcode_id', $activeWorkcode->id)
             ->where('participant_id', $participant->id)
             ->when(
-                in_array($activeWorkcode->kategori, ['harian', '24_jam']),
+                $activeWorkcode->kategori === 'harian',
                 fn ($q) => $q->whereDate('created_at', now()->toDateString())
             )
             ->first();
@@ -167,6 +167,7 @@ class AttendanceController extends Controller
             'tanggal' => now()->toDateString(),
             'waktu_hadir' => $waktuHadir,
             'status' => 'hadir',
+            'attendance_method' => 'qr_peserta',
             'device_hash' => hash('sha256', $request->ip().'|'.$request->userAgent()),
             'ip_address' => $request->ip(),
         ]);
@@ -242,7 +243,7 @@ class AttendanceController extends Controller
                 $attendances = $this->buildDailyRecap($selectedWorkcode, $allParticipants);
                 $stats['hadir'] = collect($attendances)->where('status', '!=', 'alpha')->count();
             } else {
-                // Sekali / 24 jam: list presensi per peserta
+                // Kegiatan sekali: list presensi per peserta
                 $attendanceRecords = Attendance::where('workcode_id', $selectedWorkcode->id)
                     ->with('participant')
                     ->get()
@@ -257,8 +258,12 @@ class AttendanceController extends Controller
                         'nama' => $p->nama,
                         'nis_nip' => $p->nis_nip,
                         'status_pegawai' => $p->status ?? '',
+                        'tanggal' => $att?->tanggal ?? $att?->waktu_hadir?->toDateString(),
+                        'jam_masuk' => $att?->waktu_hadir?->format('H:i'),
                         'waktu_hadir' => $att?->waktu_hadir?->format('H:i:s') ?? '-',
                         'waktu_pulang' => $att?->waktu_pulang?->format('H:i:s') ?? '-',
+                        'signature_url' => $att?->signature_path ? asset('storage/'.$att->signature_path) : null,
+                        'attendance_method' => $this->attendanceMethodLabel($att),
                         'status' => $att ? ($att->status ?? 'hadir') : 'alpha',
                     ];
                 })->values()->toArray();
@@ -303,11 +308,13 @@ class AttendanceController extends Controller
             ->map(function ($att) {
                 return [
                     'id' => $att->id,
-                    'tanggal' => $att->created_at->format('Y-m-d'),
+                    'tanggal' => $att->tanggal ?? $att->waktu_hadir?->toDateString() ?? $att->created_at->format('Y-m-d'),
                     'jam_masuk' => $att->waktu_hadir?->format('H:i'),
                     'jam_pulang' => $att->waktu_pulang?->format('H:i') ?? '-',
                     'waktu_hadir' => $att->waktu_hadir?->format('H:i') ?? '-',
                     'waktu_pulang' => $att->waktu_pulang?->format('H:i') ?? '-',
+                    'signature_url' => $att->signature_path ? asset('storage/'.$att->signature_path) : null,
+                    'attendance_method' => $this->attendanceMethodLabel($att),
                     'status' => $att->status ?? 'hadir',
                 ];
             });
@@ -364,6 +371,7 @@ class AttendanceController extends Controller
             'waktu_hadir' => $waktuHadir,
             'waktu_pulang' => $waktuPulang,
             'status' => $request->input('status'),
+            'attendance_method' => 'manual',
             'ip_address' => $request->ip(),
         ]);
 
@@ -394,6 +402,7 @@ class AttendanceController extends Controller
             : null;
 
         $attendance->update([
+            'tanggal' => $tanggal->toDateString(),
             'waktu_hadir' => $waktuHadir,
             'waktu_pulang' => $waktuPulang,
             'status' => $request->input('status'),
@@ -453,7 +462,7 @@ class AttendanceController extends Controller
                     ]);
                 }
             } else {
-                fputcsv($file, ['No', 'Nama', 'NIS/NIP', 'Status Pegawai', 'Waktu Presensi', 'Status']);
+                fputcsv($file, ['No', 'Nama', 'NIS/NIP', 'Status Pegawai', 'Waktu Presensi', 'Status', 'Metode Presensi']);
 
                 $attendanceRecords = Attendance::where('workcode_id', $workcode->id)
                     ->with('participant')
@@ -470,6 +479,7 @@ class AttendanceController extends Controller
                         $p->status ?? '',
                         $att?->waktu_hadir?->format('H:i:s') ?? '-',
                         $att ? ($att->status ?? 'hadir') : 'alpha',
+                        $this->attendanceMethodLabel($att) ?? '-',
                     ]);
                 }
             }
@@ -612,6 +622,21 @@ class AttendanceController extends Controller
                 'total_menit_terlambat' => $totalMenitTerlambat,
             ];
         })->values()->toArray();
+    }
+
+    private function attendanceMethodLabel(?Attendance $attendance): ?string
+    {
+        if (! $attendance) {
+            return null;
+        }
+
+        return match ($attendance->attendance_method) {
+            'tanda_tangan' => 'Tanda Tangan',
+            'wajah' => 'Wajah',
+            'qr_peserta' => 'QR Peserta',
+            'manual' => 'Manual',
+            default => $attendance->signature_path ? 'Tanda Tangan' : 'Wajah',
+        };
     }
 
     /**

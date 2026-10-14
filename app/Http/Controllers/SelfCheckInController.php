@@ -9,6 +9,7 @@ use App\Services\AttendanceValidationService;
 use App\Services\QrCodeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -77,6 +78,38 @@ class SelfCheckInController extends Controller
     }
 
     /**
+     * Cari peserta yang belum melakukan presensi pada Workcode aktif.
+     */
+    public function searchParticipants(Request $request, string $token)
+    {
+        if ($token !== $this->getWorkcodeToken()) {
+            return response()->json([
+                'message' => 'Tautan presensi telah kadaluarsa atau tidak valid.',
+            ], 403);
+        }
+
+        $query = trim((string) $request->query('query', ''));
+        $activeWorkcode = Workcode::getActive();
+
+        if (mb_strlen($query) < 2 || ! $activeWorkcode) {
+            return response()->json([]);
+        }
+
+        $participants = Participant::query()
+            ->where(function ($participantQuery) use ($query) {
+                $participantQuery->where('nis_nip', 'like', $query.'%')
+                    ->orWhere('nama', 'like', '%'.$query.'%');
+            })
+            ->whereDoesntHave('attendances', function ($attendanceQuery) use ($activeWorkcode) {
+                $attendanceQuery->where('workcode_id', $activeWorkcode->id);
+            })
+            ->limit(5)
+            ->get(['id', 'nama', 'nis_nip', 'status']);
+
+        return response()->json($participants);
+    }
+
+    /**
      * Tampilkan halaman form Face Check-In.
      */
     public function showFaceForm($token)
@@ -128,6 +161,7 @@ class SelfCheckInController extends Controller
             'altitude' => 'nullable|numeric',
             'device_timestamp' => 'nullable|numeric',
             'device_id' => 'nullable|string|max:255',
+            'signature' => ['required', 'string', 'max:1500000', 'regex:/^data:image\/png;base64,/'],
         ]);
 
         $deviceHash = $validationService->generateDeviceHash($request->input('device_id'), $request->userAgent());
@@ -163,15 +197,25 @@ class SelfCheckInController extends Controller
             ]);
         }
 
-        // Catat kehadiran untuk workcode aktif (beserta device_hash & IP untuk lock)
-        $attendance = Attendance::create([
-            'workcode_id' => $activeWorkcode->id,
-            'participant_id' => $participant->id,
-            'tanggal' => now()->toDateString(),
-            'waktu_hadir' => now(),
-            'device_hash' => $deviceHash,
-            'ip_address' => $ipAddress,
-        ]);
+        $signaturePath = $this->storeSignature($request->string('signature')->toString());
+
+        // Catat kehadiran untuk workcode aktif (beserta device_hash, IP, dan tanda tangan)
+        try {
+            $attendance = Attendance::create([
+                'workcode_id' => $activeWorkcode->id,
+                'participant_id' => $participant->id,
+                'tanggal' => now()->toDateString(),
+                'waktu_hadir' => now(),
+                'device_hash' => $deviceHash,
+                'ip_address' => $ipAddress,
+                'signature_path' => $signaturePath,
+                'attendance_method' => 'tanda_tangan',
+            ]);
+        } catch (\Throwable $exception) {
+            Storage::disk('public')->delete($signaturePath);
+
+            throw $exception;
+        }
 
         return response()->json([
             'status' => 'success',
@@ -179,5 +223,26 @@ class SelfCheckInController extends Controller
             'participant' => $participant,
             'timestamp' => $attendance->waktu_hadir->format('H:i:s'),
         ]);
+    }
+
+    private function storeSignature(string $dataUrl): string
+    {
+        $signature = base64_decode(Str::after($dataUrl, ','), true);
+
+        if ($signature === false || strlen($signature) < 50) {
+            throw ValidationException::withMessages([
+                'signature' => 'Tanda tangan tidak valid. Silakan hapus dan tanda tangani kembali.',
+            ]);
+        }
+
+        $path = 'attendance-signatures/'.Str::uuid().'.png';
+
+        if (! Storage::disk('public')->put($path, $signature)) {
+            throw ValidationException::withMessages([
+                'signature' => 'Tanda tangan gagal disimpan. Silakan coba kembali.',
+            ]);
+        }
+
+        return $path;
     }
 }

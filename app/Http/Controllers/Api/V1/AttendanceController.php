@@ -199,6 +199,7 @@ class AttendanceController extends Controller
                 'device_hash' => $deviceHash,
                 'ip_address' => $request->ip(),
                 'status' => 'hadir',
+                'attendance_method' => 'wajah',
                 'leave_request_id' => $approvedPulangPermission?->id,
             ]);
 

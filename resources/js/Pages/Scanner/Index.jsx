@@ -492,8 +492,9 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
         const isLate = typeof item === 'object' ? item.is_late : false;
         const lateMinutes = typeof item === 'object' ? item.late_minutes : 0;
         const lateFormatted = typeof item === 'object' ? item.late_formatted : '';
+        const showLateStatus = activeWorkcode?.kategori === 'harian' && (status === 'warning' || isLate);
 
-        if (status === 'warning' || isLate) {
+        if (showLateStatus) {
             let label = lateFormatted;
             if (!label) {
                 if (lateMinutes >= 60) {
@@ -511,6 +512,7 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
             );
         }
         switch (status) {
+            case 'warning':
             case 'success':
                 return <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">✓ HADIR</span>;
             case 'already':
@@ -791,8 +793,8 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
                                             className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-2 sm:py-3 transition-colors hover:bg-white ${index === 0 ? 'bg-indigo-50/30' : ''}`}
                                         >
                                             <div className={`flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full text-xs sm:text-sm font-bold shadow-sm ${
-                                                item.status === 'warning' || item.is_late ? 'bg-amber-100 text-amber-800 border border-amber-300' :
-                                                item.status === 'success' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
+                                                activeWorkcode?.kategori === 'harian' && (item.status === 'warning' || item.is_late) ? 'bg-amber-100 text-amber-800 border border-amber-300' :
+                                                item.status === 'success' || (activeWorkcode?.kategori !== 'harian' && item.status === 'warning') ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
                                                 item.status === 'already' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
                                                 'bg-red-100 text-red-700 border border-red-200'
                                             }`}>

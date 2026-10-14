@@ -7,6 +7,7 @@ use App\Models\Participant;
 use App\Models\Workcode;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -22,6 +23,7 @@ class SelfCheckInWebTest extends TestCase
 
         $this->token = Str::random(16);
         Cache::put('active_workcode_token', $this->token, now()->endOfDay());
+        Storage::fake('public');
     }
 
     public function test_fails_if_no_active_workcode()
@@ -68,14 +70,16 @@ class SelfCheckInWebTest extends TestCase
             'nis_nip' => '12345',
             'device_id' => 'dev1',
             'device_timestamp' => now()->timestamp * 1000,
+            'signature' => $this->signatureDataUrl(),
         ], ['User-Agent' => 'TestAgent']);
 
         $response->assertStatus(200)
             ->assertJson(['status' => 'success']);
 
-        $this->assertDatabaseHas('attendances', [
-            'participant_id' => $participant->id,
-        ]);
+        $attendance = Attendance::where('participant_id', $participant->id)->firstOrFail();
+        $this->assertNotNull($attendance->signature_path);
+        $this->assertSame('tanda_tangan', $attendance->attendance_method);
+        Storage::disk('public')->assertExists($attendance->signature_path);
     }
 
     public function test_gtt_participant_without_nip_can_be_selected_and_check_in()
@@ -105,6 +109,7 @@ class SelfCheckInWebTest extends TestCase
             'participant_id' => $participant->id,
             'device_id' => 'gtt-device',
             'device_timestamp' => now()->timestamp * 1000,
+            'signature' => $this->signatureDataUrl(),
         ], ['User-Agent' => 'TestAgentGtt']);
 
         $response->assertOk()
@@ -151,6 +156,7 @@ class SelfCheckInWebTest extends TestCase
             'nis_nip' => '12345',
             'device_id' => 'dev2', // different device to bypass device lock
             'device_timestamp' => now()->timestamp * 1000,
+            'signature' => $this->signatureDataUrl(),
         ], ['User-Agent' => 'TestAgent2']);
 
         $response->assertStatus(200)
@@ -181,6 +187,7 @@ class SelfCheckInWebTest extends TestCase
             'nis_nip' => '222',
             'device_id' => 'dev1',
             'device_timestamp' => now()->timestamp * 1000,
+            'signature' => $this->signatureDataUrl(),
         ], ['User-Agent' => 'TestAgent']);
 
         $response->assertStatus(403)
@@ -198,6 +205,7 @@ class SelfCheckInWebTest extends TestCase
         $response = $this->postJson("/self-checkin/{$this->token}", [
             'nis_nip' => '12345',
             'accuracy' => 0,
+            'signature' => $this->signatureDataUrl(),
         ]);
 
         $response->assertStatus(403)
@@ -215,6 +223,7 @@ class SelfCheckInWebTest extends TestCase
         $response = $this->postJson("/self-checkin/{$this->token}", [
             'nis_nip' => '12345',
             'accuracy' => 121,
+            'signature' => $this->signatureDataUrl(),
         ]);
 
         $response->assertStatus(400)
@@ -232,6 +241,7 @@ class SelfCheckInWebTest extends TestCase
         $response = $this->postJson("/self-checkin/{$this->token}", [
             'nis_nip' => '12345',
             'device_timestamp' => (now()->timestamp - 130) * 1000,
+            'signature' => $this->signatureDataUrl(),
         ]);
 
         $response->assertStatus(400)
@@ -254,11 +264,69 @@ class SelfCheckInWebTest extends TestCase
             'nis_nip' => '12345',
             'latitude' => -6.250000,
             'longitude' => 106.850000,
+            'signature' => $this->signatureDataUrl(),
         ]);
 
         $response->assertStatus(403)
             ->assertJsonFragment(['status' => 'error']);
 
         $this->assertStringContainsString('Anda berada di luar radius presensi', $response->json('message'));
+    }
+
+    public function test_signature_is_required_for_qr_workcode_check_in(): void
+    {
+        Workcode::create([
+            'nama_workcode' => 'Acara Wajib Tanda Tangan',
+            'kategori' => 'workcode',
+            'is_active' => true,
+        ]);
+        Participant::create([
+            'nama' => 'John Doe',
+            'nis_nip' => '12345',
+        ]);
+
+        $this->postJson("/self-checkin/{$this->token}", [
+            'nis_nip' => '12345',
+            'device_id' => 'unsigned-device',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('signature');
+
+        $this->assertDatabaseCount('attendances', 0);
+    }
+
+    public function test_participant_search_excludes_users_who_already_attended_active_workcode(): void
+    {
+        $workcode = Workcode::create([
+            'nama_workcode' => 'Acara Pencarian',
+            'kategori' => 'workcode',
+            'is_active' => true,
+        ]);
+        $attendedParticipant = Participant::create([
+            'nama' => 'Peserta Sudah Hadir',
+            'nis_nip' => '111',
+        ]);
+        $availableParticipant = Participant::create([
+            'nama' => 'Peserta Belum Hadir',
+            'nis_nip' => '222',
+        ]);
+        Attendance::create([
+            'workcode_id' => $workcode->id,
+            'participant_id' => $attendedParticipant->id,
+            'tanggal' => now()->toDateString(),
+            'waktu_hadir' => now(),
+        ]);
+
+        $response = $this->getJson(route('self-checkin.participants', [
+            'token' => $this->token,
+            'query' => 'Peserta',
+        ]))->assertOk();
+
+        $response->assertJsonMissing(['id' => $attendedParticipant->id]);
+        $response->assertJsonFragment(['id' => $availableParticipant->id]);
+    }
+
+    private function signatureDataUrl(): string
+    {
+        return 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
     }
 }

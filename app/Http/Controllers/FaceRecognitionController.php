@@ -394,28 +394,30 @@ class FaceRecognitionController extends Controller
             }
         }
 
-        // Cek keterlambatan menggunakan fungsi helper dari model Workcode atau dikalkulasi di sini
-        // Tapi AttendanceController@scan punya logika hitung telat. Kita copy sedikit logika ke sini agar lengkap.
         $waktuHadir = now();
         $lateFormatted = null;
         $isLate = false;
 
-        // Ambil info shift
-        $scanTimeStr = $waktuHadir->format('H:i');
+        // Keterlambatan hanya berlaku untuk Presensi Harian.
+        if ($activeWorkcode->kategori === 'harian') {
+            $todaySchedule = $activeWorkcode->jadwal_per_hari[$waktuHadir->dayOfWeekIso] ?? null;
+            $checkInDeadline = $todaySchedule['jam_datang_selesai'] ?? $activeWorkcode->jam_datang_selesai;
 
-        // Logika sederhana: jika absen melebihi jam 07:00, dihitung terlambat
-        // (Sama dengan AttendanceController)
-        $targetDatangSelesai = Carbon::createFromFormat('H:i', '07:00')->setDate($waktuHadir->year, $waktuHadir->month, $waktuHadir->day);
+            if ($checkInDeadline) {
+                $targetDatangSelesai = Carbon::createFromTimeString($checkInDeadline)
+                    ->setDate($waktuHadir->year, $waktuHadir->month, $waktuHadir->day);
 
-        if ($waktuHadir->greaterThan($targetDatangSelesai)) {
-            $isLate = true;
-            $diffInMinutes = $targetDatangSelesai->diffInMinutes($waktuHadir);
-            if ($diffInMinutes >= 60) {
-                $hours = floor($diffInMinutes / 60);
-                $minutes = $diffInMinutes % 60;
-                $lateFormatted = $minutes > 0 ? "{$hours} jam {$minutes} menit" : "{$hours} jam";
-            } else {
-                $lateFormatted = "{$diffInMinutes} menit";
+                if ($waktuHadir->greaterThan($targetDatangSelesai)) {
+                    $isLate = true;
+                    $diffInMinutes = (int) $targetDatangSelesai->diffInMinutes($waktuHadir);
+                    if ($diffInMinutes >= 60) {
+                        $hours = floor($diffInMinutes / 60);
+                        $minutes = $diffInMinutes % 60;
+                        $lateFormatted = $minutes > 0 ? "{$hours} jam {$minutes} menit" : "{$hours} jam";
+                    } else {
+                        $lateFormatted = "{$diffInMinutes} menit";
+                    }
+                }
             }
         }
 
@@ -427,6 +429,7 @@ class FaceRecognitionController extends Controller
             'waktu_hadir' => $waktuHadir,
             'device_hash' => $deviceHash,
             'ip_address' => $ipAddress,
+            'attendance_method' => 'wajah',
         ]);
 
         return response()->json([

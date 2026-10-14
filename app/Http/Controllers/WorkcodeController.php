@@ -6,6 +6,7 @@ use App\Models\Workcode;
 use App\Services\FcmService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class WorkcodeController extends Controller
@@ -33,8 +34,10 @@ class WorkcodeController extends Controller
         $validated = $request->validate([
             'nama_workcode' => 'required|string|max:255',
             'deskripsi' => 'nullable|string|max:1000',
-            'kategori' => 'required|in:workcode,harian,24_jam',
-            'tanggal' => 'nullable|date',
+            'kategori' => 'required|in:workcode,harian',
+            'tanggal' => 'required_if:kategori,workcode|nullable|date',
+            'jam_aktif_mulai' => 'required_if:kategori,workcode|nullable|date_format:H:i,H:i:s',
+            'jam_aktif_selesai' => 'required_if:kategori,workcode|nullable|date_format:H:i,H:i:s|after:jam_aktif_mulai',
             'hari_aktif' => 'nullable|array',
             'jam_datang_mulai' => 'nullable|date_format:H:i,H:i:s',
             'jam_datang_selesai' => 'nullable|date_format:H:i,H:i:s',
@@ -47,16 +50,10 @@ class WorkcodeController extends Controller
             'jadwal_per_hari' => 'nullable|array',
         ]);
 
-        $isFutureDate = false;
-        if (($validated['kategori'] ?? 'workcode') === 'workcode' && ! empty($validated['tanggal'])) {
-            $isFutureDate = Carbon::parse($validated['tanggal'])->startOfDay()->isFuture();
-        }
-
-        $setActive = $request->boolean('set_active') || Workcode::count() === 0;
-
-        if ($isFutureDate) {
-            $setActive = false;
-        }
+        $isActivity = $validated['kategori'] === 'workcode';
+        $setActive = $isActivity
+            ? $this->scheduledWindowIsOpen($validated)
+            : ($request->boolean('set_active') || Workcode::count() === 0);
 
         if ($setActive) {
             Workcode::query()->update(['is_active' => false]);
@@ -68,7 +65,9 @@ class WorkcodeController extends Controller
             'nama_workcode' => $validated['nama_workcode'],
             'deskripsi' => $validated['deskripsi'] ?? null,
             'kategori' => $validated['kategori'] ?? 'workcode',
-            'tanggal' => $validated['kategori'] === 'workcode' ? ($validated['tanggal'] ?? null) : null,
+            'tanggal' => $isActivity ? $validated['tanggal'] : null,
+            'jam_aktif_mulai' => $isActivity ? $validated['jam_aktif_mulai'] : null,
+            'jam_aktif_selesai' => $isActivity ? $validated['jam_aktif_selesai'] : null,
             'hari_aktif' => $isDaily ? ($validated['hari_aktif'] ?? null) : null,
             'jam_datang_mulai' => $isDaily ? ($validated['jam_datang_mulai'] ?? null) : null,
             'jam_datang_selesai' => $isDaily ? ($validated['jam_datang_selesai'] ?? null) : null,
@@ -96,6 +95,14 @@ class WorkcodeController extends Controller
      */
     public function activate(Workcode $workcode, FcmService $fcmService)
     {
+        if ($workcode->hasScheduledActiveWindow() && ! $workcode->isWithinActiveWindow()) {
+            return redirect()->back()->with(
+                'error',
+                "Workcode '{$workcode->nama_workcode}' hanya dapat aktif otomatis pada {$workcode->tanggal}, pukul "
+                    .substr($workcode->jam_aktif_mulai, 0, 5).'–'.substr($workcode->jam_aktif_selesai, 0, 5).' WIB.'
+            );
+        }
+
         Workcode::query()->update(['is_active' => false]);
         $workcode->update(['is_active' => true]);
 
@@ -124,11 +131,16 @@ class WorkcodeController extends Controller
     public function destroy(Workcode $workcode, FcmService $fcmService)
     {
         $nama = $workcode->nama_workcode;
+        $signaturePaths = $workcode->attendances()
+            ->whereNotNull('signature_path')
+            ->pluck('signature_path')
+            ->all();
 
         // Kirim FCM notification sebelum delete (masih punya ID)
         $fcmService->sendWorkcodeUpdate('deleted', $workcode);
 
         $workcode->delete();
+        Storage::disk('public')->delete($signaturePaths);
 
         return redirect()->back()->with('success', "Workcode '{$nama}' berhasil dihapus.");
     }
@@ -141,8 +153,10 @@ class WorkcodeController extends Controller
         $validated = $request->validate([
             'nama_workcode' => 'required|string|max:255',
             'deskripsi' => 'nullable|string|max:1000',
-            'kategori' => 'required|in:workcode,harian,24_jam',
-            'tanggal' => 'nullable|date',
+            'kategori' => 'required|in:workcode,harian',
+            'tanggal' => 'required_if:kategori,workcode|nullable|date',
+            'jam_aktif_mulai' => 'required_if:kategori,workcode|nullable|date_format:H:i,H:i:s',
+            'jam_aktif_selesai' => 'required_if:kategori,workcode|nullable|date_format:H:i,H:i:s|after:jam_aktif_mulai',
             'hari_aktif' => 'nullable|array',
             'jam_datang_mulai' => 'nullable|date_format:H:i,H:i:s',
             'jam_datang_selesai' => 'nullable|date_format:H:i,H:i:s',
@@ -154,13 +168,21 @@ class WorkcodeController extends Controller
             'jadwal_per_hari' => 'nullable|array',
         ]);
 
+        $isActivity = $validated['kategori'] === 'workcode';
         $isDaily = $validated['kategori'] === 'harian';
+        $shouldActivate = $isActivity && $this->scheduledWindowIsOpen($validated);
 
-        $workcode->update([
+        if ($shouldActivate) {
+            Workcode::where('id', '!=', $workcode->getKey())->update(['is_active' => false]);
+        }
+
+        $updates = [
             'nama_workcode' => $validated['nama_workcode'],
             'deskripsi' => $validated['deskripsi'] ?? null,
             'kategori' => $validated['kategori'] ?? 'workcode',
-            'tanggal' => $validated['kategori'] === 'workcode' ? ($validated['tanggal'] ?? null) : null,
+            'tanggal' => $isActivity ? $validated['tanggal'] : null,
+            'jam_aktif_mulai' => $isActivity ? $validated['jam_aktif_mulai'] : null,
+            'jam_aktif_selesai' => $isActivity ? $validated['jam_aktif_selesai'] : null,
             'hari_aktif' => $isDaily ? ($validated['hari_aktif'] ?? null) : null,
             'jam_datang_mulai' => $isDaily ? ($validated['jam_datang_mulai'] ?? null) : null,
             'jam_datang_selesai' => $isDaily ? ($validated['jam_datang_selesai'] ?? null) : null,
@@ -170,11 +192,37 @@ class WorkcodeController extends Controller
             'longitude' => $validated['longitude'] ?? null,
             'radius_meters' => $validated['radius_meters'] ?? 50,
             'jadwal_per_hari' => $isDaily ? ($validated['jadwal_per_hari'] ?? null) : null,
-        ]);
+        ];
+
+        if ($isActivity) {
+            $updates['is_active'] = $shouldActivate;
+        }
+
+        $workcode->update($updates);
 
         // Kirim FCM notification ke semua subscriber
         $fcmService->sendWorkcodeUpdate('updated', $workcode);
 
         return redirect()->back()->with('success', "Workcode '{$workcode->nama_workcode}' berhasil diperbarui.");
+    }
+
+    /**
+     * Periksa apakah jadwal kegiatan sedang berlangsung pada waktu server.
+     */
+    private function scheduledWindowIsOpen(array $data): bool
+    {
+        if (
+            ($data['kategori'] ?? null) !== 'workcode'
+            || empty($data['tanggal'])
+            || empty($data['jam_aktif_mulai'])
+            || empty($data['jam_aktif_selesai'])
+        ) {
+            return false;
+        }
+
+        $startsAt = Carbon::parse($data['tanggal'].' '.$data['jam_aktif_mulai']);
+        $endsAt = Carbon::parse($data['tanggal'].' '.$data['jam_aktif_selesai']);
+
+        return now()->greaterThanOrEqualTo($startsAt) && now()->lessThan($endsAt);
     }
 }

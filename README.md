@@ -1,59 +1,155 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Presensi SMABA (Acara SMABA)
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Attendance system for SMA Negeri 1 Babat. It handles staff and student attendance for daily schedules and one-off events ("workcodes"). People can check in by QR scan, by face recognition, or through a public self check-in link. Admins approve leave requests and face photos, then export signed attendance reports.
 
-## About Laravel
+The project includes:
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- **Web app**: Laravel 12 + Inertia + React. Admins use it for management and scanning, and participants use it for their dashboard, face registration and leave requests.
+- **Mobile API** (`/api/v1`): Sanctum-authenticated endpoints for the Android app, with push notifications through Firebase Cloud Messaging.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Tech stack
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+| Layer      | Tools |
+|------------|-------|
+| Backend    | PHP 8.2+, Laravel 12, Sanctum, Inertia (server), Ziggy |
+| Frontend   | React 18, Inertia, Tailwind CSS, Vite 7, Headless UI |
+| Attendance | `face-api.js` (models in [public/models/](public/models/)), `html5-qrcode`, Google Maps JavaScript API (geofence maps) |
+| Other      | `simple-qrcode` (QR generation), PhpSpreadsheet (Excel import/export), `kreait/laravel-firebase` (FCM) |
 
-## Learning Laravel
+## Key concepts
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+- **Participant**: a teacher, staff member or student whose attendance is tracked. A participant can be linked to a `User` account with role `participant`.
+- **Workcode**: an attendance session, either a one-off event or a recurring daily schedule. Its category is `workcode` or `harian`. One-off events have an automatic date/time activation window; daily attendance has per-day check-in/check-out schedules. Both support a GPS geofence. Only one workcode is active at a time.
+- **Attendance**: one record per participant per workcode per day, with `waktu_hadir` and `waktu_pulang`. The status is one of `hadir` (present), `izin` (leave), `sakit` (sick), `lupa_absen` (forgot to check in), `libur` (holiday) or `alpha` (absent).
+- **Leave request (izin)**: submitted by participants and approved or rejected by an admin. An approved request marks the matching attendance as leave.
+- **Photo change request**: a participant asks to replace their registered face photo, and an admin verifies the new one.
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+All attendance rules (time windows, geofence, duplicates) are enforced centrally in [AttendanceValidationService](app/Services/AttendanceValidationService.php). The web scanner and the mobile API therefore apply the same rules.
 
-## Laravel Sponsors
+## Getting started (local)
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+Requirements: PHP 8.2+, Composer, Node.js 20+, and a database (SQLite works by default; MySQL also works, e.g. via Laragon).
 
-### Premium Partners
+```bash
+composer setup
+```
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+This installs PHP and JS dependencies, creates `.env` from `.env.example`, generates the app key, runs migrations and builds the assets. To do it manually:
 
-## Contributing
+```bash
+composer install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate
+npm install
+npm run build
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Set `GOOGLE_MAPS_API_KEY` in `.env`. The key must have **Maps JavaScript API** enabled and should be restricted to the web application's HTTP referrers. An Android-restricted key cannot be used by the browser. Because Laravel provides the key at runtime, changing it does not require rebuilding the frontend; run `php artisan config:clear` if configuration is cached.
 
-## Code of Conduct
+Seed an admin account, sample participants and the school settings:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```bash
+php artisan db:seed
+php artisan db:seed --class=SettingSeeder   # principal name/NIP used on signed reports
+```
 
-## Security Vulnerabilities
+The default admin login is `admin` / `password123`. **Change it on any shared or deployed instance.**
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+Link public storage for uploaded photos. A fallback `/storage/{path}` route also exists for hosts where symlinks don't work:
 
-## License
+```bash
+php artisan storage:link
+```
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+### Running the dev environment
+
+```bash
+composer dev
+```
+
+This starts the Laravel server, the queue worker, log tailing (Pail) and the Vite dev server together.
+
+The camera (QR scanner and face recognition) only works in a **secure context**: `localhost` or HTTPS. To test on a phone, serve the app over HTTPS, for example with Laragon's SSL or a tunnel.
+
+### Scheduler
+
+Two scheduled jobs are defined in [routes/console.php](routes/console.php):
+
+| Command | Schedule | Purpose |
+|---------|----------|---------|
+| `attendance:calculate-alpha` | every 5 minutes | Marks participants as absent once a session's window closes |
+| `workcode:auto-activate`     | every minute | Activates and deactivates event workcodes according to their date/time window |
+
+Locally, run `php artisan schedule:work`. In production, add the standard cron entry:
+
+```
+* * * * * cd /path/to/app && php artisan schedule:run >> /dev/null 2>&1
+```
+
+### Firebase (push notifications)
+
+Put the Firebase service-account JSON at `storage/app/firebase-credentials.json`. This file is gitignored, so never commit it. You can also point `FIREBASE_CREDENTIALS` elsewhere. To send a test push:
+
+```bash
+php artisan fcm:test               # to the default topic
+php artisan fcm:test --token=XXXX  # to one device
+```
+
+## Other artisan commands
+
+| Command | Purpose |
+|---------|---------|
+| `face:update-descriptor --id=` | Recompute or update a participant's stored face descriptor |
+
+## Testing
+
+```bash
+composer test        # or: php artisan test
+```
+
+Feature tests live in [tests/Feature/](tests/Feature/). The mobile API tests are in [tests/Feature/Api/](tests/Feature/Api/) and are grouped by implementation phase.
+
+## Project layout
+
+```
+app/
+  Console/Commands/       Scheduled & maintenance commands
+  Http/Controllers/       Web (Inertia) controllers
+  Http/Controllers/Api/V1 Mobile API controllers
+  Http/Resources/Api/V1   API JSON resources
+  Services/               AttendanceValidationService, FcmService, QrCodeService
+resources/js/Pages/       React pages (Admin, Participant, Scanner, Report, Workcodes, ...)
+routes/web.php            Web routes (admin, participant, public self check-in)
+routes/api.php            /api/v1 mobile endpoints
+deploy/                   Server setup & deploy scripts
+public/models/            face-api.js model weights
+```
+
+## Main routes
+
+**Admin** (`auth` + `admin` middleware): `/dashboard`, `/workcodes`, `/participants` (including Excel import with preview), `/scanner`, `/report`, `/admin/leaves`, `/admin/master-qr`, `/admin/settings`.
+
+**Participant** (`role:participant`): `/participant/dashboard`, `/participant/face-registration`, `/participant/leave-history`.
+
+**Public**: `/` (live stats), `/self-checkin/{token}` (opened via the Master QR), `/verify-signature/{workcode}` (verifies a signed report), and the participant QR download routes.
+
+## Mobile API
+
+All endpoints are under `/api/v1` and use `Authorization: Bearer <token>`, which you get from `POST /api/v1/auth/login`. Write endpoints (attendance, leave requests, photo change requests) require an `Idempotency-Key` header containing a UUID v4.
+
+See [API_CONTRACT.md](API_CONTRACT.md) for the full request and response specification.
+
+## Deployment
+
+Production runs on shared hosting over SSH. The deploy script builds the assets, pushes to GitHub, then on the server pulls, runs `composer install --no-dev`, caches config, routes and views, and migrates.
+
+1. Create `deploy/.env.deploy` (gitignored) with `SSH_HOST`, `SSH_PORT`, `SSH_USER`, `REMOTE_DIR`, `REMOTE_PUBLIC_DIR`, `GITHUB_REPO`, and `PUBLIC_URL`.
+2. Run `powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\install-deploy-command.ps1` once and authorize its printed public key on the hosting account.
+3. Open a new terminal, then run:
+
+   ```powershell
+   deploy
+   ```
+
+For a first-time server setup, see [deploy/server-setup.sh](deploy/server-setup.sh). Built assets in `public/build` are committed, so the server does not need Node.js.

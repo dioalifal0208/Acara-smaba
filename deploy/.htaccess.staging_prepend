@@ -1,0 +1,8 @@
+# === STAGING EXCLUSION - JANGAN HAPUS ===
+# Mencegah WordPress/W3TC memproses request ke /staging/
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{REQUEST_URI} ^/staging(/|$)
+    RewriteRule ^ - [L]
+</IfModule>
+# === END STAGING EXCLUSION ===

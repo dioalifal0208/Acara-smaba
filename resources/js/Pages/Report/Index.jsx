@@ -78,15 +78,19 @@ export default function ReportIndex({
     const mobileAttendances = filteredAttendances.slice(0, 5);
 
     const attendancePercentage = stats && stats.total > 0 ? Math.round((stats.hadir / stats.total) * 100) : 0;
-    const isSingleAttendanceWorkcode = ['workcode', '24_jam'].includes(selectedWorkcode?.kategori);
+    const isSingleAttendanceWorkcode = selectedWorkcode?.kategori === 'workcode';
 
     // Open Manual Edit Modal
     const openManualEditModal = (att, participantName = '') => {
+        const waktuHadir = att.waktu_hadir && att.waktu_hadir !== '-' ? String(att.waktu_hadir) : '';
+        const tanggalDariWaktuHadir = waktuHadir.match(/^(\d{4}-\d{2}-\d{2})/)?.[1] || '';
+        const jamDariWaktuHadir = waktuHadir.match(/(\d{2}:\d{2})(?::\d{2})?$/)?.[1] || '';
+
         setEditingParticipantName(participantName || att.nama || 'Peserta');
         manualEditForm.setData({
             id: att.id,
-            tanggal: att.tanggal || (att.waktu_hadir ? att.waktu_hadir.split(' ')[0] : new Date().toISOString().split('T')[0]),
-            jam_masuk: att.jam_masuk || '',
+            tanggal: att.tanggal || tanggalDariWaktuHadir || new Date().toISOString().split('T')[0],
+            jam_masuk: att.jam_masuk || jamDariWaktuHadir,
             jam_pulang: isSingleAttendanceWorkcode ? '' : (att.jam_pulang || ''),
             status: att.status || 'hadir',
         });
@@ -185,6 +189,10 @@ export default function ReportIndex({
                     : `
                         <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.waktu_hadir}</td>
                         <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-weight: bold; font-size: 11px;">${a.status ? a.status.replace('_', ' ').toUpperCase() : '-'}</td>
+                        <td style="text-align: center; padding: 4px 8px; border: 1px solid #cbd5e1;">
+                            <div style="font-weight: bold; font-size: 10px;">${a.attendance_method || '-'}</div>
+                            ${a.signature_url ? `<img src="${a.signature_url}" alt="Tanda tangan ${a.nama}" style="display: block; width: 90px; height: 34px; object-fit: contain; margin: 2px auto 0;" />` : ''}
+                        </td>
                     `
                 }
             </tr>
@@ -209,6 +217,7 @@ export default function ReportIndex({
                 <th>Status Pegawai</th>
                 <th style="width: 130px;">Waktu Presensi</th>
                 <th style="width: 70px;">Status</th>
+                <th style="width: 110px;">Metode</th>
             `;
 
         printWindow.document.write(`
@@ -395,9 +404,7 @@ export default function ReportIndex({
                             <td>:</td>
                             <td style="text-transform: capitalize;">${selectedWorkcode.kategori === 'harian'
                                 ? 'Presensi Harian'
-                                : selectedWorkcode.kategori === '24_jam'
-                                    ? 'Presensi 24 Jam'
-                                    : 'Presensi Sekali / Event'}</td>
+                                : 'Presensi Sekali / Event'}</td>
                         </tr>
                         <tr>
                             <td style="font-weight: bold;">Waktu Cetak</td>
@@ -1041,9 +1048,21 @@ export default function ReportIndex({
                                             </div>
                                         </div>
                                     ) : (
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-xs text-slate-600 font-mono">{attendance.status !== 'libur' ? attendance.waktu_hadir : '-'}</span>
-                                            {renderStatusBadge(attendance.status)}
+                                        <div className="flex items-center justify-between gap-3 rounded-xl bg-slate-50 p-2">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs text-slate-600 font-mono">{attendance.status !== 'libur' ? attendance.waktu_hadir : '-'}</span>
+                                                {renderStatusBadge(attendance.status)}
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="rounded-full border border-indigo-100 bg-indigo-50 px-2 py-1 text-[9px] font-extrabold uppercase text-indigo-700">
+                                                    {attendance.attendance_method || '—'}
+                                                </span>
+                                                {attendance.signature_url && (
+                                                    <a href={attendance.signature_url} target="_blank" rel="noreferrer" title="Lihat tanda tangan peserta">
+                                                        <img src={attendance.signature_url} alt={`Tanda tangan ${attendance.nama}`} className="h-10 w-24 rounded-md bg-white object-contain" />
+                                                    </a>
+                                                )}
+                                            </div>
                                         </div>
                                     )}
                                     {/* Action buttons */}
@@ -1113,9 +1132,10 @@ export default function ReportIndex({
                                             </>
                                         ) : (
                                             <>
-                                                <th className="px-4 py-3 text-left font-extrabold uppercase tracking-wider text-slate-500">Waktu Hadir</th>
-                                                <th className="w-28 px-3 py-3 text-center font-extrabold uppercase tracking-wider text-slate-500">Status</th>
-                                                <th className="w-40 px-3 py-3 text-center font-extrabold uppercase tracking-wider text-slate-500">Aksi</th>
+                                                 <th className="px-4 py-3 text-left font-extrabold uppercase tracking-wider text-slate-500">Waktu Hadir</th>
+                                                 <th className="w-28 px-3 py-3 text-center font-extrabold uppercase tracking-wider text-slate-500">Status</th>
+                                                 <th className="w-36 px-3 py-3 text-center font-extrabold uppercase tracking-wider text-slate-500">Metode</th>
+                                                 <th className="w-40 px-3 py-3 text-center font-extrabold uppercase tracking-wider text-slate-500">Aksi</th>
                                             </>
                                         )}
                                     </tr>
@@ -1123,7 +1143,7 @@ export default function ReportIndex({
                                 <tbody className="divide-y divide-slate-100 bg-white">
                                     {filteredAttendances.length === 0 ? (
                                         <tr>
-                                            <td colSpan={selectedWorkcode?.kategori === 'harian' ? 10 : 7} className="px-4 py-16 text-center align-middle bg-white">
+                                            <td colSpan={selectedWorkcode?.kategori === 'harian' ? 10 : 8} className="px-4 py-16 text-center align-middle bg-white">
                                                 <div className="flex flex-col items-center justify-center text-center mx-auto w-full">
                                                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-50 border border-slate-200/80 mb-2.5 shadow-2xs">
                                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1200,10 +1220,22 @@ export default function ReportIndex({
                                                 ) : (
                                                     <>
                                                         <td className="px-4 py-2.5 text-xs text-slate-700 font-mono font-semibold">{attendance.status === 'libur' ? '-' : attendance.waktu_hadir}</td>
-                                                        <td className="px-3 py-2.5 text-center">
-                                                            {renderStatusBadge(attendance.status)}
-                                                        </td>
-                                                        <td className="px-3 py-2.5 text-center">
+                                                         <td className="px-3 py-2.5 text-center">
+                                                             {renderStatusBadge(attendance.status)}
+                                                         </td>
+                                                         <td className="px-3 py-2 text-center">
+                                                             <div className="flex flex-col items-center gap-1">
+                                                                 <span className="rounded-full border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[9px] font-extrabold uppercase text-indigo-700">
+                                                                     {attendance.attendance_method || '—'}
+                                                                 </span>
+                                                                 {attendance.signature_url && (
+                                                                     <a href={attendance.signature_url} target="_blank" rel="noreferrer" title="Lihat tanda tangan peserta" className="inline-flex">
+                                                                         <img src={attendance.signature_url} alt={`Tanda tangan ${attendance.nama}`} className="h-9 w-24 rounded-md border border-slate-100 bg-white object-contain" />
+                                                                     </a>
+                                                                 )}
+                                                             </div>
+                                                         </td>
+                                                         <td className="px-3 py-2.5 text-center">
                                                             <div className="flex items-center justify-center gap-1.5">
                                                                 <button
                                                                     onClick={() => openManualEditModal(attendance, attendance.nama)}

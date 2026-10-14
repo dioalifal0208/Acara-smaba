@@ -107,6 +107,9 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
     const suggestionsRef = useRef(null);
     const [isSearchingSuggestions, setIsSearchingSuggestions] = useState(false);
     const [selectedParticipant, setSelectedParticipant] = useState(null);
+    const signatureCanvasRef = useRef(null);
+    const isSigningRef = useRef(false);
+    const [signatureData, setSignatureData] = useState('');
 
     const { data, setData, processing, reset } = useForm({
         nis_nip: '',
@@ -147,17 +150,78 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
         } catch (e) { /* abaikan jika tidak disupport HP */ }
     }, []);
 
+    const clearSignature = useCallback(() => {
+        const canvas = signatureCanvasRef.current;
+        const context = canvas?.getContext('2d');
+        if (canvas && context) {
+            context.clearRect(0, 0, canvas.width, canvas.height);
+        }
+        setSignatureData('');
+    }, []);
+
+    const getSignaturePoint = (event) => {
+        const canvas = signatureCanvasRef.current;
+        const rect = canvas.getBoundingClientRect();
+
+        return {
+            x: (event.clientX - rect.left) * (canvas.width / rect.width),
+            y: (event.clientY - rect.top) * (canvas.height / rect.height),
+        };
+    };
+
+    const startSignature = (event) => {
+        event.preventDefault();
+        setErrorMsg(null);
+        const canvas = signatureCanvasRef.current;
+        const context = canvas?.getContext('2d');
+        if (!canvas || !context) return;
+
+        const point = getSignaturePoint(event);
+        isSigningRef.current = true;
+        canvas.setPointerCapture?.(event.pointerId);
+        context.beginPath();
+        context.moveTo(point.x, point.y);
+        context.lineCap = 'round';
+        context.lineJoin = 'round';
+        context.lineWidth = 4;
+        context.strokeStyle = '#0f172a';
+    };
+
+    const drawSignature = (event) => {
+        if (!isSigningRef.current) return;
+        event.preventDefault();
+
+        const canvas = signatureCanvasRef.current;
+        const context = canvas?.getContext('2d');
+        if (!canvas || !context) return;
+
+        const point = getSignaturePoint(event);
+        context.lineTo(point.x, point.y);
+        context.stroke();
+    };
+
+    const finishSignature = (event) => {
+        if (!isSigningRef.current) return;
+        event.preventDefault();
+
+        const canvas = signatureCanvasRef.current;
+        isSigningRef.current = false;
+        canvas?.releasePointerCapture?.(event.pointerId);
+        setSignatureData(canvas?.toDataURL('image/png') || '');
+    };
+
     const handleInputChange = (val) => {
         setData({
             nis_nip: val,
             participant_id: null,
         });
         setSelectedParticipant(null);
+        clearSignature();
         setErrorMsg(null);
         if (val.trim().length >= 2) {
             setIsSearchingSuggestions(true);
             setShowSuggestions(true);
-            fetch(route('participants.search') + `?query=${encodeURIComponent(val)}`)
+            fetch(route('self-checkin.participants', token) + `?query=${encodeURIComponent(val)}`)
                 .then((res) => res.json())
                 .then((d) => {
                     setSuggestions(d);
@@ -179,6 +243,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
             participant_id: participant.id,
         });
         setSelectedParticipant(participant);
+        clearSignature();
         setSuggestions([]);
         setShowSuggestions(false);
     };
@@ -196,6 +261,10 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!data.participant_id && !data.nis_nip.trim()) return;
+        if (!signatureData) {
+            setErrorMsg('Tanda tangan wajib diisi sebelum mengirim kehadiran.');
+            return;
+        }
 
         setResult(null);
         setErrorMsg(null);
@@ -249,6 +318,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                             speed: speed !== null ? speed : null,
                             device_timestamp: deviceTimestamp,
                             device_id: deviceId,
+                            signature: signatureData,
                         }),
                     });
 
@@ -263,6 +333,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                             playAudio('success');
                             reset();
                             setSelectedParticipant(null);
+                            clearSignature();
                         } else if (resData.status === 'already') {
                             setResult({
                                 type: 'already',
@@ -428,6 +499,39 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                                                 )}
                                             </div>
                                         )}
+                                    </div>
+
+                                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                                        <div className="mb-2 flex items-center justify-between gap-3">
+                                            <div>
+                                                <p className="text-xs font-extrabold text-slate-700">
+                                                    Tanda Tangan Peserta <span className="text-red-500">*</span>
+                                                </p>
+                                                <p className="text-[10px] font-medium text-slate-500">Gunakan jari atau stylus pada area berikut.</p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={clearSignature}
+                                                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold text-slate-600 shadow-sm transition hover:bg-slate-100"
+                                            >
+                                                Hapus
+                                            </button>
+                                        </div>
+                                        <canvas
+                                            ref={signatureCanvasRef}
+                                            width="800"
+                                            height="240"
+                                            onPointerDown={startSignature}
+                                            onPointerMove={drawSignature}
+                                            onPointerUp={finishSignature}
+                                            onPointerCancel={finishSignature}
+                                            onPointerLeave={finishSignature}
+                                            className="h-32 w-full cursor-crosshair touch-none rounded-xl border border-dashed border-slate-300 bg-white shadow-inner"
+                                            aria-label="Area tanda tangan peserta"
+                                        />
+                                        <p className={`mt-1.5 text-center text-[10px] font-bold ${signatureData ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                            {signatureData ? '✓ Tanda tangan siap disimpan' : 'Belum ada tanda tangan'}
+                                        </p>
                                     </div>
 
                                     {errorMsg && (
