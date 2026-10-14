@@ -1,4 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { MODEL_URL } from '@/lib/appUrl';
 import { Head, usePage } from '@inertiajs/react';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useToast } from '@/Components/Toast';
@@ -41,7 +42,6 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
     useEffect(() => {
         const loadModels = async () => {
             try {
-                const MODEL_URL = '/models';
                 await Promise.all([
                     faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
                     faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),

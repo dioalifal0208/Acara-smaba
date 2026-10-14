@@ -1,4 +1,5 @@
 import { Head, useForm } from '@inertiajs/react';
+import { appUrl } from '@/lib/appUrl';
 import { useState, useCallback, useEffect, useRef } from 'react';
 
 // ── Helper: Simple Lightweight Device Fingerprint (tanpa library eksternal) ──
@@ -54,7 +55,7 @@ function LockedScreen({ lock, activeWorkcode }) {
             <div className="relative z-10 w-full max-w-sm rounded-3xl bg-white border border-emerald-200 shadow-2xl p-7">
                 {/* Logo */}
                 <div className="flex justify-center mb-4">
-                    <img src="/images/logo.png" alt="Logo E-Presensi SMABA" className="h-12 w-12 object-contain" />
+                    <img src={appUrl('images/logo.png')} alt="Logo E-Presensi SMABA" className="h-12 w-12 object-contain" />
                 </div>
 
                 {/* Centang Besar */}
@@ -401,7 +402,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                 {/* Header Logo */}
                 <header className="relative z-10 mx-auto flex h-[72px] flex-none flex-col items-center justify-center text-center" data-aos="fade-down">
                     <div className="flex justify-center mb-1">
-                        <img src="/images/logo.png" alt="Logo E-Presensi SMABA" className="h-10 w-10 object-contain" />
+                        <img src={appUrl('images/logo.png')} alt="Logo E-Presensi SMABA" className="h-10 w-10 object-contain" />
                     </div>
                     <div>
                         <span className="font-extrabold text-sm tracking-tight text-slate-800 block leading-tight">E-Presensi</span>

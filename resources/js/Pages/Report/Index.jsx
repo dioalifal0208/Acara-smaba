@@ -1,4 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { appUrl } from '@/lib/appUrl';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 import { useToast } from '@/Components/Toast';
@@ -102,7 +103,7 @@ export default function ReportIndex({
         if (!selectedWorkcode) return;
         setIsLoadingLogs(true);
         try {
-            const response = await fetch(`/report/individual/${selectedWorkcode.id}/${participantId}`);
+            const response = await fetch(appUrl(`report/individual/${selectedWorkcode.id}/${participantId}`));
             const data = await response.json();
             setSelectedParticipantForLogs({
                 id: participantId,
@@ -456,7 +457,7 @@ export default function ReportIndex({
             const year = now.getFullYear();
             const month = now.getMonth() + 1;
             const periodLabel = now.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
-            const response = await fetch(`/report/individual/${selectedWorkcode.id}/${participantId}?year=${year}&month=${month}`);
+            const response = await fetch(appUrl(`report/individual/${selectedWorkcode.id}/${participantId}?year=${year}&month=${month}`));
             const data = await response.json();
             
             const printWindow = window.open('', '_blank', 'width=800,height=900');

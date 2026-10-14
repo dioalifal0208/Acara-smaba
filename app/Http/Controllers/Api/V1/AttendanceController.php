@@ -8,6 +8,7 @@ use App\Models\Attendance;
 use App\Models\LeaveRequest;
 use App\Models\Workcode;
 use App\Services\AttendanceValidationService;
+use App\Support\FaceDescriptor;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -117,6 +118,11 @@ class AttendanceController extends Controller
             }
 
             try {
+                // Presensi wajah hanya untuk peserta yang wajahnya sudah disetujui admin.
+                if ($blocker = $user->participant?->faceAttendanceBlocker()) {
+                    throw new \Exception(json_encode($blocker), 403);
+                }
+
                 if (! $isPulang) {
                     $validationService->validateDeviceLock($activeWorkcode, $deviceHash);
                 }
@@ -221,71 +227,31 @@ class AttendanceController extends Controller
         });
     }
 
-    private function validateFaceMatch($incomingDescriptor, $registeredDescriptorStr)
+    private function validateFaceMatch($incomingDescriptor, $registeredDescriptor)
     {
-        if (! $registeredDescriptorStr) {
+        if (FaceDescriptor::vectors($registeredDescriptor) === []) {
+            throw new \Exception(json_encode([
+                'status' => 'face_not_registered',
+                'message' => 'Data wajah Anda belum terdaftar. Silakan daftarkan wajah terlebih dahulu dan tunggu persetujuan admin.',
+            ]), 403);
+        }
+
+        // Data wajah web bisa single atau multi-sudut; Android mengirim vector ternormalisasi L2,
+        // jadi kedua sisi dinormalisasi sebelum dibandingkan. Descriptor dan jarak sengaja tidak
+        // dicatat ke log karena termasuk data biometrik.
+        $distance = FaceDescriptor::minDistance($incomingDescriptor, $registeredDescriptor, normalize: true);
+
+        if ($distance === null) {
             throw new \Exception(json_encode([
                 'status' => 'error',
-                'message' => 'Data wajah belum terdaftar (kosong).',
+                'message' => 'Versi model wajah aplikasi berbeda dengan data wajah terdaftar. Perbarui aplikasi atau daftarkan ulang wajah.',
             ]), 400);
         }
 
-        $registeredDescriptor = is_string($registeredDescriptorStr)
-            ? json_decode($registeredDescriptorStr, true)
-            : $registeredDescriptorStr;
-
-        if (! is_array($registeredDescriptor)) {
+        if ($distance > 0.85) {
             throw new \Exception(json_encode([
                 'status' => 'error',
-                'message' => 'Format data wajah di database rusak.',
-            ]), 500);
-        }
-
-        $inSize = count($incomingDescriptor);
-        $dbSize = count($registeredDescriptor);
-
-        // Rekam data Android ke log agar bisa disalin manual ke DB (Cheat Code)
-        Log::info('--- DATA WAJAH ANDROID ---', [
-            'ukuran_android' => $inSize,
-            'ukuran_web_db' => $dbSize,
-            'array_android_lengkap' => json_encode($incomingDescriptor),
-        ]);
-
-        if ($inSize !== $dbSize) {
-            throw new \Exception(json_encode([
-                'status' => 'error',
-                'message' => "Beda Model AI! Web menghasilkan $dbSize angka, Android menghasilkan $inSize angka.",
-            ]), 400);
-        }
-
-        // Auto-normalize data dari Web agar cocok dengan L2 Normalization Android
-        $dbNormSum = 0.0;
-        foreach ($registeredDescriptor as $val) {
-            $dbNormSum += ((float) $val * (float) $val);
-        }
-        $dbNorm = sqrt($dbNormSum);
-
-        if ($dbNorm > 0 && abs($dbNorm - 1.0) > 0.01) {
-            for ($i = 0; $i < $dbSize; $i++) {
-                $registeredDescriptor[$i] = (float) $registeredDescriptor[$i] / $dbNorm;
-            }
-        }
-
-        $sum = 0.0;
-        for ($i = 0; $i < $inSize; $i++) {
-            $diff = (float) $incomingDescriptor[$i] - (float) $registeredDescriptor[$i];
-            $sum += $diff * $diff;
-        }
-        $distance = sqrt($sum);
-
-        $threshold = 0.85;
-
-        Log::info('[FACE-DEBUG] Jarak Kemiripan: '.round($distance, 4));
-
-        if ($distance > $threshold) {
-            throw new \Exception(json_encode([
-                'status' => 'error',
-                'message' => 'Wajah tidak cocok. Jarak: '.round($distance, 3),
+                'message' => 'Wajah tidak cocok dengan data wajah Anda. Coba lagi dengan pencahayaan cukup.',
             ]), 400);
         }
     }

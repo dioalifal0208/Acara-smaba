@@ -56,7 +56,7 @@ class PhaseEAttendanceTest extends TestCase
     public function test_attendance_submission_success()
     {
         $user = User::factory()->create(['role' => 'participant']);
-        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode([1.0])]);
+        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode([1.0]), 'face_status' => 'approved']);
         $user->participant_id = $participant->id;
         $user->save();
         Sanctum::actingAs($user, ['role:participant']);
@@ -127,7 +127,7 @@ class PhaseEAttendanceTest extends TestCase
     public function test_attendance_submission_idempotency_replay_success()
     {
         $user = User::factory()->create(['role' => 'participant']);
-        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode([1.0])]);
+        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode([1.0]), 'face_status' => 'approved']);
         $user->participant_id = $participant->id;
         $user->save();
         Sanctum::actingAs($user, ['role:participant']);
@@ -175,7 +175,7 @@ class PhaseEAttendanceTest extends TestCase
     public function test_attendance_submission_idempotency_conflict_when_payload_changes()
     {
         $user = User::factory()->create(['role' => 'participant']);
-        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode([1.0])]);
+        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode([1.0]), 'face_status' => 'approved']);
         $user->participant_id = $participant->id;
         $user->save();
         Sanctum::actingAs($user, ['role:participant']);
@@ -222,7 +222,7 @@ class PhaseEAttendanceTest extends TestCase
     public function test_mock_location_is_rejected_by_service()
     {
         $user = User::factory()->create(['role' => 'participant']);
-        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode([1.0])]);
+        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode([1.0]), 'face_status' => 'approved']);
         $user->participant_id = $participant->id;
         $user->save();
         Sanctum::actingAs($user, ['role:participant']);
@@ -253,7 +253,7 @@ class PhaseEAttendanceTest extends TestCase
     public function test_out_of_radius_error_message_is_consistent_and_has_no_distance_leak()
     {
         $user = User::factory()->create(['role' => 'participant']);
-        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode([1.0])]);
+        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode([1.0]), 'face_status' => 'approved']);
         $user->participant_id = $participant->id;
         $user->save();
         Sanctum::actingAs($user, ['role:participant']);
@@ -290,12 +290,12 @@ class PhaseEAttendanceTest extends TestCase
     public function test_device_locked_error_does_not_leak_participant_data()
     {
         $user1 = User::factory()->create(['role' => 'participant']);
-        $participant1 = Participant::create(['nama' => 'Test1', 'nis_nip' => '111', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode([1.0])]);
+        $participant1 = Participant::create(['nama' => 'Test1', 'nis_nip' => '111', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode([1.0]), 'face_status' => 'approved']);
         $user1->participant_id = $participant1->id;
         $user1->save();
 
         $user2 = User::factory()->create(['role' => 'participant']);
-        $participant2 = Participant::create(['nama' => 'Test2', 'nis_nip' => '222', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode([1.0])]);
+        $participant2 = Participant::create(['nama' => 'Test2', 'nis_nip' => '222', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode([1.0]), 'face_status' => 'approved']);
         $user2->participant_id = $participant2->id;
         $user2->save();
 
@@ -342,7 +342,7 @@ class PhaseEAttendanceTest extends TestCase
     public function test_attendance_submission_success_for_harian_mobile_api()
     {
         $user = User::factory()->create(['role' => 'participant']);
-        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode([1.0])]);
+        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode([1.0]), 'face_status' => 'approved']);
         $user->participant_id = $participant->id;
         $user->save();
         Sanctum::actingAs($user, ['role:participant']);
@@ -378,7 +378,7 @@ class PhaseEAttendanceTest extends TestCase
     public function test_attendance_submission_rejected_for_harian_if_no_active_workcode()
     {
         $user = User::factory()->create(['role' => 'participant']);
-        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode([1.0])]);
+        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode([1.0]), 'face_status' => 'approved']);
         $user->participant_id = $participant->id;
         $user->save();
         Sanctum::actingAs($user, ['role:participant']);

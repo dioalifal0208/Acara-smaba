@@ -1,4 +1,5 @@
 import { Link, Head } from '@inertiajs/react';
+import { appUrl } from '@/lib/appUrl';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useToast } from '@/Components/Toast';
 import LoginModal from '@/Components/LoginModal';
@@ -368,7 +369,7 @@ export default function Welcome({ auth, stats: initialStats, recentScans: initia
                         {/* Brand Mark */}
                         <div className="flex items-center gap-3">
                             <div className="h-9 w-9 rounded-lg flex items-center justify-center" style={{ background: '#f0faf0', border: '1px solid #c3efc6' }}>
-                                <img src="/images/logo.png" alt="Logo SMABA" className="h-6 w-6 object-contain" />
+                                <img src={appUrl('images/logo.png')} alt="Logo SMABA" className="h-6 w-6 object-contain" />
                             </div>
                             <div>
                                 <span className="block text-[15px] font-black tracking-tight" style={{ color: '#1a3d1e', lineHeight: 1 }}>E-Presensi</span>

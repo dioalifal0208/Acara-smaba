@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { MODEL_URL } from '@/lib/appUrl';
 import * as faceapi from 'face-api.js';
 import axios from 'axios';
 import { getRandomChallenge } from '@/Utils/liveness';
@@ -71,7 +72,6 @@ export default function FaceScannerModal({ activeWorkcode, participant, onClose,
     useEffect(() => {
         const loadModels = async () => {
             try {
-                const MODEL_URL = '/models';
                 await Promise.all([
                     faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
                     faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),

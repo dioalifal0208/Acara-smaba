@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\FaceDescriptor;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
@@ -64,6 +65,34 @@ class Participant extends Model
     public function photoChangeRequests()
     {
         return $this->hasMany(PhotoChangeRequest::class);
+    }
+
+    /**
+     * Alasan peserta belum boleh presensi wajah, atau null bila wajahnya sudah disetujui admin.
+     * Dipakai bersama oleh presensi wajah web dan API Android.
+     *
+     * @return array{status: string, message: string}|null
+     */
+    public function faceAttendanceBlocker(): ?array
+    {
+        if ($this->face_status === 'approved' && FaceDescriptor::vectors($this->face_descriptor) !== []) {
+            return null;
+        }
+
+        return match ($this->face_status) {
+            'pending' => [
+                'status' => 'face_pending',
+                'message' => 'Data wajah Anda sudah didaftarkan dan masih menunggu persetujuan admin. Presensi wajah aktif otomatis setelah disetujui.',
+            ],
+            'rejected' => [
+                'status' => 'face_rejected',
+                'message' => 'Pendaftaran wajah Anda ditolak admin. Silakan daftar ulang wajah terlebih dahulu.',
+            ],
+            default => [
+                'status' => 'face_not_registered',
+                'message' => 'Data wajah Anda belum terdaftar. Silakan daftarkan wajah terlebih dahulu dan tunggu persetujuan admin.',
+            ],
+        };
     }
 
     /**

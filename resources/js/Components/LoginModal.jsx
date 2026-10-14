@@ -1,4 +1,5 @@
 import { useForm, Link } from '@inertiajs/react';
+import { appUrl } from '@/lib/appUrl';
 import { useState, useEffect } from 'react';
 import InputError from '@/Components/InputError';
 import Checkbox from '@/Components/Checkbox';
@@ -64,7 +65,7 @@ export default function LoginModal({ isOpen, onClose, canResetPassword = true })
                 {/* Header */}
                 <div className="flex items-center gap-3 mb-6">
                     <img
-                        src="/images/logo.png"
+                        src={appUrl('images/logo.png')}
                         alt="Logo E-Presensi SMABA"
                         className="h-11 w-11 object-contain"
                     />

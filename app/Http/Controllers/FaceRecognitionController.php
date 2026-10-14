@@ -6,8 +6,10 @@ use App\Models\Attendance;
 use App\Models\Participant;
 use App\Models\Workcode;
 use Carbon\Carbon;
+use App\Support\FaceDescriptor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class FaceRecognitionController extends Controller
 {
@@ -33,49 +35,29 @@ class FaceRecognitionController extends Controller
     }
 
     /**
-     * Hitung Euclidean distance antara dua vector (array float).
+     * Ambang jarak Euclidean face-api.js (standar dlib ~0.6).
+     * 0.45 sebelumnya terlalu ketat sehingga menolak wajah asli karena pencahayaan webcam.
      */
-    private function euclideanDistance(array $v1, array $v2)
+    private const MATCH_THRESHOLD = 0.58;
+
+    /**
+     * Jarak terdekat antara input descriptor dan descriptor tersimpan (single atau multi-sudut).
+     */
+    private function getMinDistance(array $inputDescriptor, $dbDescriptor): float
     {
-        if (count($v1) !== count($v2)) {
-            return INF;
-        }
-
-        $sum = 0.0;
-        for ($i = 0; $i < count($v1); $i++) {
-            $sum += pow($v1[$i] - $v2[$i], 2);
-        }
-
-        return sqrt($sum);
+        return FaceDescriptor::minDistance($inputDescriptor, $dbDescriptor) ?? INF;
     }
 
     /**
-     * Hitung jarak terdekat antara input descriptor dan stored descriptor(s)
-     * Mendukung single vector (128D) maupun multi-vector array
+     * Tolak kiriman descriptor pendaftaran yang tidak valid.
      */
-    private function getMinDistance(array $inputDescriptor, $dbDescriptor)
+    private function validateEnrollmentDescriptor(Request $request, bool $requireMultiple): void
     {
-        if (! is_array($dbDescriptor) || empty($dbDescriptor)) {
-            return INF;
-        }
+        $error = FaceDescriptor::validateEnrollment($request->input('descriptor'), $requireMultiple);
 
-        // Single 128-dimensional vector
-        if (count($dbDescriptor) === 128 && ! is_array($dbDescriptor[0])) {
-            return $this->euclideanDistance($inputDescriptor, $dbDescriptor);
+        if ($error) {
+            throw ValidationException::withMessages(['descriptor' => $error]);
         }
-
-        // Multiple 128-dimensional vectors
-        $minDist = INF;
-        foreach ($dbDescriptor as $vec) {
-            if (is_array($vec) && count($vec) === 128) {
-                $d = $this->euclideanDistance($inputDescriptor, $vec);
-                if ($d < $minDist) {
-                    $minDist = $d;
-                }
-            }
-        }
-
-        return $minDist;
     }
 
     /**
@@ -87,6 +69,7 @@ class FaceRecognitionController extends Controller
             'descriptor' => 'required|array',
             'photo' => 'nullable|string',
         ]);
+        $this->validateEnrollmentDescriptor($request, requireMultiple: false);
 
         $updateData = [
             'face_descriptor' => $request->input('descriptor'),
@@ -136,6 +119,8 @@ class FaceRecognitionController extends Controller
             'descriptor' => 'required|array',
             'photo' => 'nullable|string',
         ]);
+        // Peserta wajib melalui pemindaian terpandu multi-sudut (bukan satu frame).
+        $this->validateEnrollmentDescriptor($request, requireMultiple: true);
 
         $updateData = [
             'face_descriptor' => $request->input('descriptor'),
@@ -247,6 +232,25 @@ class FaceRecognitionController extends Controller
 
         $isAdmin = auth()->check() && (auth()->user()->role === 'admin' || auth()->user()->role === 'superadmin');
 
+        // Peserta yang login hanya boleh dicocokkan dengan wajahnya sendiri (1:1), dan hanya
+        // setelah wajahnya disetujui admin. Jangan pernah mencari ke peserta lain, karena itu
+        // bisa mencatat presensi atas nama orang lain yang mirip.
+        $selfParticipant = null;
+        if (! $isAdmin && auth()->user()?->participant_id) {
+            $selfParticipant = Participant::find(auth()->user()->participant_id);
+
+            if (! $selfParticipant) {
+                return response()->json([
+                    'status' => 'face_not_registered',
+                    'message' => 'Data peserta untuk akun ini tidak ditemukan. Hubungi admin.',
+                ], 403);
+            }
+
+            if ($blocker = $selfParticipant->faceAttendanceBlocker()) {
+                return response()->json($blocker, 403);
+            }
+        }
+
         // === Validasi GPS (Mirip Self Check-in) ===
         // Bypassed jika yang melakukan scan adalah Admin
         if (! $isAdmin) {
@@ -305,37 +309,29 @@ class FaceRecognitionController extends Controller
         }
 
         // === Pencocokan Wajah ===
-        // HANYA COCOKKAN WAJAH YANG STATUSNYA APPROVED
-        $participants = Participant::whereNotNull('face_descriptor')
-            ->where('face_status', 'approved')
-            ->get();
-
         $bestMatch = null;
-        // Standar dlib / face-api.js euclidean distance threshold: ~0.58
-        // 0.45 sebelumnya terlalu ketat sehingga menolak wajah asli karena pencahayaan webcam.
-        $bestDistance = 0.58;
 
-        // Jika user yang login adalah peserta terdaftar, cek wajah dirinya terlebih dahulu
-        $loggedInParticipantId = auth()->check() ? auth()->user()->participant_id : null;
-        if ($loggedInParticipantId) {
-            $myParticipant = $participants->firstWhere('id', $loggedInParticipantId);
-            if ($myParticipant && $myParticipant->face_descriptor) {
-                $myDist = $this->getMinDistance($inputDescriptor, $myParticipant->face_descriptor);
-                \Log::info("Distance computed for logged in user ({$myParticipant->nama}): ".$myDist);
-                if ($myDist < $bestDistance) {
-                    $bestDistance = $myDist;
-                    $bestMatch = $myParticipant;
-                }
+        if ($selfParticipant) {
+            // Peserta login: hanya bandingkan dengan wajahnya sendiri.
+            if ($this->getMinDistance($inputDescriptor, $selfParticipant->face_descriptor) < self::MATCH_THRESHOLD) {
+                $bestMatch = $selfParticipant;
             }
-        }
 
-        // Jika belum match atau bukan self-presensi, cari dari seluruh database
-        if (! $bestMatch) {
+            if (! $bestMatch) {
+                return response()->json([
+                    'status' => 'not_recognized',
+                    'message' => 'Wajah tidak cocok dengan data wajah Anda. Hadapkan wajah lurus ke kamera dengan pencahayaan cukup lalu coba lagi.',
+                ], 404);
+            }
+        } else {
+            // Scanner admin / self check-in publik: cari di antara wajah yang sudah disetujui.
+            $bestDistance = self::MATCH_THRESHOLD;
+            $participants = Participant::whereNotNull('face_descriptor')
+                ->where('face_status', 'approved')
+                ->get();
+
             foreach ($participants as $p) {
-                $dbDescriptor = $p->face_descriptor;
-                $dist = $this->getMinDistance($inputDescriptor, $dbDescriptor);
-
-                \Log::info('Distance computed between input and '.$p->nama.': '.$dist);
+                $dist = $this->getMinDistance($inputDescriptor, $p->face_descriptor);
 
                 if ($dist < $bestDistance) {
                     $bestDistance = $dist;
@@ -347,7 +343,7 @@ class FaceRecognitionController extends Controller
         if (! $bestMatch) {
             return response()->json([
                 'status' => 'not_recognized',
-                'message' => 'Wajah tidak dikenali dalam sistem. Pastikan pencahayaan cukup dan Anda sudah terdaftar.',
+                'message' => 'Wajah tidak dikenali. Data wajah belum/tidak terdaftar atau belum disetujui admin.',
             ], 404);
         }
 
@@ -361,7 +357,7 @@ class FaceRecognitionController extends Controller
             return response()->json([
                 'status' => 'already',
                 'message' => 'Anda sudah melakukan presensi untuk workcode "'.$activeWorkcode->nama_workcode.'".',
-                'participant' => $bestMatch,
+                'participant' => $bestMatch->only(['id', 'nama', 'nis_nip', 'status']),
             ]);
         }
 
@@ -435,9 +431,8 @@ class FaceRecognitionController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Presensi berhasil dicatat!',
-            'participant' => $bestMatch,
+            'participant' => $bestMatch->only(['id', 'nama', 'nis_nip', 'status']),
             'timestamp' => $attendance->waktu_hadir->format('H:i:s'),
-            'distance' => round($bestDistance, 3),
             'is_late' => $isLate,
             'late_formatted' => $lateFormatted,
         ]);

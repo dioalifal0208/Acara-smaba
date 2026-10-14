@@ -1,4 +1,5 @@
 import { Head } from '@inertiajs/react';
+import { MODEL_URL, appUrl } from '@/lib/appUrl';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import * as faceapi from 'face-api.js';
 import axios from 'axios';
@@ -63,7 +64,6 @@ export default function FaceForm({ token, activeWorkcode }) {
     useEffect(() => {
         const loadModels = async () => {
             try {
-                const MODEL_URL = '/models';
                 await Promise.all([
                     faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
                     faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
@@ -279,7 +279,7 @@ export default function FaceForm({ token, activeWorkcode }) {
             <div className="w-full max-w-sm w-full rounded-3xl bg-white overflow-hidden shadow-2xl relative">
                 {/* Header */}
                 <div className="bg-white px-5 py-4 border-b border-slate-100 text-center relative z-10">
-                    <img src="/images/logo.png" alt="Logo" className="h-10 w-10 mx-auto object-contain mb-2" />
+                    <img src={appUrl('images/logo.png')} alt="Logo" className="h-10 w-10 mx-auto object-contain mb-2" />
                     <h2 className="text-sm font-extrabold text-slate-800">Presensi Wajah</h2>
                     <p className="text-[10px] text-slate-500 font-semibold">{activeWorkcode?.nama_workcode}</p>
                 </div>

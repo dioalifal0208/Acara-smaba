@@ -1,194 +1,29 @@
-import { useState, useEffect, useRef } from 'react';
-import * as faceapi from 'face-api.js';
-import { useToast } from './Toast';
+import { useCallback, useState } from 'react';
 import axios from 'axios';
+import { useToast } from './Toast';
+import FaceEnrollmentCamera from '@/Components/FaceEnrollmentCamera';
 
 export default function FaceRegistrationModal({ participant, onClose, onSuccess }) {
     const { toast } = useToast();
-    const videoRef = useRef();
-    const canvasRef = useRef();
-    // Continuously store best frame to avoid black image capture
-    const lastGoodFrameRef = useRef(null);
-    
-    const [isModelsLoaded, setIsModelsLoaded] = useState(false);
-    const [isStreamActive, setIsStreamActive] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
-    const [faceStatus, setFaceStatus] = useState('Mencari wajah...'); // status message
-    const [detectedFace, setDetectedFace] = useState(null);
+    const [showCamera, setShowCamera] = useState(!participant.has_face);
 
-    // Load Models
-    useEffect(() => {
-        const loadModels = async () => {
-            try {
-                const MODEL_URL = '/models';
-                await Promise.all([
-                    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-                    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-                    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-                ]);
-                setIsModelsLoaded(true);
-            } catch (err) {
-                console.error("Failed to load models", err);
-                toast.error("Gagal memuat model Face API.");
-            }
-        };
-        loadModels();
-    }, []);
-
-    // Start Video Stream
-    useEffect(() => {
-        if (!isModelsLoaded) return;
-
-        let stream = null;
-        const startVideo = async () => {
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
-                if (videoRef.current) {
-                    videoRef.current.srcObject = stream;
-                    setIsStreamActive(true);
-                }
-            } catch (err) {
-                console.error(err);
-                toast.error("Kamera tidak dapat diakses.");
-            }
-        };
-
-        startVideo();
-
-        return () => {
-            if (stream) {
-                stream.getTracks().forEach(track => track.stop());
-            }
-        };
-    }, [isModelsLoaded]);
-
-    // Handle Video Play (Detection Loop)
-    const handleVideoPlay = () => {
-        let frameTick = 0;
-        const interval = setInterval(async () => {
-            if (!videoRef.current || !canvasRef.current || !isStreamActive) return;
-
-            const video = videoRef.current;
-            const canvas = canvasRef.current;
-            
-            if (video.paused || video.ended) return;
-
-            const displaySize = { width: video.videoWidth, height: video.videoHeight };
-            if (displaySize.width === 0) return;
-
-            // Continuously capture best frame every ~600ms
-            frameTick++;
-            if (frameTick % 3 === 0) {
-                try {
-                    const vw = video.videoWidth;
-                    const vh = video.videoHeight;
-                    if (vw && vh && video.readyState >= 2) {
-                        const fc = document.createElement('canvas');
-                        fc.width = vw;
-                        fc.height = vh;
-                        fc.getContext('2d').drawImage(video, 0, 0, vw, vh);
-                        const dataUrl = fc.toDataURL('image/jpeg', 0.92);
-                        if (dataUrl && dataUrl.length > 5000) {
-                            lastGoodFrameRef.current = dataUrl;
-                        }
-                    }
-                } catch (e) { /* ignore */ }
-            }
-
-            faceapi.matchDimensions(canvas, displaySize);
-
-            try {
-                const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.5 }))
-                    .withFaceLandmarks()
-                    .withFaceDescriptor();
-
-                if (detection) {
-                    const resizedDetection = faceapi.resizeResults(detection, displaySize);
-                    
-                    // Clear previous drawings
-                    const ctx = canvas.getContext('2d');
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    
-                    // Draw bounding box
-                    faceapi.draw.drawDetections(canvas, resizedDetection);
-                    faceapi.draw.drawFaceLandmarks(canvas, resizedDetection);
-
-                    setFaceStatus('Wajah terdeteksi. Posisikan diam.');
-                    setDetectedFace(detection);
-                } else {
-                    const ctx = canvas.getContext('2d');
-                    ctx.clearRect(0, 0, canvas.width, canvas.height);
-                    setFaceStatus('Tidak ada wajah terdeteksi.');
-                    setDetectedFace(null);
-                }
-            } catch (e) {
-                // Ignore detection errors during loop
-            }
-
-        }, 200);
-
-        return () => clearInterval(interval);
-    };
-
-    const handleRegister = async () => {
-        if (!detectedFace) {
-            toast.error("Wajah belum terdeteksi secara sempurna.");
-            return;
-        }
-
-        setIsProcessing(true);
-        try {
-            // Use stored frame for reliable capture (avoids black image)
-            let photoDataUrl = lastGoodFrameRef.current;
-
-            // Fallback to live capture
-            if (!photoDataUrl || photoDataUrl.length < 5000) {
-                const video = videoRef.current;
-                const vw = video?.videoWidth;
-                const vh = video?.videoHeight;
-                if (vw && vh && video.readyState >= 2) {
-                    const captureCanvas = document.createElement('canvas');
-                    captureCanvas.width = vw;
-                    captureCanvas.height = vh;
-                    captureCanvas.getContext('2d').drawImage(video, 0, 0, vw, vh);
-                    const liveCapture = captureCanvas.toDataURL('image/jpeg', 0.92);
-                    if (liveCapture && liveCapture.length > 5000) {
-                        photoDataUrl = liveCapture;
-                    }
-                }
-            }
-
-            if (!photoDataUrl || photoDataUrl.length < 5000) {
-                throw new Error('Gagal mengambil foto. Coba lagi.');
-            }
-
-            const descriptor = Array.from(detectedFace.descriptor);
-            
-            const response = await axios.post(`/api/participants/${participant.id}/face`, {
-                descriptor: descriptor,
-                photo: photoDataUrl
-            });
-
-            toast.success(response.data.message);
-            onSuccess(); // Close modal & refresh list
-        } catch (error) {
-            console.error(error);
-            toast.error("Gagal mendaftarkan wajah.");
-        } finally {
-            setIsProcessing(false);
-        }
-    };
+    const handleComplete = useCallback(async ({ descriptors, photo }) => {
+        const response = await axios.post(`/api/participants/${participant.id}/face`, { descriptor: descriptors, photo });
+        toast.success(response.data.message);
+        onSuccess(); // tutup modal & muat ulang daftar
+    }, [participant.id, onSuccess, toast]);
 
     const handleDelete = async () => {
-        if (!confirm("Yakin ingin menghapus data wajah peserta ini?")) return;
+        if (!confirm('Yakin ingin menghapus data wajah peserta ini?')) return;
 
         setIsProcessing(true);
         try {
             const response = await axios.delete(`/api/participants/${participant.id}/face`);
             toast.success(response.data.message);
             onSuccess();
-        } catch (error) {
-            toast.error("Gagal menghapus wajah.");
+        } catch {
+            toast.error('Gagal menghapus wajah.');
         } finally {
             setIsProcessing(false);
         }
@@ -198,7 +33,7 @@ export default function FaceRegistrationModal({ participant, onClose, onSuccess 
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-0 sm:p-4 backdrop-blur-sm" onClick={onClose}>
-            <div className="w-full sm:max-w-lg animate-[fadeIn_0.2s_ease-out] sm:rounded-3xl rounded-none bg-white border border-slate-200 p-6 shadow-2xl flex flex-col max-h-screen sm:max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="w-full sm:max-w-md animate-[fadeIn_0.2s_ease-out] sm:rounded-3xl rounded-none bg-white border border-slate-200 p-6 shadow-2xl flex flex-col max-h-screen sm:max-h-[95dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                 {/* Header */}
                 <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
                     <div>
@@ -232,65 +67,37 @@ export default function FaceRegistrationModal({ participant, onClose, onSuccess 
                     )}
                 </div>
 
-                {/* Camera Section */}
-                <div className="relative flex-1 bg-black rounded-2xl overflow-hidden min-h-[300px] flex items-center justify-center border-2 border-slate-200 shadow-inner">
-                    {!isModelsLoaded ? (
-                        <div className="text-white flex flex-col items-center">
-                            <svg className="animate-spin h-8 w-8 mb-2 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            <span className="text-sm font-semibold">Memuat Model AI...</span>
-                        </div>
-                    ) : (
-                        <>
-                            <video 
-                                ref={videoRef} 
-                                autoPlay 
-                                muted 
-                                playsInline
-                                onPlay={handleVideoPlay}
-                                className="absolute inset-0 w-full h-full object-cover transform scale-x-[-1]"
-                            />
-                            <canvas 
-                                ref={canvasRef} 
-                                className="absolute inset-0 w-full h-full object-cover transform scale-x-[-1]"
-                            />
-                            
-                            {/* Overlay frame guide */}
-                            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                                <div className={`w-48 h-64 border-2 border-dashed rounded-full transition-colors duration-300 ${detectedFace ? 'border-emerald-400 bg-emerald-400/10' : 'border-white/50'}`}></div>
-                            </div>
-                        </>
-                    )}
-                </div>
-
-                {/* Status Bar */}
-                <div className="mt-3 text-center">
-                    <p className={`text-sm font-bold ${detectedFace ? 'text-emerald-600' : 'text-slate-500'}`}>
-                        {faceStatus}
-                    </p>
-                </div>
+                {/* Camera Section: pemindaian terpandu multi-sudut, tersimpan otomatis setelah selesai */}
+                {showCamera ? (
+                    <>
+                        <FaceEnrollmentCamera onComplete={handleComplete} className="rounded-2xl" />
+                        <p className="mt-3 text-center text-xs font-semibold text-slate-500">
+                            Minta peserta mengikuti instruksi di layar. Data wajah tersimpan otomatis setelah semua langkah selesai.
+                        </p>
+                    </>
+                ) : (
+                    <button
+                        type="button"
+                        onClick={() => setShowCamera(true)}
+                        disabled={isProcessing}
+                        className="w-full rounded-xl bg-indigo-600 py-3 text-sm font-extrabold text-white shadow-lg shadow-indigo-600/30 transition-all hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                        Daftarkan Ulang Wajah
+                    </button>
+                )}
 
                 {/* Actions */}
-                <div className="mt-5 flex gap-3">
-                    <button
-                        onClick={handleRegister}
-                        disabled={!detectedFace || isProcessing}
-                        className="flex-1 rounded-xl bg-indigo-600 py-3 text-sm font-extrabold text-white shadow-lg shadow-indigo-600/30 transition-all hover:bg-indigo-700 focus:outline-none disabled:opacity-50 disabled:shadow-none"
-                    >
-                        {isProcessing ? 'Memproses...' : 'Ambil & Daftarkan Wajah'}
-                    </button>
-                    {hasFace && (
+                {hasFace && (
+                    <div className="mt-5 flex gap-3">
                         <button
                             onClick={handleDelete}
                             disabled={isProcessing}
-                            className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-extrabold text-red-600 transition-colors hover:bg-red-100 focus:outline-none disabled:opacity-50"
+                            className="flex-1 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-extrabold text-red-600 transition-colors hover:bg-red-100 focus:outline-none disabled:opacity-50"
                         >
-                            Hapus Data
+                            Hapus Data Wajah
                         </button>
-                    )}
-                </div>
+                    </div>
+                )}
             </div>
         </div>
     );

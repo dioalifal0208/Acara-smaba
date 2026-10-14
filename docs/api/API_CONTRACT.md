@@ -143,9 +143,28 @@ Digunakan oleh peserta untuk melakukan presensi dari aplikasi Android. Dikawal `
 }
 ```
 
+**Response Error (403) - Wajah belum boleh dipakai presensi**:
+
+Presensi wajah hanya untuk peserta yang data wajahnya **sudah disetujui admin**. Begitu admin menyetujui, presensi langsung bisa dilakukan tanpa perubahan di aplikasi. Tampilkan `message` apa adanya ke pengguna dan arahkan ke pendaftaran wajah bila perlu.
+
+| `status` | Arti |
+|---|---|
+| `face_not_registered` | Belum pernah mendaftarkan wajah |
+| `face_pending` | Sudah mendaftar, menunggu persetujuan admin |
+| `face_rejected` | Pendaftaran ditolak admin, harus daftar ulang |
+
+```json
+{
+    "status": "face_pending",
+    "message": "Data wajah Anda sudah didaftarkan dan masih menunggu persetujuan admin. Presensi wajah aktif otomatis setelah disetujui."
+}
+```
+
+> Data wajah tersimpan bisa berupa beberapa vector (pendaftaran multi-sudut dari web). Server mencocokkan `face_descriptor` dengan vector terdekat setelah normalisasi L2, jadi aplikasi cukup mengirim **satu** vector seperti biasa. Jarak kemiripan tidak lagi dikirim dalam pesan error.
+
 **Responses Error**:
-- **400 Bad Request**: `Idempotency-Key` hilang/bukan UUID, mock location terdeteksi, akurasi GPS terlalu rendah, clock skew.
-- **403 Forbidden**: Di luar radius GPS, perangkat terkunci untuk user lain, di luar jam buka/tutup.
+- **400 Bad Request**: `Idempotency-Key` hilang/bukan UUID, mock location terdeteksi, akurasi GPS terlalu rendah, clock skew, wajah tidak cocok, dimensi `face_descriptor` berbeda dengan data terdaftar.
+- **403 Forbidden**: Di luar radius GPS, perangkat terkunci untuk user lain, di luar jam buka/tutup, wajah belum terdaftar/disetujui (lihat tabel di atas).
 - **409 Conflict**: `Idempotency-Key` sama dengan payload berbeda.
 - **422 Unprocessable Entity**: Validasi gagal (field wajib hilang, format salah).
 - **426 Upgrade Required**: `face_descriptor` tidak dikirim (versi app lama).
