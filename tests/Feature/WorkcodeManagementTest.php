@@ -101,6 +101,35 @@ class WorkcodeManagementTest extends TestCase
         $this->assertTrue($workcode->is_active);
     }
 
+    public function test_workcode_name_cannot_be_the_logged_in_account_identity(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'username' => 'admin', 'email' => 'admin@smaba.sch.id']);
+        $workcode = Workcode::create(['nama_workcode' => 'Rapat Pleno', 'kategori' => 'workcode']);
+
+        foreach (['admin', ' Admin ', 'admin@smaba.sch.id', $admin->name] as $autofilled) {
+            $this->actingAs($admin)
+                ->from(route('workcodes.index'))
+                ->post(route('workcodes.store'), [
+                    'nama_workcode' => $autofilled,
+                    'kategori' => 'harian',
+                    'radius_meters' => 100,
+                ])
+                ->assertSessionHasErrors('nama_workcode');
+
+            $this->actingAs($admin)
+                ->from(route('workcodes.index'))
+                ->put(route('workcodes.update', $workcode), [
+                    'nama_workcode' => $autofilled,
+                    'kategori' => 'workcode',
+                    'radius_meters' => 100,
+                ])
+                ->assertSessionHasErrors('nama_workcode');
+        }
+
+        $this->assertSame('Rapat Pleno', $workcode->fresh()->nama_workcode);
+        $this->assertSame(1, Workcode::count());
+    }
+
     public function test_workcode_actions_still_work_when_firebase_is_not_configured(): void
     {
         $this->app->bind(Messaging::class, function () {

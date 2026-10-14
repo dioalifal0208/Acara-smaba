@@ -32,7 +32,7 @@ class WorkcodeController extends Controller
     public function store(Request $request, FcmService $fcmService)
     {
         $validated = $request->validate([
-            'nama_workcode' => 'required|string|max:255',
+            'nama_workcode' => $this->namaWorkcodeRules($request),
             'deskripsi' => 'nullable|string|max:1000',
             'kategori' => 'required|in:workcode,harian',
             'tanggal' => 'required_if:kategori,workcode|nullable|date',
@@ -151,7 +151,7 @@ class WorkcodeController extends Controller
     public function update(Request $request, Workcode $workcode, FcmService $fcmService)
     {
         $validated = $request->validate([
-            'nama_workcode' => 'required|string|max:255',
+            'nama_workcode' => $this->namaWorkcodeRules($request),
             'deskripsi' => 'nullable|string|max:1000',
             'kategori' => 'required|in:workcode,harian',
             'tanggal' => 'required_if:kategori,workcode|nullable|date',
@@ -204,6 +204,28 @@ class WorkcodeController extends Controller
         $fcmService->sendWorkcodeUpdate('updated', $workcode);
 
         return redirect()->back()->with('success', "Workcode '{$workcode->nama_workcode}' berhasil diperbarui.");
+    }
+
+    /**
+     * Aturan nama workcode. Menolak nama yang sama dengan username/nama/email akun yang
+     * sedang login: itu tanda kolom terisi otomatis oleh pengelola password browser.
+     */
+    private function namaWorkcodeRules(Request $request): array
+    {
+        $identities = collect([$request->user()?->username, $request->user()?->name, $request->user()?->email])
+            ->filter()
+            ->map(fn ($value) => mb_strtolower(trim($value)));
+
+        return [
+            'required',
+            'string',
+            'max:255',
+            function (string $attribute, mixed $value, \Closure $fail) use ($identities) {
+                if (is_string($value) && $identities->contains(mb_strtolower(trim($value)))) {
+                    $fail('Nama workcode tidak boleh sama dengan akun login. Kemungkinan kolom ini terisi otomatis oleh browser; ketik ulang nama kegiatan.');
+                }
+            },
+        ];
     }
 
     /**

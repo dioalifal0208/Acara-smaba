@@ -591,7 +591,7 @@ export default function WorkcodesIndex({ workcodes }) {
 
                         {/* Body */}
                         <div className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-6">
-                            <form id="create-workcode-form" onSubmit={handleSubmit} className="grid grid-cols-1 gap-5 items-stretch lg:h-full lg:min-h-0 lg:grid-cols-12">
+                            <form id="create-workcode-form" onSubmit={handleSubmit} autoComplete="off" className="grid grid-cols-1 gap-5 items-stretch lg:h-full lg:min-h-0 lg:grid-cols-12">
                                 {/* Left Column (7 cols) */}
                                 <div className="flex flex-col gap-4 lg:col-span-7 lg:h-full lg:min-h-0">
                                     {/* Nama Workcode */}
@@ -599,8 +599,15 @@ export default function WorkcodesIndex({ workcodes }) {
                                         <label className="block text-[10px] font-extrabold text-slate-700 uppercase tracking-wider mb-1">
                                             Nama Workcode / Kegiatan <span className="text-red-500">*</span>
                                         </label>
+                                        {/* Cegah pengelola password browser mengisi username akun ke kolom ini */}
                                         <input
                                             type="text"
+                                            name="nama_workcode"
+                                            autoComplete="off"
+                                            data-lpignore="true"
+                                            data-1p-ignore="true"
+                                            data-bwignore="true"
+                                            data-form-type="other"
                                             required
                                             placeholder="Contoh: Presensi Harian Guru & Karyawan / Upworkcode..."
                                             value={data.nama_workcode}
