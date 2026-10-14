@@ -228,7 +228,8 @@ restore_app() { php artisan up >/dev/null 2>&1 || true; }
 trap restore_app EXIT
 
 git pull --ff-only origin main
-composer install --no-dev --optimize-autoloader --no-interaction
+composer install --no-dev --optimize-autoloader --no-interaction --no-scripts
+php artisan package:discover --ansi
 php artisan migrate --force
 php artisan optimize:clear
 php artisan config:cache
