@@ -4,10 +4,12 @@ import {
     DETECTOR_OPTIONS,
     ENROLLMENT_STEPS,
     ENROLLMENT_TIMEOUT_SECONDS,
-    EYES_CLOSED_EAR,
-    EYES_REOPENED_EAR,
+    FAST_DETECTOR_OPTIONS,
     SAME_PERSON_MAX_DISTANCE,
+    YAW_METER,
     assessFace,
+    createBlinkDetector,
+    estimatePose,
     faceBrightness,
     isStable,
     loadEnrollmentModels,
@@ -33,6 +35,48 @@ const cameraErrorMessage = (error) => {
 };
 
 /**
+ * Indikator sudut toleh. Video ditampilkan seperti cermin, jadi yaw kamera dibalik agar
+ * penanda bergerak searah kepala pengguna. Zona hijau = sudut yang diterima.
+ */
+function YawMeter({ yaw, stepId, turnSign }) {
+    const toPercent = (value) => Math.min(100, Math.max(0, 50 + (value / YAW_METER.range) * 50));
+    const zones = [-1, 1].map((side) => ({
+        side,
+        // Sisi tampilan `side` sesuai yaw kamera bertanda -side; tahap kedua hanya menerima arah sebaliknya.
+        active: stepId === 'turn_a' || side === turnSign,
+        from: toPercent(side * YAW_METER.min),
+        to: toPercent(side * YAW_METER.max),
+    }));
+    const marker = yaw === null ? null : toPercent(-yaw);
+
+    return (
+        <div className="mb-2 rounded-xl bg-slate-900/70 backdrop-blur-md border border-white/10 px-3 pt-2 pb-2.5">
+            <div className="flex justify-between text-[9px] font-bold uppercase tracking-wider text-white/60">
+                <span>← Kiri</span>
+                <span>Lurus</span>
+                <span>Kanan →</span>
+            </div>
+            <div className="relative mt-1.5 h-2.5 rounded-full bg-white/15">
+                {zones.map((zone) => (
+                    <span
+                        key={zone.side}
+                        className={`absolute inset-y-0 rounded-full ${zone.active ? 'bg-emerald-400/70' : 'bg-white/10'}`}
+                        style={{ left: `${Math.min(zone.from, zone.to)}%`, width: `${Math.abs(zone.to - zone.from)}%` }}
+                    />
+                ))}
+                <span className="absolute inset-y-0 left-1/2 w-px bg-white/40" />
+                {marker !== null && (
+                    <span
+                        className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-sky-400 shadow transition-[left] duration-150"
+                        style={{ left: `${marker}%` }}
+                    />
+                )}
+            </div>
+        </div>
+    );
+}
+
+/**
  * Kamera pendaftaran wajah terpandu multi-sudut.
  *
  * Wajah harus utuh di dalam bingkai, stabil, cukup terang, dan satu-satunya wajah di layar.
@@ -55,7 +99,10 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
     const stableRef = useRef(0);
     const prevBoxRef = useRef(null);
     const turnSignRef = useRef(0);
-    const blinkRef = useRef('open');
+    const blinkRef = useRef('open'); // 'open' sampai kedipan terdeteksi, lalu 'done'
+    const blinkDetectorRef = useRef(createBlinkDetector());
+    const blinkStepStartRef = useRef(0);
+    const lastFaceAtRef = useRef(0);
     const photoRef = useRef(null);
 
     const [phase, setPhase] = useState('loading'); // loading | camera | uploading | error
@@ -66,6 +113,7 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
     const [faceOk, setFaceOk] = useState(false);
     const [timeLeft, setTimeLeft] = useState(ENROLLMENT_TIMEOUT_SECONDS);
     const [attempt, setAttempt] = useState(0);
+    const [yaw, setYaw] = useState(null);
 
     const stopCamera = useCallback(() => {
         runningRef.current = false;
@@ -82,9 +130,11 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
         prevBoxRef.current = null;
         turnSignRef.current = 0;
         blinkRef.current = 'open';
+        blinkDetectorRef.current.reset();
         photoRef.current = null;
         setStepIndex(0);
         setCaptured(0);
+        setYaw(null);
     }, []);
 
     const fail = useCallback((message) => {
@@ -136,7 +186,62 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
         }
     }, [stopCamera]);
 
+    /**
+     * Tahap kedip sebelum kedipan terdeteksi: deteksi ringan (tanpa descriptor) dengan jeda
+     * sangat pendek agar kedipan 0,1-0,3 detik tidak terlewat. Wajah yang hilang sesaat saat
+     * mata terpejam tidak membatalkan kedipan.
+     */
+    const processBlink = useCallback(async (video) => {
+        const frame = { width: video.videoWidth, height: video.videoHeight };
+        const detection = await faceapi.detectSingleFace(video, FAST_DETECTOR_OPTIONS()).withFaceLandmarks();
+        const now = Date.now();
+        const detector = blinkDetectorRef.current;
+
+        if (!detection) {
+            if (now - lastFaceAtRef.current > 1500) {
+                detector.reset();
+                drawOverlay([], frame, false);
+                setFaceOk(false);
+                setHint('Posisikan seluruh wajah di dalam bingkai.');
+            }
+            return;
+        }
+
+        lastFaceAtRef.current = now;
+        const pose = estimatePose(detection.landmarks);
+
+        if (Math.abs(pose.yaw) > 0.15 && !detector.closed) {
+            drawOverlay([detection], frame, false);
+            setFaceOk(false);
+            setHint('Hadapkan wajah lurus ke kamera.');
+            return;
+        }
+
+        drawOverlay([detection], frame, true);
+        setFaceOk(true);
+
+        const state = detector.update(pose.ear, now);
+        if (state === 'blinked') {
+            blinkRef.current = 'done';
+            stableRef.current = 0;
+            prevBoxRef.current = null;
+            setHint('Kedipan terdeteksi. Buka mata dan tahan posisi...');
+        } else if (state === 'closed') {
+            setHint('Bagus, sekarang buka mata kembali.');
+        } else if (state === 'calibrating') {
+            setHint('Lihat lurus ke kamera...');
+        } else {
+            setHint(now - blinkStepStartRef.current > 7000
+                ? 'Pejamkan mata sebentar (sekitar ½ detik), lalu buka kembali.'
+                : 'Kedipkan mata perlahan.');
+        }
+    }, []);
+
     const processFrame = useCallback(async (video) => {
+        if (ENROLLMENT_STEPS[stepRef.current]?.id === 'blink' && blinkRef.current !== 'done') {
+            return processBlink(video);
+        }
+
         const frame = { width: video.videoWidth, height: video.videoHeight };
         const detections = await faceapi
             .detectAllFaces(video, DETECTOR_OPTIONS())
@@ -152,7 +257,7 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
 
         if (detections.length === 0) {
             drawOverlay([], frame, false);
-            blinkRef.current = blinkRef.current === 'done' ? 'done' : 'open';
+            setYaw(null);
             return resetStable('Posisikan seluruh wajah di dalam bingkai.');
         }
         if (detections.length > 1) {
@@ -163,8 +268,9 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
         const detection = detections[0];
         const box = detection.detection.box;
         const step = ENROLLMENT_STEPS[stepRef.current];
+        setYaw(estimatePose(detection.landmarks).yaw);
         const brightness = faceBrightness(video, box, samplerRef.current);
-        const quality = assessFace(detection, visibleRegion(video), brightness, { allowClosedEyes: step.id === 'blink' });
+        const quality = assessFace(detection, visibleRegion(video), brightness, { relaxed: Boolean(step.relaxed) });
 
         if (!quality.ok) {
             drawOverlay(detections, frame, false);
@@ -179,25 +285,6 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
 
         drawOverlay(detections, frame, true);
         setFaceOk(true);
-
-        // Tahap kedip: harus terlihat mata menutup lalu terbuka lagi sebelum diambil.
-        if (step.id === 'blink' && blinkRef.current !== 'done') {
-            if (quality.pose.ear < EYES_CLOSED_EAR) {
-                blinkRef.current = 'closed';
-                setHint('Bagus, sekarang buka mata kembali.');
-            } else if (blinkRef.current === 'closed' && quality.pose.ear > EYES_REOPENED_EAR) {
-                blinkRef.current = 'done';
-                setHint('Kedipan terdeteksi. Tahan posisi...');
-            } else {
-                setHint('Kedipkan mata sekali.');
-            }
-            stableRef.current = 0;
-            prevBoxRef.current = box;
-            return;
-        }
-        if (step.id === 'blink' && quality.pose.ear < EYES_REOPENED_EAR) {
-            return resetStable('Buka mata dan lihat ke kamera.');
-        }
 
         stableRef.current = isStable(prevBoxRef.current, box, frame.width) ? stableRef.current + 1 : 1;
         prevBoxRef.current = box;
@@ -226,6 +313,9 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
             stepCapturesRef.current = 0;
             stepRef.current += 1;
             blinkRef.current = 'open';
+            blinkDetectorRef.current.reset();
+            blinkStepStartRef.current = Date.now();
+            lastFaceAtRef.current = Date.now();
             if (stepRef.current >= ENROLLMENT_STEPS.length) {
                 await finish();
                 return;
@@ -235,7 +325,7 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
         } else {
             setHint('Bagus. Tahan sebentar lagi...');
         }
-    }, [finish, resetProgress]);
+    }, [finish, processBlink, resetProgress]);
 
     // Muat model + nyalakan kamera (ulang setiap kali "Coba Lagi")
     useEffect(() => {
@@ -285,7 +375,9 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
                         // frame gagal diproses; lanjut ke frame berikutnya
                     }
                 }
-                if (runningRef.current) loopRef.current = setTimeout(tick, 120);
+                // Tahap kedip memakai jeda sangat pendek agar kedipan singkat tetap tertangkap.
+                const blinkPending = ENROLLMENT_STEPS[stepRef.current]?.id === 'blink' && blinkRef.current !== 'done';
+                if (runningRef.current) loopRef.current = setTimeout(tick, blinkPending ? 15 : 120);
             };
             tick();
         };
@@ -357,6 +449,7 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
             {/* Petunjuk + progres */}
             {phase === 'camera' && (
                 <div className="absolute bottom-3 inset-x-3 z-20">
+                    {step.relaxed && <YawMeter yaw={yaw} stepId={step.id} turnSign={turnSignRef.current} />}
                     <div className={`rounded-xl px-3 py-2 text-center text-xs font-bold backdrop-blur-md border ${faceOk ? 'bg-emerald-500/25 border-emerald-300/40 text-emerald-50' : 'bg-amber-500/25 border-amber-300/40 text-amber-50'}`}>
                         {hint}
                     </div>
