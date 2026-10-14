@@ -1,6 +1,6 @@
 # Rencana Implementasi Detail — Fase 0 s.d. 6
 
-Turunan dari [implementation_plan.md](../../implementation_plan.md). Setiap fase punya file sendiri berisi: tujuan, prasyarat, task bernomor (file/baris yang disentuh), test, verifikasi, rollback, dan Definition of Done.
+Turunan dari [implementation_plan.md](implementation_plan.md). Setiap fase punya file sendiri berisi: tujuan, prasyarat, task bernomor (file/baris yang disentuh), test, verifikasi, rollback, dan Definition of Done.
 
 | Fase | File | Fokus | Estimasi |
 |---|---|---|---|

@@ -82,22 +82,22 @@ Prinsip desain yang sudah terlihat:
 | `vendor/` | Dependency Composer; generated dan tidak boleh diedit manual. |
 | `node_modules/` | Dependency npm; generated dan tidak boleh diedit manual. |
 | `public/build/` | Bundle produksi Vite; saat ini sengaja dapat di-commit. |
-| `scratch/` dan `scratch_*.php` | Eksperimen/diagnostik lokal; bukan bagian alur produksi. |
-| `README.md` | Panduan cepat instalasi dan penggunaan. |
-| `API_CONTRACT.md` | Kontrak detail endpoint web scanner dan API Android. |
-| `audit_report.md` | Audit fondasi data/API terdahulu. |
-| `business_logic_audit.md` | Audit aturan bisnis presensi terdahulu. |
-| `face_recognition_analysis.md` | Analisis teknis face recognition terdahulu. |
-| `walkthrough.md` | Catatan perbaikan UX mobile. |
+| `scratch/` | Eksperimen/diagnostik lokal; diabaikan Git dan bukan bagian alur produksi. |
+| `README.md` | Gambaran project, instalasi, dan operasi harian. |
+| `docs/` | Seluruh dokumentasi teknis; indeks di `docs/README.md`. |
+| `docs/architecture/PROJECT_DOCUMENTATION.md` | Dokumen ini (peta arsitektur). |
+| `docs/api/API_CONTRACT.md` | Kontrak detail endpoint web scanner dan API Android. |
+| `docs/audits/audit_report.md` | Audit fondasi data/API terdahulu. |
+| `docs/implementation/` | Rencana perbaikan Fase 0–6. |
+| `docs/ux/walkthrough.md` | Catatan perbaikan UX mobile. |
 | `composer.json` | Dependency PHP dan script `setup`, `dev`, serta `test`. |
 | `package.json` | Dependency JavaScript dan script Vite. |
 | `vite.config.js`, `tailwind.config.js`, `postcss.config.js` | Toolchain frontend. |
 
 Catatan kebersihan repository:
 
-- `resources/js/Pages/Workcodes/Index.jsx.bak` adalah backup source dan sebaiknya tidak menjadi bagian source aktif;
+- file backup (`*.bak`) dan skrip diagnostik (`scratch_*.php`) sudah dikeluarkan dari repository dan diabaikan Git (14 Oktober 2026);
 - `start_server.bat` kosong dan diabaikan Git;
-- beberapa file `scratch_*.php` berada di root walaupun `.gitignore` hanya mengabaikan folder `scratch/` dan file tertentu;
 - `.env` dan `.env.production` ada di working directory tetapi sudah masuk `.gitignore`; nilainya tidak dicantumkan dalam dokumen ini.
 
 ## 5. Modul Backend (`app/`)
@@ -446,8 +446,8 @@ Alur aktif yang didokumentasikan oleh `deploy/deploy.ps1`:
 2. build aset dengan `npm run build`;
 3. pastikan perubahan Git sudah di-stage/commit dan push branch `main`;
 4. konek ke server dengan SSH key;
-5. server menjalankan `git pull`, `composer install --no-dev --optimize-autoloader`, cache config/route/view, dan `php artisan migrate --force`;
-6. aset publik ditempatkan untuk layout shared hosting.
+5. server menjalankan `git pull`, `composer install --no-dev --optimize-autoloader --no-scripts` lalu `php artisan package:discover` (PHP CLI Hostinger menonaktifkan `proc_open`), `php artisan migrate --force`, serta cache config dan view. `route:cache` sengaja tidak dipakai karena cache route yang dihasilkan di server membuat `GET /` gagal 405;
+6. isi `public/` disalin ke folder web publik, lalu path di `index.php` diarahkan ke `../../presensi-app/` dan diverifikasi sebelum aplikasi diaktifkan kembali.
 
 File pendukung:
 
@@ -538,11 +538,11 @@ Saat menambah migration:
 
 ## 16. Dokumen Terkait
 
-- `README.md` — quick start dan operasi harian;
-- `API_CONTRACT.md` — kontrak request/response API;
-- `audit_report.md` — audit model data/API;
-- `business_logic_audit.md` — riwayat audit aturan presensi;
-- `face_recognition_analysis.md` — analisis descriptor dan threshold;
-- `walkthrough.md` — perubahan UX mobile-first.
+- [README.md](../../README.md) — gambaran project, quick start, dan operasi harian;
+- [API_CONTRACT.md](../api/API_CONTRACT.md) — kontrak request/response API;
+- [audit_report.md](../audits/audit_report.md) — audit model data/API;
+- [implementation/](../implementation/README.md) — rencana perbaikan Fase 0–6;
+- [walkthrough.md](../ux/walkthrough.md) — perubahan UX mobile-first;
+- `business_logic_audit.md` dan `face_recognition_analysis.md` — audit lama, hanya disimpan lokal (diabaikan Git).
 
 Dokumen ini sebaiknya diperbarui ketika schema, route, role, alur presensi, atau deployment berubah.

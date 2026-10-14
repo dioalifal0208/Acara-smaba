@@ -36,6 +36,8 @@ storage/app/firebase-credentials.json
 /scratch/
 /start_server.bat
 /test_hash.php
+/scratch_*.php
+*.bak
 
 # Backups
 /storage/app/backups/
