@@ -100,9 +100,13 @@ Jika pemilik menolak force-push: dokumentasikan bahwa kredensial lama sudah tida
 
 ## Definition of Done Fase 0
 
-- [ ] `/register` mengembalikan 404 di produksi.
-- [ ] `role` tidak di `$fillable`; default DB `participant`; test lulus.
-- [ ] Password SSH dan DB diganti; login password SSH lama gagal.
-- [ ] `deploy/test.ps1` terhapus dari working tree; `.gitignore` diperbarui.
-- [ ] Daftar admin dikonfirmasi sah oleh pemilik; akun asing dicabut; token direset.
+Status per 14 Oktober 2026:
+
+- [x] `/register` mengembalikan 404 di produksi.
+- [x] `role` tidak di `$fillable`; default DB `participant`; test lulus; admin baru lewat `user:make-admin`.
+- [ ] ~~Password SSH dan DB diganti~~ — **dilewati atas keputusan pemilik** (akun Hostinger dipakai bersama banyak pengguna). Risiko tersisa: password SSH lama tetap terbaca di history publik; mitigasi yang tersedia adalah 0.4 atau menjadikan repo privat.
+- [x] `deploy/test.ps1` dan `deploy/plink.exe` terhapus; `.gitignore` diperbarui; `deploy/.env.deploy.example` dibuat.
+- [x] Password bawaan dihapus dari `DatabaseSeeder` dan `deploy/init_staging.sh`.
+- [x] Audit admin: produksi hanya 1 admin (`admin`), tidak ada akun hasil registrasi publik.
+- [ ] Admin produksi dan staging masih memakai password bawaan yang tertulis di history repo — **wajib diganti** (`php artisan user:make-admin admin`).
 - [ ] (Opsional, atas izin) history dibersihkan dan tim klon ulang.

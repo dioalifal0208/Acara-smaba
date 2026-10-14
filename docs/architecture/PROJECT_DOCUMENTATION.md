@@ -466,7 +466,9 @@ Production harus memakai `APP_ENV=production`, `APP_DEBUG=false`, HTTPS, databas
 
 1. ~~**Registrasi publik dapat menghasilkan akun admin.**~~ **Selesai 14 Oktober 2026.** Route `/register` dan `RegisteredUserController` dihapus, `role` dikeluarkan dari `$fillable`, default kolom `role` menjadi `participant`, dan admin baru dibuat lewat `php artisan user:make-admin`. Audit produksi saat perbaikan: hanya 1 admin, semuanya memiliki username, sehingga tidak ada tanda akun hasil registrasi publik.
 
-2. **Kredensial SSH plaintext berada di `deploy/test.ps1`.** Segera rotasi password/kunci terkait, hapus kredensial dari file, gunakan `deploy/.env.deploy` atau secret manager, dan bersihkan history Git bila file pernah di-commit. Jangan hanya menghapus baris pada commit terbaru.
+2. **Kredensial SSH plaintext pernah di-commit di `deploy/test.ps1`.** File sudah dihapus (14 Oktober 2026) dan deploy memakai SSH key + `deploy/.env.deploy`. Password tidak dirotasi atas keputusan pemilik karena akun Hostinger dipakai bersama, sehingga password lama **masih terbaca di history repo publik**. Mitigasi tersisa: bersihkan history (Fase 0.4) atau jadikan repo privat.
+
+3. **Admin produksi dan staging memakai password bawaan dari seeder** yang tertulis di history repo publik. Password bawaan sudah dihapus dari `DatabaseSeeder` dan `init_staging.sh`, tetapi akun yang sudah ada harus diganti passwordnya dengan `php artisan user:make-admin admin`.
 
 ### Tinggi
 

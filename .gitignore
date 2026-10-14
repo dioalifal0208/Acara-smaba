@@ -24,13 +24,16 @@ Homestead.yaml
 Thumbs.db
 
 # Deploy credentials (NEVER commit)
-deploy/.env.deploy
-deploy/.env.staging
+deploy/.env.*
+!deploy/.env.deploy.example
+deploy/*.local.ps1
 deploy/*.key
-deploy/*.pem
+deploy/*.exe
+*.pem
 
 # Firebase service account (NEVER commit)
 storage/app/firebase-credentials.json
+*firebase*credentials*.json
 
 # Scratch/temp files
 /scratch/

@@ -216,7 +216,7 @@ npm run build
 ```
 </details>
 
-Akun admin awal dibuat oleh [DatabaseSeeder](database/seeders/DatabaseSeeder.php). Password bawaannya **hanya untuk lokal**; segera ganti di instance yang bisa diakses orang lain.
+Akun admin awal (username `admin`) dibuat oleh [DatabaseSeeder](database/seeders/DatabaseSeeder.php). Passwordnya diambil dari variabel `ADMIN_PASSWORD`. Bila variabel itu kosong, password dibuat acak dan ditampilkan sekali di terminal saat seeding.
 
 Registrasi publik ditutup, dan akun baru otomatis ber-role `participant`. Admin tambahan dibuat lewat terminal server (password diminta secara interaktif):
 
@@ -302,7 +302,7 @@ Produksi berjalan di shared hosting (Hostinger) melalui SSH. Satu perintah `depl
 
 Persiapan sekali saja:
 
-1. Buat `deploy/.env.deploy` (diabaikan Git) berisi `SSH_HOST`, `SSH_PORT`, `SSH_USER`, `REMOTE_DIR`, `REMOTE_PUBLIC_DIR`, `GITHUB_REPO`, dan `PUBLIC_URL`.
+1. Salin [deploy/.env.deploy.example](deploy/.env.deploy.example) menjadi `deploy/.env.deploy` (diabaikan Git), lalu isi nilainya.
 2. Jalankan `powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\install-deploy-command.ps1`, lalu daftarkan public key yang dicetak ke akun hosting.
 3. Buka terminal baru dan jalankan `deploy`.
 

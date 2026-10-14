@@ -5,18 +5,8 @@ echo "=== Setting Seeder ==="
 php artisan db:seed --class=SettingSeeder --force
 
 echo "=== Create Admin User ==="
-php artisan tinker --execute="
-\$user = App\Models\User::firstOrCreate(
-    ['email' => 'admin@smaba.sch.id'],
-    [
-        'name' => 'Admin SMABA',
-        'password' => bcrypt('password123'),
-        'role' => 'admin',
-        'email_verified_at' => now(),
-    ]
-);
-echo 'Admin: ' . \$user->email . ' (' . (\$user->wasRecentlyCreated ? 'created' : 'exists') . ')';
-"
+# Password diminta interaktif; jangan pernah menulis password di file ini.
+php artisan user:make-admin admin --name="Admin SMABA"
 
 echo "=== Test DB Connection ==="
 php artisan tinker --execute="echo 'Users: ' . App\Models\User::count() . ', Settings: ' . App\Models\Setting::count();"

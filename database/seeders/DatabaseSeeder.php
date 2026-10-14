@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\Participant;
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Str;
 
 class DatabaseSeeder extends Seeder
 {
@@ -15,14 +16,21 @@ class DatabaseSeeder extends Seeder
     {
         // User::factory(10)->create();
 
-        // Buat akun Admin
+        // Buat akun Admin. Password tidak boleh tertulis di repo: ambil dari
+        // ADMIN_PASSWORD atau buat acak dan tampilkan sekali di terminal.
+        $password = env('ADMIN_PASSWORD') ?: Str::password(16, symbols: false);
+
         User::factory()->create([
             'name' => 'Administrator SMABA',
             'email' => 'admin@smaba.sch.id',
             'username' => 'admin',
             'role' => 'admin',
-            'password' => bcrypt('password123'),
+            'password' => bcrypt($password),
         ]);
+
+        if (! env('ADMIN_PASSWORD')) {
+            $this->command?->warn("Password admin (username: admin): {$password}");
+        }
 
         // Buat data Peserta (Guru SMABA) untuk pencarian QR
         Participant::create([
