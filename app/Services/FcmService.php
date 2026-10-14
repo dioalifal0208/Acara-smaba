@@ -14,11 +14,16 @@ class FcmService
      */
     const TOPIC = 'workcode-updates';
 
-    protected Messaging $messaging;
+    protected ?Messaging $messaging = null;
 
-    public function __construct(Messaging $messaging)
+    /**
+     * Firebase di-resolve saat dipakai (di dalam try/catch tiap method), bukan di constructor.
+     * Bila kredensial Firebase belum dikonfigurasi, hanya pengiriman FCM yang gagal dan tercatat
+     * di log; aksi workcode dan scheduler tetap berjalan.
+     */
+    protected function messaging(): Messaging
     {
-        $this->messaging = $messaging;
+        return $this->messaging ??= app(Messaging::class);
     }
 
     /**
@@ -44,7 +49,7 @@ class FcmService
                 ->withTopic(self::TOPIC)
                 ->withData($data);
 
-            $this->messaging->send($message);
+            $this->messaging()->send($message);
 
             Log::info('FCM workcode update sent', [
                 'action' => $action,
@@ -67,7 +72,7 @@ class FcmService
     public function subscribeToWorkcodeUpdates(string $token): void
     {
         try {
-            $this->messaging->subscribeToTopic(self::TOPIC, [$token]);
+            $this->messaging()->subscribeToTopic(self::TOPIC, [$token]);
 
             Log::info('FCM token subscribed to topic', [
                 'topic' => self::TOPIC,
@@ -86,7 +91,7 @@ class FcmService
     public function unsubscribeFromWorkcodeUpdates(string $token): void
     {
         try {
-            $this->messaging->unsubscribeFromTopic(self::TOPIC, [$token]);
+            $this->messaging()->unsubscribeFromTopic(self::TOPIC, [$token]);
 
             Log::info('FCM token unsubscribed from topic', [
                 'topic' => self::TOPIC,

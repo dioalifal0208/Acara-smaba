@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Models\Workcode;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Kreait\Firebase\Contract\Messaging;
 use Tests\TestCase;
 
 class WorkcodeManagementTest extends TestCase
@@ -98,5 +99,31 @@ class WorkcodeManagementTest extends TestCase
 
         $this->assertSame('Presensi Harian Baru', $workcode->nama_workcode);
         $this->assertTrue($workcode->is_active);
+    }
+
+    public function test_workcode_actions_still_work_when_firebase_is_not_configured(): void
+    {
+        $this->app->bind(Messaging::class, function () {
+            throw new \RuntimeException('Unable to determine the Firebase Project ID');
+        });
+
+        $admin = User::factory()->create(['role' => 'admin']);
+        $workcode = Workcode::create([
+            'nama_workcode' => 'Kegiatan Sekolah',
+            'kategori' => 'workcode',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($admin)
+            ->from(route('workcodes.index'))
+            ->post(route('workcodes.deactivate', $workcode))
+            ->assertRedirect(route('workcodes.index'));
+        $this->assertFalse($workcode->fresh()->is_active);
+
+        $this->actingAs($admin)
+            ->from(route('workcodes.index'))
+            ->post(route('workcodes.activate', $workcode))
+            ->assertRedirect(route('workcodes.index'));
+        $this->assertTrue($workcode->fresh()->is_active);
     }
 }
