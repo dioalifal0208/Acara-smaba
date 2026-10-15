@@ -35,6 +35,7 @@ export default function ReportIndex({
     const [showLogsModal, setShowLogsModal] = useState(false);
     const [showCalendarModal, setShowCalendarModal] = useState(false);
     const [calendarParticipant, setCalendarParticipant] = useState(null);
+    const [signatureAttendance, setSignatureAttendance] = useState(null);
 
     const [editingParticipantName, setEditingParticipantName] = useState('');
     const [selectedParticipantForLogs, setSelectedParticipantForLogs] = useState(null);
@@ -80,6 +81,16 @@ export default function ReportIndex({
 
     const attendancePercentage = stats && stats.total > 0 ? Math.round((stats.hadir / stats.total) * 100) : 0;
     const isSingleAttendanceWorkcode = selectedWorkcode?.kategori === 'workcode';
+
+    const formatAttendanceDate = (date) => {
+        if (!date) return '-';
+
+        return new Intl.DateTimeFormat('id-ID', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+        }).format(new Date(`${date}T00:00:00`));
+    };
 
     // Open Manual Edit Modal
     const openManualEditModal = (att, participantName = '') => {
@@ -1059,9 +1070,14 @@ export default function ReportIndex({
                                                     {attendance.attendance_method || '—'}
                                                 </span>
                                                 {attendance.signature_url && (
-                                                    <a href={attendance.signature_url} target="_blank" rel="noreferrer" title="Lihat tanda tangan peserta">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSignatureAttendance(attendance)}
+                                                        title="Lihat detail presensi dan tanda tangan peserta"
+                                                        className="rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                                                    >
                                                         <img src={attendance.signature_url} alt={`Tanda tangan ${attendance.nama}`} className="h-10 w-24 rounded-md bg-white object-contain" />
-                                                    </a>
+                                                    </button>
                                                 )}
                                             </div>
                                         </div>
@@ -1230,9 +1246,14 @@ export default function ReportIndex({
                                                                      {attendance.attendance_method || '—'}
                                                                  </span>
                                                                  {attendance.signature_url && (
-                                                                     <a href={attendance.signature_url} target="_blank" rel="noreferrer" title="Lihat tanda tangan peserta" className="inline-flex">
+                                                                     <button
+                                                                         type="button"
+                                                                         onClick={() => setSignatureAttendance(attendance)}
+                                                                         title="Lihat detail presensi dan tanda tangan peserta"
+                                                                         className="inline-flex rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                                                                     >
                                                                          <img src={attendance.signature_url} alt={`Tanda tangan ${attendance.nama}`} className="h-9 w-24 rounded-md border border-slate-100 bg-white object-contain" />
-                                                                     </a>
+                                                                     </button>
                                                                  )}
                                                              </div>
                                                          </td>
@@ -1269,6 +1290,86 @@ export default function ReportIndex({
                     </div>
                 </div>
             </div>
+
+            {/* Detail tanda tangan dan presensi */}
+            <Modal show={Boolean(signatureAttendance)} onClose={() => setSignatureAttendance(null)} maxWidth="lg">
+                {signatureAttendance && (
+                    <div className="p-5 sm:p-6">
+                        <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
+                            <div className="flex min-w-0 items-center gap-3">
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12.75 11.25 15 15 9.75M12 3C7.03 3 3 5.015 3 7.5c0 1.381 1.244 2.617 3.2 3.442L5.25 15l4.307-2.154C10.337 12.946 11.156 13 12 13c4.97 0 9-2.015 9-4.5S16.97 3 12 3Z" />
+                                    </svg>
+                                </div>
+                                <div className="min-w-0">
+                                    <h3 className="truncate text-base font-extrabold text-slate-800">Detail Presensi</h3>
+                                    <p className="truncate text-xs font-medium text-slate-500">{selectedWorkcode?.nama_workcode || 'Workcode'}</p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setSignatureAttendance(null)}
+                                className="rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                                aria-label="Tutup detail presensi"
+                            >
+                                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18 18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div className="mt-5 rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4 text-center">
+                            <p className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600">Tanda Tangan Digital</p>
+                            <img
+                                src={signatureAttendance.signature_url}
+                                alt={`Tanda tangan ${signatureAttendance.nama}`}
+                                className="mx-auto mt-2 h-32 w-full max-w-md rounded-xl border border-slate-200 bg-white object-contain p-2 shadow-inner"
+                            />
+                        </div>
+
+                        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            <div className="rounded-xl border border-slate-200 bg-white p-3 sm:col-span-2">
+                                <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Peserta</p>
+                                <p className="mt-1 text-sm font-extrabold text-slate-800">{signatureAttendance.nama}</p>
+                                <p className="text-xs font-medium text-slate-500">{signatureAttendance.nis_nip || 'Tanpa NIP'} · {signatureAttendance.status_pegawai || '-'}</p>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                                <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Tanggal Presensi</p>
+                                <p className="mt-1 text-xs font-bold text-slate-800">{formatAttendanceDate(signatureAttendance.tanggal)}</p>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                                <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Waktu Hadir</p>
+                                <p className="mt-1 font-mono text-xs font-bold text-slate-800">{signatureAttendance.waktu_hadir !== '-' ? `${signatureAttendance.waktu_hadir} WIB` : '-'}</p>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                                <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Waktu Pulang</p>
+                                <p className="mt-1 font-mono text-xs font-bold text-slate-800">{signatureAttendance.waktu_pulang !== '-' ? `${signatureAttendance.waktu_pulang} WIB` : '-'}</p>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                                <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Status Kehadiran</p>
+                                <div className="mt-1">{renderStatusBadge(signatureAttendance.status)}</div>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                                <p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Metode Presensi</p>
+                                <p className="mt-1 text-xs font-bold text-slate-800">{signatureAttendance.attendance_method || '-'}</p>
+                            </div>
+                        </div>
+
+                        {selectedWorkcode?.latitude && selectedWorkcode?.longitude && (
+                            <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+                                <p className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-700">Lokasi Workcode</p>
+                                <p className="mt-1 text-xs font-semibold text-emerald-950">Radius presensi {selectedWorkcode.radius_meters || 100} meter</p>
+                                <p className="mt-0.5 font-mono text-[10px] text-emerald-700">{Number(selectedWorkcode.latitude).toFixed(6)}, {Number(selectedWorkcode.longitude).toFixed(6)}</p>
+                            </div>
+                        )}
+
+                        <div className="mt-5 flex justify-end border-t border-slate-100 pt-4">
+                            <SecondaryButton onClick={() => setSignatureAttendance(null)}>Tutup</SecondaryButton>
+                        </div>
+                    </div>
+                )}
+            </Modal>
 
             {/* Modal Edit Presensi */}
             <Modal show={showEditModal} onClose={() => setShowEditModal(false)} maxWidth="md">
