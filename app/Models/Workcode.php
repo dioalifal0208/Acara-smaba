@@ -80,7 +80,13 @@ class Workcode extends Model
      */
     public function isEffectivelyActive(?Carbon $moment = null): bool
     {
-        return $this->is_active && $this->isWithinActiveWindow($moment);
+        // Workcode kegiatan tidak bergantung pada scheduler/cron untuk menjadi aktif.
+        // Statusnya selalu dihitung dari jadwal yang tersimpan dan waktu server saat ini.
+        if ($this->hasScheduledActiveWindow()) {
+            return $this->isWithinActiveWindow($moment);
+        }
+
+        return $this->is_active;
     }
 
     /**
@@ -88,8 +94,32 @@ class Workcode extends Model
      */
     public static function getActive()
     {
-        return static::where('is_active', true)
+        $now = now();
+
+        // Kegiatan terjadwal selalu diprioritaskan dan aktif secara dinamis,
+        // termasuk ketika scheduler hosting tidak berjalan.
+        $scheduledWorkcode = static::where('kategori', 'workcode')
+            ->whereDate('tanggal', $now->toDateString())
+            ->whereNotNull('jam_aktif_mulai')
+            ->whereNotNull('jam_aktif_selesai')
+            ->orderByDesc('jam_aktif_mulai')
+            ->orderByDesc('id')
             ->get()
-            ->first(fn (self $workcode) => $workcode->isEffectivelyActive());
+            ->first(fn (self $workcode) => $workcode->isWithinActiveWindow($now));
+
+        if ($scheduledWorkcode) {
+            return $scheduledWorkcode;
+        }
+
+        // Workcode tanpa jadwal otomatis (mis. presensi harian) tetap
+        // menggunakan status manual yang disimpan pada database.
+        return static::where('is_active', true)
+            ->where(function ($query): void {
+                $query->where('kategori', '!=', 'workcode')
+                    ->orWhereNull('tanggal')
+                    ->orWhereNull('jam_aktif_mulai')
+                    ->orWhereNull('jam_aktif_selesai');
+            })
+            ->first();
     }
 }

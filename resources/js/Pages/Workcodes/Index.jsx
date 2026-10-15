@@ -258,7 +258,7 @@ export default function WorkcodesIndex({ workcodes }) {
         }
     };
 
-    const activeWorkcode = workcodes.find((e) => e.is_active);
+    const activeWorkcode = workcodes.find((e) => e.is_effectively_active);
 
     return (
         <AuthenticatedLayout
@@ -353,7 +353,7 @@ export default function WorkcodesIndex({ workcodes }) {
                                     <div
                                         key={workcode.id}
                                         className={`rounded-2xl bg-white border transition-all p-5 shadow-sm hover:shadow-md flex flex-col justify-between relative ${
-                                            workcode.is_active
+                                            workcode.is_effectively_active
                                                 ? 'border-indigo-500 ring-2 ring-indigo-500/20'
                                                 : 'border-slate-200'
                                         }`}
@@ -363,13 +363,13 @@ export default function WorkcodesIndex({ workcodes }) {
                                                 <div className="flex items-center gap-1.5 flex-wrap">
                                                     <span
                                                         className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
-                                                            workcode.is_active
+                                                            workcode.is_effectively_active
                                                                 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                                                                 : 'bg-slate-100 text-slate-600'
                                                         }`}
                                                     >
-                                                        <span className={`h-1.5 w-1.5 rounded-full ${workcode.is_active ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
-                                                        {workcode.is_active ? 'AKTIF' : 'Non-Aktif'}
+                                                        <span className={`h-1.5 w-1.5 rounded-full ${workcode.is_effectively_active ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
+                                                        {workcode.is_effectively_active ? 'AKTIF' : 'Non-Aktif'}
                                                     </span>
                                                     {workcode.kategori === 'harian' ? (
                                                         <span className="inline-flex items-center rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[10px] font-bold text-blue-700">

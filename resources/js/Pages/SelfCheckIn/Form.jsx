@@ -1,4 +1,4 @@
-import { Head, useForm } from '@inertiajs/react';
+import { Head, router, useForm } from '@inertiajs/react';
 import { appUrl } from '@/lib/appUrl';
 import { useState, useCallback, useEffect, useRef } from 'react';
 
@@ -126,6 +126,21 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
             }
         }
     }, [activeWorkcode?.id]);
+
+    // Halaman dari QR workcode dapat dibiarkan terbuka sebelum kegiatan dimulai.
+    // Perbarui data dari server secara ringan agar workcode yang baru dibuat/diubah
+    // segera tampil tanpa scheduler server atau refresh manual.
+    useEffect(() => {
+        const refreshInterval = window.setInterval(() => {
+            router.reload({
+                only: ['activeWorkcode'],
+                preserveScroll: true,
+                preserveState: true,
+            });
+        }, 30000);
+
+        return () => window.clearInterval(refreshInterval);
+    }, []);
 
     // Umpan balik audio sederhana untuk HP peserta
     const playAudio = useCallback((type) => {

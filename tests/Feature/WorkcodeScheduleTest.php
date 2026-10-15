@@ -82,6 +82,23 @@ class WorkcodeScheduleTest extends TestCase
         $this->assertNull(Workcode::getActive());
     }
 
+    public function test_scheduled_workcode_is_active_without_scheduler_or_database_flag(): void
+    {
+        $this->travelTo(Carbon::parse('2026-10-14 07:30:00', 'Asia/Jakarta'));
+
+        $workcode = Workcode::create([
+            'nama_workcode' => 'Kegiatan Dinamis',
+            'kategori' => 'workcode',
+            'tanggal' => '2026-10-14',
+            'jam_aktif_mulai' => '07:00',
+            'jam_aktif_selesai' => '10:00',
+            'is_active' => false,
+        ]);
+
+        $this->assertTrue($workcode->isEffectivelyActive());
+        $this->assertTrue(Workcode::getActive()->is($workcode));
+    }
+
     public function test_scheduler_activates_and_deactivates_workcode_at_configured_times(): void
     {
         $fcmService = $this->mock(FcmService::class);

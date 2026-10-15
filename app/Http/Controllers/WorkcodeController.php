@@ -21,6 +21,14 @@ class WorkcodeController extends Controller
             ->orderBy('created_at', 'desc')
             ->get();
 
+        // Dipakai tampilan admin agar status kegiatan mengikuti waktu server
+        // tanpa menunggu command scheduler mengubah kolom is_active. Bila ada
+        // jadwal yang bertumpuk, hanya workcode yang dipilih getActive() aktif.
+        $activeWorkcodeId = Workcode::getActive()?->getKey();
+        $workcodes->each(function (Workcode $workcode) use ($activeWorkcodeId): void {
+            $workcode->setAttribute('is_effectively_active', $workcode->getKey() === $activeWorkcodeId);
+        });
+
         return Inertia::render('Workcodes/Index', [
             'workcodes' => $workcodes,
         ]);
