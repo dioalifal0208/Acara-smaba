@@ -104,8 +104,13 @@ Nama file diacak (UUID) dan simpan hanya path relatif; validasi upload: `mimes:j
 
 ## Definition of Done Fase 1
 
-- [ ] Tidak ada descriptor, jarak mentah, atau token di log; log lama dihapus.
-- [ ] Semua penyimpanan dokumen/foto memakai disk `private`; file lama dimigrasi dan diverifikasi.
-- [ ] Akses file hanya via endpoint ber-Policy; `/storage/{path}` ter-whitelist.
-- [ ] Android tetap dapat menampilkan foto profil (signed URL atau bearer).
-- [ ] Test otorisasi file, redaksi log, dan upload berbahaya lulus.
+Status per 15 Oktober 2026 (commit `91d56a6`):
+
+- [x] Tidak ada descriptor, jarak mentah, atau token di log; penyaring `App\Logging\RedactSensitiveData` aktif di channel `single`/`daily`; 23 baris log lama berisi nama + jarak wajah dihapus dari produksi. Produksi: `LOG_STACK=daily`, `LOG_LEVEL=warning`, `LOG_DAILY_DAYS=14`.
+- [x] Semua penyimpanan foto wajah, foto kandidat, foto presensi, tanda tangan, dan dokumen izin memakai disk `private`; 3 file lama dimigrasi (`files:migrate-private --execute`), disk publik kosong. Backup sebelum migrasi: `~/backup-presensi-public-20261015.tar.gz` (hapus setelah 29 Okt 2026).
+- [x] Akses file hanya lewat **URL bertanda tangan sementara** (`/files/{type}/{id}`, TTL 60 menit) yang dibuat server untuk admin/pemilik — dipilih menggantikan Policy+endpoint ber-sesi karena sekaligus kompatibel dengan Android. `/storage/{path}` hanya melayani prefix `branding/`; route `serve` bawaan disk publik dimatikan.
+- [x] Android tetap dapat menampilkan foto profil: `photo_url` tetap ada, isinya signed URL (lihat `docs/api/API_CONTRACT.md` §5).
+- [x] Test otorisasi file, kedaluwarsa URL, path traversal, redaksi log, upload skrip yang disamarkan, migrasi file, dan penghapusan file saat peserta dihapus lulus (`tests/Feature/PrivateFilesTest.php`).
+- [x] 1.3: persetujuan sebelum kamera pendaftaran wajah menyala; penghapusan peserta/workcode ikut menghapus semua file pribadinya; kebijakan di `docs/security.md`.
+- [ ] 1.3 (ditunda, alasan di `docs/security.md` §7): enkripsi `face_descriptor` di database — setelah pencocokan publik 1:1 (Fase 2).
+- [ ] Sekolah menetapkan masa simpan data (usulan ⚠️ di `docs/security.md` §5).
