@@ -263,6 +263,7 @@ class AttendanceController extends Controller
                         'waktu_hadir' => $att?->waktu_hadir?->format('H:i:s') ?? '-',
                         'waktu_pulang' => $att?->waktu_pulang?->format('H:i:s') ?? '-',
                         'signature_url' => $att?->signature_path ? asset('storage/'.$att->signature_path) : null,
+                        'face_capture_url' => $att?->face_capture_path ? asset('storage/'.$att->face_capture_path) : null,
                         'attendance_method' => $this->attendanceMethodLabel($att),
                         'status' => $att ? ($att->status ?? 'hadir') : 'alpha',
                     ];
@@ -314,6 +315,7 @@ class AttendanceController extends Controller
                     'waktu_hadir' => $att->waktu_hadir?->format('H:i') ?? '-',
                     'waktu_pulang' => $att->waktu_pulang?->format('H:i') ?? '-',
                     'signature_url' => $att->signature_path ? asset('storage/'.$att->signature_path) : null,
+                    'face_capture_url' => $att->face_capture_path ? asset('storage/'.$att->face_capture_path) : null,
                     'attendance_method' => $this->attendanceMethodLabel($att),
                     'status' => $att->status ?? 'hadir',
                 ];

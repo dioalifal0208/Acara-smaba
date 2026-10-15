@@ -18,6 +18,7 @@ class Attendance extends Model
         'waktu_pulang',
         'status',
         'signature_path',
+        'face_capture_path',
         'attendance_method',
         'leave_request_id',
         'device_hash',
@@ -32,9 +33,10 @@ class Attendance extends Model
     protected static function booted(): void
     {
         static::deleting(function (Attendance $attendance) {
-            if ($attendance->signature_path) {
-                Storage::disk('public')->delete($attendance->signature_path);
-            }
+            Storage::disk('public')->delete(array_filter([
+                $attendance->signature_path,
+                $attendance->face_capture_path,
+            ]));
         });
     }
 

@@ -105,6 +105,19 @@ export default function AdminFaceScanner({ activeWorkcode, gpsData, onScanResult
         return () => clearInterval(interval);
     };
 
+    const captureFaceImage = () => {
+        const video = videoRef.current;
+        if (!video?.videoWidth || !video?.videoHeight) return null;
+
+        const canvas = document.createElement('canvas');
+        const scale = Math.min(1, 640 / video.videoWidth);
+        canvas.width = Math.round(video.videoWidth * scale);
+        canvas.height = Math.round(video.videoHeight * scale);
+        canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        return canvas.toDataURL('image/jpeg', 0.85);
+    };
+
     const processFace = async (descriptor) => {
         if (!activeWorkcode) return;
         setIsProcessing(true);
@@ -113,6 +126,7 @@ export default function AdminFaceScanner({ activeWorkcode, gpsData, onScanResult
         try {
             let payload = {
                 descriptor: Array.from(descriptor),
+                face_capture: captureFaceImage(),
             };
 
             if (activeWorkcode.latitude && activeWorkcode.longitude && gpsData) {

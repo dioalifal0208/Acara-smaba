@@ -1069,14 +1069,14 @@ export default function ReportIndex({
                                                 <span className="rounded-full border border-indigo-100 bg-indigo-50 px-2 py-1 text-[9px] font-extrabold uppercase text-indigo-700">
                                                     {attendance.attendance_method || '—'}
                                                 </span>
-                                                {attendance.signature_url && (
+                                                {(attendance.signature_url || attendance.face_capture_url) && (
                                                     <button
                                                         type="button"
                                                         onClick={() => setSignatureAttendance(attendance)}
-                                                        title="Lihat detail presensi dan tanda tangan peserta"
+                                                        title="Lihat detail presensi dan bukti kehadiran peserta"
                                                         className="rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                                                     >
-                                                        <img src={attendance.signature_url} alt={`Tanda tangan ${attendance.nama}`} className="h-10 w-24 rounded-md bg-white object-contain" />
+                                                        <img src={attendance.face_capture_url || attendance.signature_url} alt={`Bukti presensi ${attendance.nama}`} className="h-10 w-24 rounded-md bg-white object-contain" />
                                                     </button>
                                                 )}
                                             </div>
@@ -1245,14 +1245,14 @@ export default function ReportIndex({
                                                                  <span className="rounded-full border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[9px] font-extrabold uppercase text-indigo-700">
                                                                      {attendance.attendance_method || '—'}
                                                                  </span>
-                                                                 {attendance.signature_url && (
+                                                                 {(attendance.signature_url || attendance.face_capture_url) && (
                                                                      <button
                                                                          type="button"
                                                                          onClick={() => setSignatureAttendance(attendance)}
-                                                                         title="Lihat detail presensi dan tanda tangan peserta"
+                                                                         title="Lihat detail presensi dan bukti kehadiran peserta"
                                                                          className="inline-flex rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                                                                      >
-                                                                         <img src={attendance.signature_url} alt={`Tanda tangan ${attendance.nama}`} className="h-9 w-24 rounded-md border border-slate-100 bg-white object-contain" />
+                                                                         <img src={attendance.face_capture_url || attendance.signature_url} alt={`Bukti presensi ${attendance.nama}`} className="h-9 w-24 rounded-md border border-slate-100 bg-white object-contain" />
                                                                      </button>
                                                                  )}
                                                              </div>
@@ -1320,11 +1320,13 @@ export default function ReportIndex({
                         </div>
 
                         <div className="mt-5 rounded-2xl border border-indigo-100 bg-indigo-50/50 p-4 text-center">
-                            <p className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600">Tanda Tangan Digital</p>
+                            <p className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600">
+                                {signatureAttendance.face_capture_url ? 'Foto Presensi Wajah' : 'Tanda Tangan Digital'}
+                            </p>
                             <img
-                                src={signatureAttendance.signature_url}
-                                alt={`Tanda tangan ${signatureAttendance.nama}`}
-                                className="mx-auto mt-2 h-32 w-full max-w-md rounded-xl border border-slate-200 bg-white object-contain p-2 shadow-inner"
+                                src={signatureAttendance.face_capture_url || signatureAttendance.signature_url}
+                                alt={`${signatureAttendance.face_capture_url ? 'Foto presensi wajah' : 'Tanda tangan'} ${signatureAttendance.nama}`}
+                                className={`mx-auto mt-2 h-32 w-full max-w-md rounded-xl border border-slate-200 bg-white shadow-inner ${signatureAttendance.face_capture_url ? 'object-cover' : 'object-contain p-2'}`}
                             />
                         </div>
 

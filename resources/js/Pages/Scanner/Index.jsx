@@ -363,7 +363,16 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
                             isFaceProcessingRef.current = true;
                             setIsFaceProcessing(true);
 
-                            let payload = { descriptor: Array.from(detection.descriptor) };
+                            const captureCanvas = document.createElement('canvas');
+                            const captureScale = Math.min(1, 640 / video.videoWidth);
+                            captureCanvas.width = Math.round(video.videoWidth * captureScale);
+                            captureCanvas.height = Math.round(video.videoHeight * captureScale);
+                            captureCanvas.getContext('2d')?.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
+
+                            let payload = {
+                                descriptor: Array.from(detection.descriptor),
+                                face_capture: captureCanvas.toDataURL('image/jpeg', 0.85),
+                            };
                             if (activeWorkcode?.latitude && activeWorkcode?.longitude && gpsDataRef.current) {
                                 payload = { ...payload, ...gpsDataRef.current };
                             }

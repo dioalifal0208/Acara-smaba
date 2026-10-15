@@ -180,10 +180,24 @@ export default function FaceForm({ token, activeWorkcode }) {
         return () => clearInterval(interval);
     };
 
+    const captureFaceImage = () => {
+        const video = videoRef.current;
+        if (!video?.videoWidth || !video?.videoHeight) return null;
+
+        const canvas = document.createElement('canvas');
+        const scale = Math.min(1, 640 / video.videoWidth);
+        canvas.width = Math.round(video.videoWidth * scale);
+        canvas.height = Math.round(video.videoHeight * scale);
+        canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        return canvas.toDataURL('image/jpeg', 0.85);
+    };
+
     const processAttendance = async (descriptor) => {
         setIsProcessing(true);
         setStatus("Liveness lolos. Mencocokkan wajah & lokasi...");
 
+        const faceCapture = captureFaceImage();
         // Stop video
         if (videoRef.current && videoRef.current.srcObject) {
             videoRef.current.srcObject.getTracks().forEach(t => t.stop());
@@ -192,6 +206,7 @@ export default function FaceForm({ token, activeWorkcode }) {
         try {
             const payload = {
                 descriptor: Array.from(descriptor),
+                face_capture: faceCapture,
                 latitude: gpsData.latitude,
                 longitude: gpsData.longitude,
                 accuracy: gpsData.accuracy,

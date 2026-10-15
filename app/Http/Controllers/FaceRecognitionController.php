@@ -9,6 +9,7 @@ use Carbon\Carbon;
 use App\Support\FaceDescriptor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class FaceRecognitionController extends Controller
@@ -226,6 +227,7 @@ class FaceRecognitionController extends Controller
             'accuracy' => 'nullable|numeric',
             'device_timestamp' => 'nullable|numeric',
             'device_id' => 'nullable|string',
+            'face_capture' => ['nullable', 'string', 'max:1500000', 'regex:/^data:image\\/jpeg;base64,/'],
         ]);
 
         $inputDescriptor = $request->input('descriptor');
@@ -418,15 +420,28 @@ class FaceRecognitionController extends Controller
         }
 
         // === Catat Presensi ===
-        $attendance = Attendance::create([
-            'workcode_id' => $activeWorkcode->id,
-            'participant_id' => $bestMatch->id,
-            'tanggal' => now()->toDateString(),
-            'waktu_hadir' => $waktuHadir,
-            'device_hash' => $deviceHash,
-            'ip_address' => $ipAddress,
-            'attendance_method' => 'wajah',
-        ]);
+        $faceCapturePath = $request->filled('face_capture')
+            ? $this->storeFaceCapture($request->string('face_capture')->toString())
+            : null;
+
+        try {
+            $attendance = Attendance::create([
+                'workcode_id' => $activeWorkcode->id,
+                'participant_id' => $bestMatch->id,
+                'tanggal' => now()->toDateString(),
+                'waktu_hadir' => $waktuHadir,
+                'device_hash' => $deviceHash,
+                'ip_address' => $ipAddress,
+                'face_capture_path' => $faceCapturePath,
+                'attendance_method' => 'wajah',
+            ]);
+        } catch (\Throwable $exception) {
+            if ($faceCapturePath) {
+                Storage::disk('public')->delete($faceCapturePath);
+            }
+
+            throw $exception;
+        }
 
         return response()->json([
             'status' => 'success',
@@ -436,5 +451,26 @@ class FaceRecognitionController extends Controller
             'is_late' => $isLate,
             'late_formatted' => $lateFormatted,
         ]);
+    }
+
+    private function storeFaceCapture(string $dataUrl): string
+    {
+        $capture = base64_decode(Str::after($dataUrl, ','), true);
+
+        if ($capture === false || strlen($capture) < 50) {
+            throw ValidationException::withMessages([
+                'face_capture' => 'Foto presensi wajah tidak valid. Silakan coba lagi.',
+            ]);
+        }
+
+        $path = 'attendance-face-captures/'.Str::uuid().'.jpg';
+
+        if (! Storage::disk('public')->put($path, $capture)) {
+            throw ValidationException::withMessages([
+                'face_capture' => 'Foto presensi wajah gagal disimpan. Silakan coba lagi.',
+            ]);
+        }
+
+        return $path;
     }
 }
