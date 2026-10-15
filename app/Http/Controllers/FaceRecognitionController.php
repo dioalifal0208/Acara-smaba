@@ -349,6 +349,17 @@ class FaceRecognitionController extends Controller
             ], 404);
         }
 
+        // Wajah yang cocok juga menentukan workcode aktif miliknya. Dengan
+        // demikian peserta tidak dapat masuk ke workcode aktif kelompok lain.
+        $participantWorkcode = Workcode::getActive($bestMatch);
+        if (! $participantWorkcode) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Tidak ada workcode aktif yang tersedia untuk peserta ini.',
+            ], 403);
+        }
+        $activeWorkcode = $participantWorkcode;
+
         // === Cek apakah sudah absen ===
         $alreadyAttended = Attendance::where('workcode_id', $activeWorkcode->id)
             ->where('participant_id', $bestMatch->id)

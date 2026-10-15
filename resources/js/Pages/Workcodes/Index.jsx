@@ -84,7 +84,7 @@ const normalizeDailySchedule = (schedule) => {
     );
 };
 
-export default function WorkcodesIndex({ workcodes }) {
+export default function WorkcodesIndex({ workcodes, participants }) {
     const { flash } = usePage().props;
     const { toast } = useToast();
     const confirm = useConfirm();
@@ -93,6 +93,8 @@ export default function WorkcodesIndex({ workcodes }) {
     const [mapPosition, setMapPosition] = useState(DEFAULT_MAP_POSITION);
     const [locationStatus, setLocationStatus] = useState(null);
     const [editingWorkcode, setEditingWorkcode] = useState(null);
+    const [isParticipantSelectionOpen, setIsParticipantSelectionOpen] = useState(false);
+    const [participantSearch, setParticipantSearch] = useState('');
 
     const { data, setData, post, put, processing, errors, reset, transform } = useForm({
         nama_workcode: '',
@@ -119,6 +121,7 @@ export default function WorkcodesIndex({ workcodes }) {
         longitude: '',
         radius_meters: 100,
         set_active: true,
+        participant_ids: [],
     });
 
     const updateJadwalPerHari = (hari, field, value) => {
@@ -157,6 +160,8 @@ export default function WorkcodesIndex({ workcodes }) {
     const handleCreate = () => {
         reset();
         setEditingWorkcode(null);
+        setIsParticipantSelectionOpen(false);
+        setParticipantSearch('');
         setMapPosition(DEFAULT_MAP_POSITION);
         setLocationStatus(null);
         setShowCreateModal(true);
@@ -206,6 +211,8 @@ export default function WorkcodesIndex({ workcodes }) {
             : DEFAULT_MAP_POSITION;
 
         setEditingWorkcode(workcode);
+        setIsParticipantSelectionOpen(false);
+        setParticipantSearch('');
         setLocationStatus(null);
         setData({
             nama_workcode: workcode.nama_workcode,
@@ -232,6 +239,7 @@ export default function WorkcodesIndex({ workcodes }) {
             longitude: workcode.longitude || '',
             radius_meters: workcode.radius_meters || 100,
             set_active: false,
+            participant_ids: (workcode.participants || []).map((participant) => participant.id),
         });
         setMapPosition(safePosition);
         setShowCreateModal(true);
@@ -841,6 +849,16 @@ export default function WorkcodesIndex({ workcodes }) {
                                         )}
                                     </div>
 
+                                    <div className="shrink-0 rounded-xl border border-emerald-200 bg-emerald-50/50 p-3">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <button type="button" onClick={() => setIsParticipantSelectionOpen(true)} className="min-w-0 text-left">
+                                                <p className="text-[10px] font-extrabold uppercase tracking-wider text-emerald-900">Peserta Workcode</p>
+                                                <p className="mt-0.5 text-[10px] leading-snug text-emerald-700">{data.participant_ids.length === 0 ? 'Belum dibatasi — semua peserta dapat presensi.' : `${data.participant_ids.length} peserta dipilih.`}</p>
+                                            </button>
+                                            <button type="button" onClick={() => setIsParticipantSelectionOpen(true)} className="shrink-0 rounded-lg border border-emerald-200 bg-white px-2.5 py-1.5 text-[10px] font-extrabold text-emerald-700 hover:bg-emerald-100">Pilih Peserta</button>
+                                        </div>
+                                    </div>
+
                                     {/* Activate Checkbox */}
                                     {!editingWorkcode && data.kategori === 'harian' && (
                                         <label className="flex items-center gap-2 cursor-pointer pt-0.5 select-none">
@@ -936,6 +954,49 @@ export default function WorkcodesIndex({ workcodes }) {
                                         : 'Simpan & Aktifkan'
                                 )}
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {isParticipantSelectionOpen && (
+                <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 sm:p-6">
+                    <button type="button" aria-label="Tutup pemilihan peserta" onClick={() => setIsParticipantSelectionOpen(false)} className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" />
+                    <div className="relative flex max-h-[min(720px,calc(100dvh-2rem))] w-full max-w-2xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+                        <div className="flex items-start justify-between gap-4 border-b border-slate-100 bg-emerald-50 px-5 py-4 sm:px-6">
+                            <div>
+                                <p className="text-base font-extrabold text-emerald-950">Pilih Peserta Workcode</p>
+                                <p className="mt-1 text-xs font-medium text-emerald-700">Hanya peserta yang dicentang dapat menggunakan workcode ini.</p>
+                            </div>
+                            <button type="button" onClick={() => setIsParticipantSelectionOpen(false)} className="rounded-xl p-2 text-slate-500 hover:bg-white hover:text-slate-800" aria-label="Tutup">
+                                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+                        <div className="border-b border-slate-100 px-5 py-3 sm:px-6">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                <label className="flex cursor-pointer items-center gap-2 text-xs font-extrabold text-emerald-800">
+                                    <input type="checkbox" checked={participants.length > 0 && data.participant_ids.length === participants.length} onChange={(event) => setData('participant_ids', event.target.checked ? participants.map((participant) => participant.id) : [])} className="h-4 w-4 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500" />
+                                    Centang seluruh peserta
+                                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px]">{data.participant_ids.length}/{participants.length}</span>
+                                </label>
+                                <input value={participantSearch} onChange={(event) => setParticipantSearch(event.target.value)} placeholder="Cari nama atau NIP..." className="w-full rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold focus:border-emerald-500 focus:ring-emerald-500 sm:w-60" />
+                            </div>
+                            <p className="mt-2 text-[11px] text-slate-500">Kosongkan semua centang jika workcode ini terbuka untuk seluruh peserta.</p>
+                        </div>
+                        <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4">
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                {participants.filter((participant) => `${participant.nama} ${participant.nis_nip || ''}`.toLowerCase().includes(participantSearch.toLowerCase())).map((participant) => {
+                                    const selected = data.participant_ids.includes(participant.id);
+                                    return <label key={participant.id} className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 transition ${selected ? 'border-emerald-300 bg-emerald-50' : 'border-slate-200 bg-white hover:border-emerald-200 hover:bg-emerald-50/40'}`}>
+                                        <input type="checkbox" checked={selected} onChange={() => setData('participant_ids', selected ? data.participant_ids.filter((id) => id !== participant.id) : [...data.participant_ids, participant.id])} className="h-4 w-4 shrink-0 rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500" />
+                                        <span className="min-w-0"><span className="block truncate text-xs font-extrabold text-slate-800">{participant.nama}</span><span className="mt-0.5 block truncate text-[10px] font-medium text-slate-500">{participant.nis_nip || participant.status || 'Tanpa NIP'}</span></span>
+                                    </label>;
+                                })}
+                            </div>
+                        </div>
+                        <div className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-5 py-3 sm:px-6">
+                            <p className="text-xs font-semibold text-slate-500">{data.participant_ids.length === 0 ? 'Semua peserta diizinkan.' : `${data.participant_ids.length} peserta dibatasi untuk workcode ini.`}</p>
+                            <button type="button" onClick={() => setIsParticipantSelectionOpen(false)} className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-extrabold text-white shadow-sm hover:bg-emerald-700">Selesai</button>
                         </div>
                     </div>
                 </div>

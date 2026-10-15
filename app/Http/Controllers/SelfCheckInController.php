@@ -29,9 +29,22 @@ class SelfCheckInController extends Controller
     /**
      * Tampilkan halaman Master QR Code untuk Admin.
      */
-    public function masterQr(QrCodeService $qrCodeService)
+    public function masterQr(Request $request, QrCodeService $qrCodeService)
     {
-        $activeWorkcode = Workcode::getActive();
+        $activeWorkcodes = Workcode::getActiveWorkcodes();
+        if ($activeWorkcodes->count() > 1 && ! $request->filled('workcode_id')) {
+            return Inertia::render('Admin/WorkcodeQrSelection', [
+                'activeWorkcodes' => $activeWorkcodes,
+            ]);
+        }
+
+        $activeWorkcode = $request->filled('workcode_id')
+            ? $activeWorkcodes->firstWhere('id', $request->integer('workcode_id'))
+            : $activeWorkcodes->first();
+
+        if ($request->filled('workcode_id') && ! $activeWorkcode) {
+            abort(404, 'Workcode tidak sedang aktif.');
+        }
         $token = $this->getWorkcodeToken();
 
         // Buat URL check-in menggunakan host saat ini
@@ -45,6 +58,7 @@ class SelfCheckInController extends Controller
             'checkInUrl' => $checkInUrl,
             'qrCodeSvg' => $qrCodeSvg,
             'token' => $token,
+            'activeWorkcodes' => $activeWorkcodes,
         ]);
     }
 
@@ -89,9 +103,9 @@ class SelfCheckInController extends Controller
         }
 
         $query = trim((string) $request->query('query', ''));
-        $activeWorkcode = Workcode::getActive();
+        $activeWorkcodes = Workcode::getActiveWorkcodes();
 
-        if (mb_strlen($query) < 2 || ! $activeWorkcode) {
+        if (mb_strlen($query) < 2 || $activeWorkcodes->isEmpty()) {
             return response()->json([]);
         }
 
@@ -100,11 +114,26 @@ class SelfCheckInController extends Controller
                 $participantQuery->where('nis_nip', 'like', $query.'%')
                     ->orWhere('nama', 'like', '%'.$query.'%');
             })
-            ->whereDoesntHave('attendances', function ($attendanceQuery) use ($activeWorkcode) {
-                $attendanceQuery->where('workcode_id', $activeWorkcode->id);
+            ->limit(30)
+            ->get(['id', 'nama', 'nis_nip', 'status'])
+            ->map(function (Participant $participant) use ($activeWorkcodes) {
+                $availableWorkcodes = $activeWorkcodes
+                    ->filter(fn (Workcode $workcode) => $workcode->isAvailableFor($participant))
+                    ->filter(fn (Workcode $workcode) => ! $participant->attendances()->where('workcode_id', $workcode->id)->exists())
+                    ->values()
+                    ->map(fn (Workcode $workcode) => [
+                        'workcode_id' => $workcode->id,
+                        'nama_workcode' => $workcode->nama_workcode,
+                        'kategori' => $workcode->kategori,
+                    ]);
+
+                $participant->setAttribute('available_workcodes', $availableWorkcodes);
+
+                return $participant;
             })
-            ->limit(5)
-            ->get(['id', 'nama', 'nis_nip', 'status']);
+            ->filter(fn (Participant $participant) => $participant->available_workcodes->isNotEmpty())
+            ->take(5)
+            ->values();
 
         return response()->json($participants);
     }
@@ -142,7 +171,6 @@ class SelfCheckInController extends Controller
         }
 
         $activeWorkcode = Workcode::getActive();
-
         try {
             $validationService->validateWorkcodeActive($activeWorkcode);
         } catch (ValidationException $e) {
@@ -154,6 +182,7 @@ class SelfCheckInController extends Controller
 
         $request->validate([
             'participant_id' => 'nullable|integer|exists:participants,id',
+            'workcode_id' => 'nullable|integer|exists:workcodes,id',
             'nis_nip' => 'required_without:participant_id|nullable|string|max:50',
             'latitude' => 'nullable|numeric',
             'longitude' => 'nullable|numeric',
@@ -187,6 +216,29 @@ class SelfCheckInController extends Controller
                 'status' => 'error',
                 'message' => 'Data peserta tidak terdaftar. Hubungi panitia.',
             ], 404);
+        }
+
+        $availableWorkcodes = Workcode::getActiveWorkcodes($participant);
+        $activeWorkcode = $request->filled('workcode_id')
+            ? $availableWorkcodes->firstWhere('id', $request->integer('workcode_id'))
+            : ($availableWorkcodes->count() === 1 ? $availableWorkcodes->first() : null);
+
+        if (! $activeWorkcode) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $availableWorkcodes->isEmpty()
+                    ? 'Tidak ada workcode aktif yang tersedia untuk peserta ini.'
+                    : 'Pilih workcode presensi terlebih dahulu.',
+            ], 422);
+        }
+
+        try {
+            $validationService->validateWorkcodeActive($activeWorkcode);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $e->validator->errors()->first(),
+            ], $e->status);
         }
 
         if ($validationService->checkAlreadyAttended($activeWorkcode, $participant)) {

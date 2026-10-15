@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Workcode;
+use App\Models\Participant;
 use App\Services\FcmService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -16,21 +17,19 @@ class WorkcodeController extends Controller
      */
     public function index()
     {
-        $workcodes = Workcode::withCount('attendances')
+        $workcodes = Workcode::with('participants:id')->withCount(['attendances', 'participants'])
             ->orderBy('is_active', 'desc')
             ->orderBy('created_at', 'desc')
             ->get();
 
-        // Dipakai tampilan admin agar status kegiatan mengikuti waktu server
-        // tanpa menunggu command scheduler mengubah kolom is_active. Bila ada
-        // jadwal yang bertumpuk, hanya workcode yang dipilih getActive() aktif.
-        $activeWorkcodeId = Workcode::getActive()?->getKey();
-        $workcodes->each(function (Workcode $workcode) use ($activeWorkcodeId): void {
-            $workcode->setAttribute('is_effectively_active', $workcode->getKey() === $activeWorkcodeId);
+        // Setiap jadwal yang sedang berlangsung dapat aktif bersamaan.
+        $workcodes->each(function (Workcode $workcode): void {
+            $workcode->setAttribute('is_effectively_active', $workcode->isEffectivelyActive());
         });
 
         return Inertia::render('Workcodes/Index', [
             'workcodes' => $workcodes,
+            'participants' => Participant::orderBy('nama')->get(['id', 'nama', 'nis_nip', 'status']),
         ]);
     }
 
@@ -56,16 +55,14 @@ class WorkcodeController extends Controller
             'radius_meters' => 'nullable|integer|min:1',
             'set_active' => 'boolean',
             'jadwal_per_hari' => 'nullable|array',
+            'participant_ids' => 'nullable|array',
+            'participant_ids.*' => 'integer|exists:participants,id',
         ]);
 
         $isActivity = $validated['kategori'] === 'workcode';
         $setActive = $isActivity
             ? $this->scheduledWindowIsOpen($validated)
             : ($request->boolean('set_active') || Workcode::count() === 0);
-
-        if ($setActive) {
-            Workcode::query()->update(['is_active' => false]);
-        }
 
         $isDaily = $validated['kategori'] === 'harian';
 
@@ -87,6 +84,7 @@ class WorkcodeController extends Controller
             'is_active' => $setActive,
             'jadwal_per_hari' => $isDaily ? ($validated['jadwal_per_hari'] ?? null) : null,
         ]);
+        $workcode->participants()->sync($validated['participant_ids'] ?? []);
 
         // Kirim FCM notification ke semua subscriber
         $fcmService->sendWorkcodeUpdate('created', $workcode);
@@ -111,7 +109,6 @@ class WorkcodeController extends Controller
             );
         }
 
-        Workcode::query()->update(['is_active' => false]);
         $workcode->update(['is_active' => true]);
 
         // Kirim FCM notification ke semua subscriber
@@ -174,15 +171,13 @@ class WorkcodeController extends Controller
             'longitude' => 'nullable|numeric',
             'radius_meters' => 'nullable|integer|min:1',
             'jadwal_per_hari' => 'nullable|array',
+            'participant_ids' => 'nullable|array',
+            'participant_ids.*' => 'integer|exists:participants,id',
         ]);
 
         $isActivity = $validated['kategori'] === 'workcode';
         $isDaily = $validated['kategori'] === 'harian';
         $shouldActivate = $isActivity && $this->scheduledWindowIsOpen($validated);
-
-        if ($shouldActivate) {
-            Workcode::where('id', '!=', $workcode->getKey())->update(['is_active' => false]);
-        }
 
         $updates = [
             'nama_workcode' => $validated['nama_workcode'],
@@ -207,6 +202,7 @@ class WorkcodeController extends Controller
         }
 
         $workcode->update($updates);
+        $workcode->participants()->sync($validated['participant_ids'] ?? []);
 
         // Kirim FCM notification ke semua subscriber
         $fcmService->sendWorkcodeUpdate('updated', $workcode);

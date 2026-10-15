@@ -115,6 +115,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
     const { data, setData, processing, reset } = useForm({
         nis_nip: '',
         participant_id: null,
+        workcode_id: null,
     });
 
     // Cek LocalStorage lock saat halaman pertama dibuka
@@ -230,6 +231,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
         setData({
             nis_nip: val,
             participant_id: null,
+            workcode_id: null,
         });
         setSelectedParticipant(null);
         clearSignature();
@@ -257,6 +259,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
         setData({
             nis_nip: participant.nis_nip || participant.nama,
             participant_id: participant.id,
+            workcode_id: participant.available_workcodes?.[0]?.workcode_id || null,
         });
         setSelectedParticipant(participant);
         clearSignature();
@@ -329,6 +332,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                         body: JSON.stringify({
                             nis_nip: data.nis_nip,
                             participant_id: data.participant_id,
+                            workcode_id: data.workcode_id,
                             latitude,
                             longitude,
                             accuracy: accuracy ? Math.round(accuracy * 10) / 10 : null,
@@ -346,7 +350,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                     if (response.ok) {
                         if (resData.status === 'success') {
                             // Kunci browser secara lokal - permanen untuk workcode ini
-                            setLocalLock(activeWorkcode.id, resData.participant, resData.timestamp);
+                            setLocalLock(data.workcode_id, resData.participant, resData.timestamp);
                             // Tampilkan layar terkunci permanen
                             setDeviceLock({ participant: resData.participant, timestamp: resData.timestamp });
                             playAudio('success');
@@ -370,7 +374,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                         if (resData.status === 'device_locked') {
                             // Kunci juga secara lokal menggunakan data dari server
                             const lp = resData.locked_participant;
-                            setLocalLock(activeWorkcode.id, { nama: lp.nama, nis_nip: lp.nis_nip, status: lp.status }, lp.waktu_hadir);
+                            setLocalLock(data.workcode_id, { nama: lp.nama, nis_nip: lp.nis_nip, status: lp.status }, lp.waktu_hadir);
                             setDeviceLock({ participant: { nama: lp.nama, nis_nip: lp.nis_nip, status: lp.status }, timestamp: lp.waktu_hadir });
                             playAudio('error');
                         } else {
@@ -540,6 +544,13 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                                                     <p className="text-[11px] font-bold text-emerald-700">{selectedParticipant.nis_nip || `${selectedParticipant.status || 'GTT/PTT'} · Tanpa NIP`}</p>
                                                 </div>
                                                 <span className="text-[10px] font-extrabold text-emerald-700">DIPILIH</span>
+                                            </div>
+
+                                            <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3">
+                                                <label className="mb-1 block text-[10px] font-extrabold uppercase tracking-wider text-indigo-800">Workcode yang dipilih</label>
+                                                <select value={data.workcode_id || ''} onChange={(event) => setData('workcode_id', Number(event.target.value) || null)} className="w-full rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 focus:border-indigo-500 focus:ring-indigo-500">
+                                                    {(selectedParticipant.available_workcodes || []).map((workcode) => <option key={workcode.workcode_id} value={workcode.workcode_id}>{workcode.nama_workcode}</option>)}
+                                                </select>
                                             </div>
 
                                     <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-3">

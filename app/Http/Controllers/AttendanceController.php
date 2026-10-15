@@ -88,6 +88,17 @@ class AttendanceController extends Controller
             ], 404);
         }
 
+        // Saat beberapa workcode aktif bersamaan, QR peserta menentukan
+        // workcode yang memang tersedia untuk peserta tersebut.
+        $participantWorkcode = Workcode::getActive($participant);
+        if (! $participantWorkcode) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Tidak ada workcode aktif yang tersedia untuk peserta ini.',
+            ], 403);
+        }
+        $activeWorkcode = $participantWorkcode;
+
         // Cek GPS radius jika workcode memiliki koordinat
         if ($activeWorkcode->latitude && $activeWorkcode->longitude) {
             if ($request->filled('latitude') && $request->filled('longitude')) {
@@ -223,6 +234,7 @@ class AttendanceController extends Controller
     public function report(Request $request)
     {
         $workcodes = Workcode::orderByDesc('created_at')->get();
+        $activeWorkcodes = Workcode::getActiveWorkcodes();
 
         $selectedWorkcodeId = $request->input('workcode_id');
         $selectedWorkcode = $selectedWorkcodeId
@@ -280,6 +292,7 @@ class AttendanceController extends Controller
 
         return Inertia::render('Report/Index', [
             'workcodes' => $workcodes,
+            'activeWorkcodes' => $activeWorkcodes,
             'selectedWorkcodeId' => $selectedWorkcode?->id,
             'selectedWorkcode' => $selectedWorkcode,
             'stats' => $stats,

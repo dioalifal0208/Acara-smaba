@@ -3,7 +3,7 @@ import { Head, Link, usePage } from '@inertiajs/react';
 import Dropdown from '@/Components/Dropdown';
 import { useEffect, useState } from 'react';
 
-export default function Dashboard({ stats, activeWorkcode: propActiveWorkcode, pendingLeaveCount }) {
+export default function Dashboard({ stats, activeWorkcode: propActiveWorkcode, activeWorkcodes = [], pendingLeaveCount }) {
     const { auth, activeWorkcode: globalActiveWorkcode } = usePage().props;
     const activeWorkcode = propActiveWorkcode || globalActiveWorkcode;
     const user = auth.user;
@@ -76,6 +76,12 @@ export default function Dashboard({ stats, activeWorkcode: propActiveWorkcode, p
                 
                 {/* Alerts Area */}
                 <div className="space-y-2 mb-4 flex-none">
+                    {activeWorkcodes.length > 1 && (
+                        <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-3">
+                            <p className="text-sm font-extrabold text-indigo-900">{activeWorkcodes.length} workcode sedang aktif bersamaan</p>
+                            <p className="mt-1 text-xs font-medium text-indigo-700">{activeWorkcodes.map((workcode) => workcode.nama_workcode).join(' · ')}</p>
+                        </div>
+                    )}
                     {/* No Workcode Banner */}
                     {!activeWorkcode && (
                         <div className={`overflow-hidden rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/60 p-1 shadow-sm transition-all duration-500 ease-out transform ${mounted ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-8'}`}>

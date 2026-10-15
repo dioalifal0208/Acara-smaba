@@ -46,6 +46,22 @@ class Workcode extends Model
         return $this->hasMany(Attendance::class);
     }
 
+    /** Peserta yang secara khusus dipilih admin untuk workcode ini. */
+    public function participants()
+    {
+        return $this->belongsToMany(Participant::class)->withTimestamps();
+    }
+
+    /**
+     * Workcode tanpa peserta terpilih bersifat terbuka untuk semua peserta,
+     * sehingga data workcode lama tetap berfungsi seperti sebelumnya.
+     */
+    public function isAvailableFor(Participant $participant): bool
+    {
+        return ! $this->participants()->exists()
+            || $this->participants()->whereKey($participant->getKey())->exists();
+    }
+
     /**
      * Apakah kegiatan mempunyai jadwal aktif otomatis yang lengkap.
      */
@@ -92,34 +108,38 @@ class Workcode extends Model
     /**
      * Helper untuk mengambil Workcode yang benar-benar aktif saat ini.
      */
-    public static function getActive()
+    public static function getActive(?Participant $participant = null)
+    {
+        return static::getActiveWorkcodes($participant)->first();
+    }
+
+    /** Semua workcode yang aktif saat ini, termasuk jadwal yang bertumpuk. */
+    public static function getActiveWorkcodes(?Participant $participant = null)
     {
         $now = now();
-
-        // Kegiatan terjadwal selalu diprioritaskan dan aktif secara dinamis,
-        // termasuk ketika scheduler hosting tidak berjalan.
-        $scheduledWorkcode = static::where('kategori', 'workcode')
-            ->whereDate('tanggal', $now->toDateString())
-            ->whereNotNull('jam_aktif_mulai')
-            ->whereNotNull('jam_aktif_selesai')
+        $workcodes = static::query()
+            ->where(function ($query) use ($now): void {
+                $query->where('is_active', true)
+                    ->orWhere(function ($scheduled) use ($now): void {
+                        $scheduled->where('kategori', 'workcode')
+                            ->whereDate('tanggal', $now->toDateString())
+                            ->whereNotNull('jam_aktif_mulai')
+                            ->whereNotNull('jam_aktif_selesai');
+                    });
+            })
+            ->withCount('participants')
             ->orderByDesc('jam_aktif_mulai')
             ->orderByDesc('id')
             ->get()
-            ->first(fn (self $workcode) => $workcode->isWithinActiveWindow($now));
+            ->filter(fn (self $workcode) => $workcode->isEffectivelyActive($now));
 
-        if ($scheduledWorkcode) {
-            return $scheduledWorkcode;
+        if ($participant) {
+            $assignedIds = $participant->workcodes()->pluck('workcodes.id');
+
+            $workcodes = $workcodes->filter(fn (self $workcode) => $workcode->participants_count === 0 || $assignedIds->contains($workcode->id));
         }
 
-        // Workcode tanpa jadwal otomatis (mis. presensi harian) tetap
-        // menggunakan status manual yang disimpan pada database.
-        return static::where('is_active', true)
-            ->where(function ($query): void {
-                $query->where('kategori', '!=', 'workcode')
-                    ->orWhereNull('tanggal')
-                    ->orWhereNull('jam_aktif_mulai')
-                    ->orWhereNull('jam_aktif_selesai');
-            })
-            ->first();
+        return $workcodes->values();
     }
+
 }

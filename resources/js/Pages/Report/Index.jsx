@@ -15,6 +15,7 @@ import InputError from '@/Components/InputError';
 
 export default function ReportIndex({
     workcodes = [],
+    activeWorkcodes = [],
     selectedWorkcodeId,
     selectedWorkcode,
     stats,
@@ -914,6 +915,15 @@ export default function ReportIndex({
             }
         >
             <Head title="Laporan Kehadiran" />
+
+            {activeWorkcodes.length > 1 && (
+                <div className="mx-auto mt-4 w-full max-w-7xl px-4 sm:px-6 lg:px-8">
+                    <div className="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+                        <span className="font-extrabold">{activeWorkcodes.length} workcode aktif bersamaan: </span>
+                        <span className="font-medium">{activeWorkcodes.map((workcode) => workcode.nama_workcode).join(' · ')}</span>
+                    </div>
+                </div>
+            )}
 
             <div className="py-4 px-4 sm:px-6 lg:px-8 flex-1 flex flex-col">
                 <div className="mx-auto max-w-7xl w-full flex-1 flex flex-col space-y-3.5">

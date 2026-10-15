@@ -72,7 +72,8 @@ Route::get('/participants/{participant}/download-png', [ParticipantController::c
 Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     // Dashboard route
     Route::get('/dashboard', function () {
-        $activeWorkcode = Workcode::getActive();
+        $activeWorkcodes = Workcode::getActiveWorkcodes();
+        $activeWorkcode = $activeWorkcodes->first();
         $totalParticipants = Participant::count();
         $totalAttended = $activeWorkcode
             ? Attendance::where('workcode_id', $activeWorkcode->id)->distinct('participant_id')->count('participant_id')
@@ -82,6 +83,7 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
 
         return Inertia::render('Dashboard', [
             'activeWorkcode' => $activeWorkcode,
+            'activeWorkcodes' => $activeWorkcodes,
             'pendingLeaveCount' => $pendingLeaveCount,
             'stats' => [
                 'total' => $totalParticipants,

@@ -59,6 +59,11 @@ class Participant extends Model
         return $this->hasMany(Attendance::class);
     }
 
+    public function workcodes()
+    {
+        return $this->belongsToMany(Workcode::class)->withTimestamps();
+    }
+
     /**
      * Riwayat pengajuan perubahan foto dari peserta.
      */
