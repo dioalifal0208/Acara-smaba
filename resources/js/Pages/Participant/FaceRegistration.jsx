@@ -42,7 +42,7 @@ export default function FaceRegistration({ participant }) {
                 <div className="bg-white px-5 py-4 border-b border-slate-100 text-center relative z-10">
                     <img src={appUrl('images/logo.png')} alt="Logo" className="h-10 w-10 mx-auto object-contain mb-2" />
                     <h2 className="text-sm font-extrabold text-slate-800">Pendaftaran Wajah</h2>
-                    <p className="text-[10px] text-slate-500 font-semibold">Pemindaian multi-sudut &amp; verifikasi liveness</p>
+                    <p className="text-[10px] text-slate-500 font-semibold">Wajah menghadap depan sebagai data acuan presensi</p>
                 </div>
 
                 <FaceEnrollmentCamera onComplete={handleComplete} />

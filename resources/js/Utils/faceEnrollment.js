@@ -1,9 +1,9 @@
 /**
- * Pendaftaran wajah terpandu (multi-sudut) berbasis face-api.js.
+ * Pendaftaran wajah (menghadap depan) berbasis face-api.js.
  *
- * Webcam browser tidak punya sensor kedalaman (IR) seperti Windows Hello, jadi "3D" didekati
- * dengan 68 titik landmark wajah: kualitas tiap frame diperiksa ketat, pose kepala (yaw/roll)
- * diestimasi dari posisi mata dan hidung, lalu descriptor diambil dari beberapa sudut.
+ * Kualitas tiap frame diperiksa ketat memakai 68 titik landmark wajah: wajah utuh di area
+ * yang terlihat, di tengah, lurus menghadap kamera, cukup terang, mata terbuka, dan diam.
+ * Beberapa sampel wajah depan diambil sebagai data acuan presensi.
  */
 import * as faceapi from 'face-api.js';
 import { MODEL_URL } from '@/lib/appUrl';
@@ -25,18 +25,21 @@ export function loadEnrollmentModels() {
 
 export const DETECTOR_OPTIONS = () => new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.5 });
 
-/** Deteksi ringan (tanpa descriptor) untuk tahap kedip agar frame rate cukup tinggi menangkap kedipan. */
-export const FAST_DETECTOR_OPTIONS = () => new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 });
+export const ENROLLMENT_TIMEOUT_SECONDS = 60;
 
-export const ENROLLMENT_TIMEOUT_SECONDS = 90;
+/** Jumlah sampel wajah depan yang disimpan (server mewajibkan minimal 3). */
+export const FRONT_SAMPLES = 3;
 
-/** Jarak maksimum descriptor sudut lain ke descriptor wajah depan pertama (orang yang sama). */
+/** Frame stabil berturut-turut sebelum satu sampel diambil. */
+export const STABLE_FRAMES = 5;
+
+/** Jarak maksimum antar sampel ke sampel pertama (harus orang yang sama). */
 export const SAME_PERSON_MAX_DISTANCE = 0.5;
 
 const LIMITS = {
     minScore: 0.75,
-    edgeMargin: 0.04, // wajah + titik landmark wajib berada di dalam frame dengan margin 4%
-    minHeight: 0.32, // tinggi kotak wajah relatif tinggi frame
+    edgeMargin: 0.04, // wajah + titik landmark wajib berada di dalam area terlihat dengan margin 4%
+    minHeight: 0.32, // tinggi kotak wajah relatif tinggi area terlihat
     maxHeight: 0.85,
     maxCenterOffsetX: 0.15,
     maxCenterOffsetY: 0.18,
@@ -45,81 +48,8 @@ const LIMITS = {
     maxBrightness: 215,
     eyesOpenEar: 0.2,
     frontalYaw: 0.1,
-    // Toleh cukup kecil (~10-20°): model 68 titik tidak akurat di atas ~30°.
-    turnMinYaw: 0.1,
-    turnMaxYaw: 0.35,
     stableMove: 0.03, // pergeseran pusat wajah antar frame relatif lebar frame
 };
-
-/** Batas yang dilonggarkan saat menoleh: skor deteksi dan posisi wajah wajar bergeser. */
-const RELAXED_LIMITS = {
-    ...LIMITS,
-    minScore: 0.6,
-    maxCenterOffsetX: 0.22,
-    maxCenterOffsetY: 0.22,
-    maxRollDeg: 16,
-};
-
-/** Rentang yaw untuk indikator toleh di layar. */
-export const YAW_METER = { range: 0.45, min: LIMITS.turnMinYaw, max: LIMITS.turnMaxYaw };
-
-/**
- * Tahapan pendaftaran. `frames` = jumlah frame stabil berturut-turut sebelum descriptor diambil,
- * `captures` = jumlah descriptor yang diambil pada tahap itu.
- */
-export const ENROLLMENT_STEPS = [
-    { id: 'front', title: 'Lihat lurus ke kamera', detail: 'Tahan posisi, wajah tepat di dalam bingkai.', frames: 5, captures: 2 },
-    { id: 'turn_a', title: 'Tolehkan kepala sedikit ke kiri atau kanan', detail: 'Cukup sedikit sampai penanda masuk zona hijau.', frames: 3, captures: 1, relaxed: true },
-    { id: 'turn_b', title: 'Sekarang tolehkan sedikit ke arah sebaliknya', detail: 'Perlahan sampai penanda masuk zona hijau.', frames: 3, captures: 1, relaxed: true },
-    { id: 'blink', title: 'Kembali lurus, lalu kedipkan mata perlahan', detail: 'Pejamkan mata sekitar setengah detik, lalu buka kembali.', frames: 2, captures: 1 },
-];
-
-/**
- * Deteksi kedipan relatif terhadap bukaan mata normal pengguna (bukan angka tetap),
- * sehingga tetap bekerja untuk mata sipit atau pengguna berkacamata.
- */
-export function createBlinkDetector() {
-    let baseline = null;
-    let samples = 0;
-    let closedAt = null;
-
-    return {
-        reset() {
-            baseline = null;
-            samples = 0;
-            closedAt = null;
-        },
-        get closed() {
-            return closedAt !== null;
-        },
-        /** @returns {'calibrating'|'open'|'closed'|'blinked'} */
-        update(ear, now = Date.now()) {
-            if (closedAt === null) {
-                if (baseline === null) {
-                    baseline = ear;
-                } else if (ear >= baseline * 0.9) {
-                    baseline = baseline * 0.8 + ear * 0.2;
-                }
-                samples += 1;
-                if (samples < 4) return 'calibrating';
-                if (ear < baseline * 0.75) {
-                    closedAt = now;
-                    return 'closed';
-                }
-                return 'open';
-            }
-
-            if (ear > baseline * 0.88) {
-                const duration = now - closedAt;
-                closedAt = null;
-                // Mata tertutup lebih dari 3 detik bukan kedipan wajar (mis. foto mata tertutup).
-                return duration <= 3000 ? 'blinked' : 'open';
-            }
-
-            return 'closed';
-        },
-    };
-}
 
 const mean = (points) => ({
     x: points.reduce((sum, p) => sum + p.x, 0) / points.length,
@@ -188,25 +118,17 @@ export function visibleRegion(video) {
 }
 
 /**
- * Periksa kualitas satu frame terhadap area yang terlihat (`frame` dari visibleRegion).
- * Mengembalikan { ok, hint, pose }. `allowClosedEyes` dipakai saat tahap kedip.
+ * Periksa kualitas satu frame wajah depan terhadap area yang terlihat (`frame` dari visibleRegion).
+ * Mengembalikan { ok, hint, pose }.
  */
-export function assessFace(detection, frame, brightness, { allowClosedEyes = false, relaxed = false } = {}) {
+export function assessFace(detection, frame, brightness) {
     const { x: X0 = 0, y: Y0 = 0, width: W, height: H } = frame;
     const box = detection.detection.box;
     const pose = estimatePose(detection.landmarks);
     const fail = (hint) => ({ ok: false, hint, pose });
-    const L = relaxed ? RELAXED_LIMITS : LIMITS;
 
-    // Saat menoleh terlalu jauh skor deteksi turun; beri petunjuk sudutnya, bukan "kurang jelas".
-    if (relaxed && Math.abs(pose.yaw) > LIMITS.turnMaxYaw) {
-        return fail('Terlalu jauh menoleh. Kembalikan sedikit ke arah kamera.');
-    }
-
-    if (detection.detection.score < L.minScore) {
-        return fail(relaxed
-            ? 'Titik wajah sulit terbaca. Kurangi sudut toleh dan pastikan wajah cukup terang.'
-            : 'Wajah kurang jelas. Hadapkan wajah ke kamera dan pastikan tidak tertutup.');
+    if (detection.detection.score < LIMITS.minScore) {
+        return fail('Wajah kurang jelas. Hadapkan wajah ke kamera dan pastikan tidak tertutup.');
     }
 
     const mx = W * LIMITS.edgeMargin;
@@ -223,40 +145,17 @@ export function assessFace(detection, frame, brightness, { allowClosedEyes = fal
 
     const cx = (box.x - X0 + box.width / 2) / W - 0.5;
     const cy = (box.y - Y0 + box.height / 2) / H - 0.5;
-    if (Math.abs(cx) > L.maxCenterOffsetX || Math.abs(cy) > L.maxCenterOffsetY) {
+    if (Math.abs(cx) > LIMITS.maxCenterOffsetX || Math.abs(cy) > LIMITS.maxCenterOffsetY) {
         return fail('Posisikan wajah tepat di tengah bingkai.');
     }
 
-    if (Math.abs(pose.rollDeg) > L.maxRollDeg) return fail('Luruskan kepala, jangan dimiringkan.');
+    if (Math.abs(pose.rollDeg) > LIMITS.maxRollDeg) return fail('Luruskan kepala, jangan dimiringkan.');
+    if (Math.abs(pose.yaw) > LIMITS.frontalYaw) return fail('Hadapkan wajah lurus ke kamera.');
     if (brightness < LIMITS.minBrightness) return fail('Pencahayaan terlalu gelap. Cari tempat yang lebih terang.');
     if (brightness > LIMITS.maxBrightness) return fail('Wajah terlalu silau. Hindari cahaya langsung dari belakang/depan.');
-    if (!allowClosedEyes && pose.ear < LIMITS.eyesOpenEar) return fail('Buka mata dan lihat ke kamera.');
+    if (pose.ear < LIMITS.eyesOpenEar) return fail('Buka mata dan lihat ke kamera.');
 
     return { ok: true, hint: null, pose };
-}
-
-/** Apakah pose sesuai tahap saat ini. `turnSign` = arah toleh tahap pertama (+1 / -1). */
-export function poseMatchesStep(stepId, pose, turnSign) {
-    const yaw = pose.yaw;
-    switch (stepId) {
-        case 'front':
-        case 'blink':
-            return Math.abs(yaw) <= LIMITS.frontalYaw
-                ? { ok: true }
-                : { ok: false, hint: 'Hadapkan wajah lurus ke kamera.' };
-        case 'turn_a':
-            if (Math.abs(yaw) < LIMITS.turnMinYaw) return { ok: false, hint: 'Tolehkan kepala sedikit lagi ke kiri atau kanan.' };
-            if (Math.abs(yaw) > LIMITS.turnMaxYaw) return { ok: false, hint: 'Terlalu jauh menoleh. Kembalikan sedikit.' };
-            return { ok: true };
-        case 'turn_b':
-            if (Math.sign(yaw) === turnSign || Math.abs(yaw) < LIMITS.turnMinYaw) {
-                return { ok: false, hint: 'Tolehkan kepala ke arah sebaliknya.' };
-            }
-            if (Math.abs(yaw) > LIMITS.turnMaxYaw) return { ok: false, hint: 'Terlalu jauh menoleh. Kembalikan sedikit.' };
-            return { ok: true };
-        default:
-            return { ok: false, hint: null };
-    }
 }
 
 export function isStable(previousBox, box, frameWidth) {
@@ -266,4 +165,3 @@ export function isStable(previousBox, box, frameWidth) {
     return Math.hypot(dx, dy) / frameWidth <= LIMITS.stableMove
         && Math.abs(previousBox.height - box.height) / box.height <= 0.08;
 }
-

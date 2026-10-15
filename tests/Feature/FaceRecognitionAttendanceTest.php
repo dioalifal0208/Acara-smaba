@@ -89,6 +89,24 @@ class FaceRecognitionAttendanceTest extends TestCase
         Storage::disk('public')->assertExists($attendance->face_capture_path);
     }
 
+    public function test_face_attendance_requires_workcode_choice_when_participant_has_multiple_active_workcodes(): void
+    {
+        $firstWorkcode = Workcode::create(['nama_workcode' => 'Kegiatan A', 'kategori' => 'workcode', 'is_active' => true]);
+        $secondWorkcode = Workcode::create(['nama_workcode' => 'Kegiatan B', 'kategori' => 'workcode', 'is_active' => true]);
+        $participant = $this->createParticipantWithFace();
+        $firstWorkcode->participants()->attach($participant);
+        $secondWorkcode->participants()->attach($participant);
+
+        $this->postJson(route('face.match'), [
+            'descriptor' => array_fill(0, 128, 0.0),
+            'device_id' => 'multiple-workcode-device',
+        ])->assertStatus(409)
+            ->assertJsonPath('status', 'workcode_selection_required')
+            ->assertJsonCount(2, 'workcodes');
+
+        $this->assertDatabaseCount('attendances', 0);
+    }
+
     private function createParticipantWithFace(): Participant
     {
         return Participant::create([

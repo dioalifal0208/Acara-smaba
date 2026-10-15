@@ -148,6 +148,22 @@ export default function AdminFaceScanner({ activeWorkcode, gpsData, onScanResult
         } catch (error) {
             console.error(error);
             const errorData = error.response?.data || { status: 'error', message: 'Gagal menghubungi server.' };
+            if (errorData.status === 'workcode_selection_required') {
+                const choices = errorData.workcodes.map((workcode) => `${workcode.id}: ${workcode.nama_workcode}`).join('\n');
+                const chosenId = window.prompt(`Pilih workcode untuk ${errorData.participant?.nama}:\n${choices}`);
+                const selected = errorData.workcodes.find((workcode) => String(workcode.id) === String(chosenId));
+                if (selected) {
+                    try {
+                        const selectedResponse = await axios.post('/api/face/match', { ...payload, workcode_id: selected.id });
+                        onScanResult(selectedResponse.data);
+                    } catch (selectedError) {
+                        onScanResult(selectedError.response?.data || { status: 'error', message: 'Presensi gagal diproses.' });
+                    }
+                    setIsProcessing(false);
+                    setStatus('Mencari Wajah...');
+                    return;
+                }
+            }
             onScanResult(errorData);
 
             // Shorter cooldown on error

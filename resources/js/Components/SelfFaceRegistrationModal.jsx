@@ -41,7 +41,7 @@ export default function SelfFaceRegistrationModal({ participant, onClose }) {
                 <div className="bg-white px-5 py-4 border-b border-slate-100 flex items-center justify-between relative z-10">
                     <div>
                         <h2 className="text-sm font-extrabold text-slate-800">Pendaftaran Wajah</h2>
-                        <p className="text-[10px] text-slate-500 font-semibold">Pemindaian multi-sudut &amp; verifikasi liveness</p>
+                        <p className="text-[10px] text-slate-500 font-semibold">Wajah menghadap depan sebagai data acuan presensi</p>
                     </div>
                     <button type="button" onClick={() => onClose(false)} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">

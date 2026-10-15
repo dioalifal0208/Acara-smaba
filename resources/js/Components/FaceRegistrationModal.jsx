@@ -67,7 +67,7 @@ export default function FaceRegistrationModal({ participant, onClose, onSuccess 
                     )}
                 </div>
 
-                {/* Camera Section: pemindaian terpandu multi-sudut, tersimpan otomatis setelah selesai */}
+                {/* Camera Section: pemindaian wajah depan terpandu, tersimpan otomatis setelah selesai */}
                 {showCamera ? (
                     <>
                         <FaceEnrollmentCamera onComplete={handleComplete} className="rounded-2xl" />

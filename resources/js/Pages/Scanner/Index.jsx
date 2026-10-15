@@ -383,6 +383,17 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
                                 })
                                 .catch(error => {
                                     const errorData = error.response?.data || { status: 'error', message: 'Gagal menghubungi server.' };
+                                    if (errorData.status === 'workcode_selection_required') {
+                                        const choices = errorData.workcodes.map((workcode) => `${workcode.id}: ${workcode.nama_workcode}`).join('\n');
+                                        const chosenId = window.prompt(`Pilih workcode untuk ${errorData.participant?.nama}:\n${choices}`);
+                                        const selected = errorData.workcodes.find((workcode) => String(workcode.id) === String(chosenId));
+                                        if (selected) {
+                                            axios.post('/api/face/match', { ...payload, workcode_id: selected.id })
+                                                .then((selectedResponse) => handleFaceScanResult(selectedResponse.data))
+                                                .catch((selectedError) => handleFaceScanResult(selectedError.response?.data || { status: 'error', message: 'Presensi gagal diproses.' }));
+                                            return;
+                                        }
+                                    }
                                     handleFaceScanResult(errorData);
                                 })
                                 .finally(() => {

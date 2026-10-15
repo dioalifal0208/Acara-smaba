@@ -22,7 +22,7 @@ class FaceRegistrationAndMatchTest extends TestCase
 
     private function enrollment(float $base = 0.1): array
     {
-        return [$this->vector($base), $this->vector($base, 0.002), $this->vector($base, 0.004), $this->vector($base, 0.006), $this->vector($base, 0.008)];
+        return [$this->vector($base), $this->vector($base, 0.002), $this->vector($base, 0.004)]; // 3 sampel wajah depan
     }
 
     private function participantUser(array $participantAttributes = []): array
@@ -41,7 +41,7 @@ class FaceRegistrationAndMatchTest extends TestCase
         return Workcode::create(['nama_workcode' => 'Rapat', 'kategori' => 'workcode', 'is_active' => true]);
     }
 
-    public function test_self_registration_requires_multi_angle_enrollment(): void
+    public function test_self_registration_requires_multiple_front_samples(): void
     {
         [$participant, $user] = $this->participantUser();
 
@@ -56,7 +56,7 @@ class FaceRegistrationAndMatchTest extends TestCase
     public function test_self_registration_rejects_inconsistent_faces(): void
     {
         [$participant, $user] = $this->participantUser();
-        $mixed = [$this->vector(0.1), $this->vector(0.1), $this->vector(0.1), $this->vector(0.3), $this->vector(0.3)];
+        $mixed = [$this->vector(0.1), $this->vector(0.1), $this->vector(0.3)];
 
         $this->actingAs($user)
             ->postJson("/api/participants/{$participant->id}/face/self", ['descriptor' => $mixed])
@@ -64,7 +64,7 @@ class FaceRegistrationAndMatchTest extends TestCase
             ->assertJsonValidationErrors('descriptor');
     }
 
-    public function test_self_registration_with_multi_angle_enrollment_is_pending(): void
+    public function test_self_registration_with_front_samples_is_pending(): void
     {
         [$participant, $user] = $this->participantUser();
 
@@ -74,7 +74,7 @@ class FaceRegistrationAndMatchTest extends TestCase
 
         $participant->refresh();
         $this->assertSame('pending', $participant->face_status);
-        $this->assertCount(5, $participant->face_descriptor);
+        $this->assertCount(3, $participant->face_descriptor);
     }
 
     public function test_participant_without_approved_face_gets_clear_message_and_never_matches_others(): void
@@ -123,7 +123,7 @@ class FaceRegistrationAndMatchTest extends TestCase
         $this->assertSame(1, Attendance::where('workcode_id', $workcode->id)->where('participant_id', $participant->id)->count());
     }
 
-    public function test_mobile_api_requires_approved_face_and_supports_multi_angle_data(): void
+    public function test_mobile_api_requires_approved_face_and_supports_multiple_samples(): void
     {
         $workcode = $this->activateWorkcode();
         [$participant, $user] = $this->participantUser(['face_descriptor' => $this->enrollment(0.1), 'face_status' => 'pending']);

@@ -42,7 +42,7 @@ class FaceRecognitionController extends Controller
     private const MATCH_THRESHOLD = 0.58;
 
     /**
-     * Jarak terdekat antara input descriptor dan descriptor tersimpan (single atau multi-sudut).
+     * Jarak terdekat antara input descriptor dan descriptor tersimpan (single atau beberapa sampel wajah depan).
      */
     private function getMinDistance(array $inputDescriptor, $dbDescriptor): float
     {
@@ -120,7 +120,7 @@ class FaceRecognitionController extends Controller
             'descriptor' => 'required|array',
             'photo' => 'nullable|string',
         ]);
-        // Peserta wajib melalui pemindaian terpandu multi-sudut (bukan satu frame).
+        // Peserta wajib melalui pemindaian terpandu (beberapa sampel wajah depan, bukan satu frame).
         $this->validateEnrollmentDescriptor($request, requireMultiple: true);
 
         $updateData = [
@@ -227,6 +227,7 @@ class FaceRecognitionController extends Controller
             'accuracy' => 'nullable|numeric',
             'device_timestamp' => 'nullable|numeric',
             'device_id' => 'nullable|string',
+            'workcode_id' => 'nullable|integer|exists:workcodes,id',
             'face_capture' => ['nullable', 'string', 'max:1500000', 'regex:/^data:image\\/jpeg;base64,/'],
         ]);
 
@@ -349,16 +350,39 @@ class FaceRecognitionController extends Controller
             ], 404);
         }
 
-        // Wajah yang cocok juga menentukan workcode aktif miliknya. Dengan
-        // demikian peserta tidak dapat masuk ke workcode aktif kelompok lain.
-        $participantWorkcode = Workcode::getActive($bestMatch);
-        if (! $participantWorkcode) {
+        // Jangan prioritaskan salah satu workcode jika peserta memiliki lebih
+        // dari satu pilihan aktif. Klien harus meminta pilihan peserta dahulu.
+        $availableWorkcodes = Workcode::getActiveWorkcodes($bestMatch);
+        if ($availableWorkcodes->isEmpty()) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Tidak ada workcode aktif yang tersedia untuk peserta ini.',
             ], 403);
         }
-        $activeWorkcode = $participantWorkcode;
+
+        if (! $request->filled('workcode_id') && $availableWorkcodes->count() > 1) {
+            return response()->json([
+                'status' => 'workcode_selection_required',
+                'message' => 'Pilih workcode untuk presensi wajah ini.',
+                'participant' => $bestMatch->only(['id', 'nama', 'nis_nip', 'status']),
+                'workcodes' => $availableWorkcodes->map(fn (Workcode $workcode) => [
+                    'id' => $workcode->id,
+                    'nama_workcode' => $workcode->nama_workcode,
+                    'kategori' => $workcode->kategori,
+                ])->values(),
+            ], 409);
+        }
+
+        $activeWorkcode = $request->filled('workcode_id')
+            ? $availableWorkcodes->firstWhere('id', $request->integer('workcode_id'))
+            : $availableWorkcodes->first();
+
+        if (! $activeWorkcode) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Workcode yang dipilih tidak tersedia untuk peserta ini.',
+            ], 422);
+        }
 
         // === Cek apakah sudah absen ===
         $alreadyAttended = Attendance::where('workcode_id', $activeWorkcode->id)

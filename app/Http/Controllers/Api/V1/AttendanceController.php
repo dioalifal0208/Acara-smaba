@@ -236,7 +236,7 @@ class AttendanceController extends Controller
             ]), 403);
         }
 
-        // Data wajah web bisa single atau multi-sudut; Android mengirim vector ternormalisasi L2,
+        // Data wajah web bisa single atau beberapa sampel wajah depan; Android mengirim vector ternormalisasi L2,
         // jadi kedua sisi dinormalisasi sebelum dibandingkan. Descriptor dan jarak sengaja tidak
         // dicatat ke log karena termasuk data biometrik.
         $distance = FaceDescriptor::minDistance($incomingDescriptor, $registeredDescriptor, normalize: true);

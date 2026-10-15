@@ -33,6 +33,8 @@ export default function FaceScannerModal({ activeWorkcode, participant, onClose,
     
     // Result
     const [result, setResult] = useState(null);
+    const [workcodeSelection, setWorkcodeSelection] = useState(null);
+    const [pendingPayload, setPendingPayload] = useState(null);
 
     // Stop video stream cleanly
     const stopVideoStream = useCallback(() => {
@@ -228,12 +230,34 @@ export default function FaceScannerModal({ activeWorkcode, participant, onClose,
             }, 3000);
             
         } catch (error) {
+            if (error.response?.data?.status === 'workcode_selection_required') {
+                setWorkcodeSelection(error.response.data);
+                setPendingPayload(payload);
+                return;
+            }
             playAudio('error');
             if (error.response?.data?.message) {
                 setErrorMsg(error.response.data.message);
             } else {
                 setErrorMsg("Gagal menghubungi server.");
             }
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    const submitSelectedWorkcode = async (workcodeId) => {
+        if (!pendingPayload) return;
+        setIsProcessing(true);
+        try {
+            const res = await axios.post('/api/face/match', { ...pendingPayload, workcode_id: workcodeId });
+            setResult(res.data);
+            setWorkcodeSelection(null);
+            playAudio('success');
+            setTimeout(() => onSuccess ? onSuccess() : onClose(), 3000);
+        } catch (error) {
+            setErrorMsg(error.response?.data?.message || 'Presensi gagal diproses.');
+            playAudio('error');
         } finally {
             setIsProcessing(false);
         }
@@ -287,7 +311,13 @@ export default function FaceScannerModal({ activeWorkcode, participant, onClose,
                 </div>
 
                 {/* Content */}
-                {result ? (
+                {workcodeSelection ? (
+                    <div className="p-6 text-center">
+                        <h2 className="text-lg font-extrabold text-slate-900">Pilih Workcode</h2>
+                        <p className="mt-1 text-xs text-slate-500">Wajah {workcodeSelection.participant?.nama} dikenali. Pilih presensi yang akan dicatat.</p>
+                        <div className="mt-5 space-y-2">{workcodeSelection.workcodes.map((workcode) => <button key={workcode.id} type="button" disabled={isProcessing} onClick={() => submitSelectedWorkcode(workcode.id)} className="w-full rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-left text-sm font-extrabold text-indigo-800 hover:bg-indigo-100 disabled:opacity-50">{workcode.nama_workcode}</button>)}</div>
+                    </div>
+                ) : result ? (
                     <div className="p-7 text-center">
                         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/30">
                             <svg className="h-9 w-9 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>

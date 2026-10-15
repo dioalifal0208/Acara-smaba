@@ -6,13 +6,13 @@ namespace App\Support;
  * Utilitas descriptor wajah (face-api.js / Android).
  *
  * Data wajah peserta bisa berupa satu vector (format lama) atau beberapa vector
- * hasil pendaftaran multi-sudut. Semua pencocokan memakai jarak terdekat ke salah satunya.
+ * sampel wajah depan dari pendaftaran terpandu. Semua pencocokan memakai jarak terdekat ke salah satunya.
  */
 final class FaceDescriptor
 {
     public const DIMENSIONS = 128;
 
-    /** Jumlah vector yang dikirim pendaftaran terpandu (depan x2, toleh x2, kedip x1). */
+    /** Jumlah minimum sampel wajah depan dari pendaftaran terpandu. */
     public const MIN_ENROLLMENT_VECTORS = 3;
 
     public const MAX_ENROLLMENT_VECTORS = 10;
@@ -88,7 +88,7 @@ final class FaceDescriptor
 
         $isSingle = self::isVector($value);
         if ($isSingle && $requireMultiple) {
-            return 'Pendaftaran wajah harus melalui pemindaian multi-sudut. Muat ulang halaman lalu ulangi pendaftaran.';
+            return 'Pendaftaran wajah harus melalui pemindaian wajah terpandu. Muat ulang halaman lalu ulangi pendaftaran.';
         }
 
         $vectors = $isSingle ? [$value] : $value;

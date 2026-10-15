@@ -2,22 +2,16 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import * as faceapi from 'face-api.js';
 import {
     DETECTOR_OPTIONS,
-    ENROLLMENT_STEPS,
     ENROLLMENT_TIMEOUT_SECONDS,
-    FAST_DETECTOR_OPTIONS,
+    FRONT_SAMPLES,
     SAME_PERSON_MAX_DISTANCE,
-    YAW_METER,
+    STABLE_FRAMES,
     assessFace,
-    createBlinkDetector,
-    estimatePose,
     faceBrightness,
     isStable,
     loadEnrollmentModels,
-    poseMatchesStep,
     visibleRegion,
 } from '@/Utils/faceEnrollment';
-
-const TOTAL_CAPTURES = ENROLLMENT_STEPS.reduce((sum, step) => sum + step.captures, 0);
 
 const cameraErrorMessage = (error) => {
     switch (error?.name) {
@@ -35,53 +29,11 @@ const cameraErrorMessage = (error) => {
 };
 
 /**
- * Indikator sudut toleh. Video ditampilkan seperti cermin, jadi yaw kamera dibalik agar
- * penanda bergerak searah kepala pengguna. Zona hijau = sudut yang diterima.
- */
-function YawMeter({ yaw, stepId, turnSign }) {
-    const toPercent = (value) => Math.min(100, Math.max(0, 50 + (value / YAW_METER.range) * 50));
-    const zones = [-1, 1].map((side) => ({
-        side,
-        // Sisi tampilan `side` sesuai yaw kamera bertanda -side; tahap kedua hanya menerima arah sebaliknya.
-        active: stepId === 'turn_a' || side === turnSign,
-        from: toPercent(side * YAW_METER.min),
-        to: toPercent(side * YAW_METER.max),
-    }));
-    const marker = yaw === null ? null : toPercent(-yaw);
-
-    return (
-        <div className="mb-2 rounded-xl bg-slate-900/70 backdrop-blur-md border border-white/10 px-3 pt-2 pb-2.5">
-            <div className="flex justify-between text-[9px] font-bold uppercase tracking-wider text-white/60">
-                <span>← Kiri</span>
-                <span>Lurus</span>
-                <span>Kanan →</span>
-            </div>
-            <div className="relative mt-1.5 h-2.5 rounded-full bg-white/15">
-                {zones.map((zone) => (
-                    <span
-                        key={zone.side}
-                        className={`absolute inset-y-0 rounded-full ${zone.active ? 'bg-emerald-400/70' : 'bg-white/10'}`}
-                        style={{ left: `${Math.min(zone.from, zone.to)}%`, width: `${Math.abs(zone.to - zone.from)}%` }}
-                    />
-                ))}
-                <span className="absolute inset-y-0 left-1/2 w-px bg-white/40" />
-                {marker !== null && (
-                    <span
-                        className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-sky-400 shadow transition-[left] duration-150"
-                        style={{ left: `${marker}%` }}
-                    />
-                )}
-            </div>
-        </div>
-    );
-}
-
-/**
- * Kamera pendaftaran wajah terpandu multi-sudut.
+ * Kamera pendaftaran wajah menghadap depan.
  *
- * Wajah harus utuh di dalam bingkai, stabil, cukup terang, dan satu-satunya wajah di layar.
- * Descriptor diambil dari beberapa sudut (depan, toleh kiri/kanan, depan setelah berkedip)
- * dan dicek berasal dari orang yang sama. `onComplete({ descriptors, photo })` boleh async;
+ * Wajah harus utuh di dalam bingkai, lurus ke kamera, stabil, cukup terang, mata terbuka, dan
+ * satu-satunya wajah di layar. Beberapa sampel wajah depan diambil dan dicek berasal dari orang
+ * yang sama; sampel inilah data acuan presensi. `onComplete({ descriptors, photo })` boleh async;
  * bila melempar error, pesan ditampilkan dan pengguna bisa mengulang.
  */
 export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
@@ -93,27 +45,18 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
     const loopRef = useRef(null);
 
     // Status pendaftaran (ref agar loop deteksi tidak membaca state basi)
-    const stepRef = useRef(0);
-    const stepCapturesRef = useRef(0);
     const capturedRef = useRef([]);
     const stableRef = useRef(0);
     const prevBoxRef = useRef(null);
-    const turnSignRef = useRef(0);
-    const blinkRef = useRef('open'); // 'open' sampai kedipan terdeteksi, lalu 'done'
-    const blinkDetectorRef = useRef(createBlinkDetector());
-    const blinkStepStartRef = useRef(0);
-    const lastFaceAtRef = useRef(0);
     const photoRef = useRef(null);
 
     const [phase, setPhase] = useState('loading'); // loading | camera | uploading | error
     const [errorMsg, setErrorMsg] = useState(null);
-    const [stepIndex, setStepIndex] = useState(0);
     const [captured, setCaptured] = useState(0);
     const [hint, setHint] = useState('Menyiapkan kamera...');
     const [faceOk, setFaceOk] = useState(false);
     const [timeLeft, setTimeLeft] = useState(ENROLLMENT_TIMEOUT_SECONDS);
     const [attempt, setAttempt] = useState(0);
-    const [yaw, setYaw] = useState(null);
 
     const stopCamera = useCallback(() => {
         runningRef.current = false;
@@ -123,18 +66,11 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
     }, []);
 
     const resetProgress = useCallback(() => {
-        stepRef.current = 0;
-        stepCapturesRef.current = 0;
         capturedRef.current = [];
         stableRef.current = 0;
         prevBoxRef.current = null;
-        turnSignRef.current = 0;
-        blinkRef.current = 'open';
-        blinkDetectorRef.current.reset();
         photoRef.current = null;
-        setStepIndex(0);
         setCaptured(0);
-        setYaw(null);
     }, []);
 
     const fail = useCallback((message) => {
@@ -160,9 +96,8 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
         }
         const ctx = canvas.getContext('2d');
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        const color = ok ? 'rgba(52, 211, 153, 0.95)' : 'rgba(251, 191, 36, 0.9)';
+        ctx.fillStyle = ok ? 'rgba(52, 211, 153, 0.95)' : 'rgba(251, 191, 36, 0.9)';
         detections.forEach((det) => {
-            ctx.fillStyle = color;
             det.landmarks.positions.forEach((pt) => {
                 ctx.beginPath();
                 ctx.arc(pt.x, pt.y, Math.max(1.5, frame.width / 320), 0, Math.PI * 2);
@@ -186,62 +121,7 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
         }
     }, [stopCamera]);
 
-    /**
-     * Tahap kedip sebelum kedipan terdeteksi: deteksi ringan (tanpa descriptor) dengan jeda
-     * sangat pendek agar kedipan 0,1-0,3 detik tidak terlewat. Wajah yang hilang sesaat saat
-     * mata terpejam tidak membatalkan kedipan.
-     */
-    const processBlink = useCallback(async (video) => {
-        const frame = { width: video.videoWidth, height: video.videoHeight };
-        const detection = await faceapi.detectSingleFace(video, FAST_DETECTOR_OPTIONS()).withFaceLandmarks();
-        const now = Date.now();
-        const detector = blinkDetectorRef.current;
-
-        if (!detection) {
-            if (now - lastFaceAtRef.current > 1500) {
-                detector.reset();
-                drawOverlay([], frame, false);
-                setFaceOk(false);
-                setHint('Posisikan seluruh wajah di dalam bingkai.');
-            }
-            return;
-        }
-
-        lastFaceAtRef.current = now;
-        const pose = estimatePose(detection.landmarks);
-
-        if (Math.abs(pose.yaw) > 0.15 && !detector.closed) {
-            drawOverlay([detection], frame, false);
-            setFaceOk(false);
-            setHint('Hadapkan wajah lurus ke kamera.');
-            return;
-        }
-
-        drawOverlay([detection], frame, true);
-        setFaceOk(true);
-
-        const state = detector.update(pose.ear, now);
-        if (state === 'blinked') {
-            blinkRef.current = 'done';
-            stableRef.current = 0;
-            prevBoxRef.current = null;
-            setHint('Kedipan terdeteksi. Buka mata dan tahan posisi...');
-        } else if (state === 'closed') {
-            setHint('Bagus, sekarang buka mata kembali.');
-        } else if (state === 'calibrating') {
-            setHint('Lihat lurus ke kamera...');
-        } else {
-            setHint(now - blinkStepStartRef.current > 7000
-                ? 'Pejamkan mata sebentar (sekitar ½ detik), lalu buka kembali.'
-                : 'Kedipkan mata perlahan.');
-        }
-    }, []);
-
     const processFrame = useCallback(async (video) => {
-        if (ENROLLMENT_STEPS[stepRef.current]?.id === 'blink' && blinkRef.current !== 'done') {
-            return processBlink(video);
-        }
-
         const frame = { width: video.videoWidth, height: video.videoHeight };
         const detections = await faceapi
             .detectAllFaces(video, DETECTOR_OPTIONS())
@@ -257,7 +137,6 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
 
         if (detections.length === 0) {
             drawOverlay([], frame, false);
-            setYaw(null);
             return resetStable('Posisikan seluruh wajah di dalam bingkai.');
         }
         if (detections.length > 1) {
@@ -267,20 +146,12 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
 
         const detection = detections[0];
         const box = detection.detection.box;
-        const step = ENROLLMENT_STEPS[stepRef.current];
-        setYaw(estimatePose(detection.landmarks).yaw);
         const brightness = faceBrightness(video, box, samplerRef.current);
-        const quality = assessFace(detection, visibleRegion(video), brightness, { relaxed: Boolean(step.relaxed) });
+        const quality = assessFace(detection, visibleRegion(video), brightness);
 
         if (!quality.ok) {
             drawOverlay(detections, frame, false);
             return resetStable(quality.hint);
-        }
-
-        const poseCheck = poseMatchesStep(step.id, quality.pose, turnSignRef.current);
-        if (!poseCheck.ok) {
-            drawOverlay(detections, frame, false);
-            return resetStable(poseCheck.hint);
         }
 
         drawOverlay(detections, frame, true);
@@ -288,7 +159,7 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
 
         stableRef.current = isStable(prevBoxRef.current, box, frame.width) ? stableRef.current + 1 : 1;
         prevBoxRef.current = box;
-        if (stableRef.current < step.frames) {
+        if (stableRef.current < STABLE_FRAMES) {
             setHint('Tahan posisi, jangan bergerak...');
             return;
         }
@@ -302,30 +173,16 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
 
         capturedRef.current.push(descriptor);
         setCaptured(capturedRef.current.length);
-        if (step.id === 'front' && !photoRef.current) photoRef.current = capturePhoto(video);
-        if (step.id === 'turn_a') turnSignRef.current = Math.sign(quality.pose.yaw);
-
+        if (!photoRef.current) photoRef.current = capturePhoto(video);
         stableRef.current = 0;
         prevBoxRef.current = null;
-        stepCapturesRef.current += 1;
 
-        if (stepCapturesRef.current >= step.captures) {
-            stepCapturesRef.current = 0;
-            stepRef.current += 1;
-            blinkRef.current = 'open';
-            blinkDetectorRef.current.reset();
-            blinkStepStartRef.current = Date.now();
-            lastFaceAtRef.current = Date.now();
-            if (stepRef.current >= ENROLLMENT_STEPS.length) {
-                await finish();
-                return;
-            }
-            setStepIndex(stepRef.current);
-            setHint(ENROLLMENT_STEPS[stepRef.current].detail);
-        } else {
-            setHint('Bagus. Tahan sebentar lagi...');
+        if (capturedRef.current.length >= FRONT_SAMPLES) {
+            await finish();
+            return;
         }
-    }, [finish, processBlink, resetProgress]);
+        setHint('Bagus. Tahan sebentar lagi...');
+    }, [finish, resetProgress]);
 
     // Muat model + nyalakan kamera (ulang setiap kali "Coba Lagi")
     useEffect(() => {
@@ -362,7 +219,7 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
             }
 
             setPhase('camera');
-            setHint(ENROLLMENT_STEPS[0].detail);
+            setHint('Lihat lurus ke kamera dengan wajah tepat di dalam bingkai.');
             runningRef.current = true;
 
             const tick = async () => {
@@ -375,9 +232,7 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
                         // frame gagal diproses; lanjut ke frame berikutnya
                     }
                 }
-                // Tahap kedip memakai jeda sangat pendek agar kedipan singkat tetap tertangkap.
-                const blinkPending = ENROLLMENT_STEPS[stepRef.current]?.id === 'blink' && blinkRef.current !== 'done';
-                if (runningRef.current) loopRef.current = setTimeout(tick, blinkPending ? 15 : 120);
+                if (runningRef.current) loopRef.current = setTimeout(tick, 120);
             };
             tick();
         };
@@ -401,8 +256,7 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
         return () => clearTimeout(timer);
     }, [phase, timeLeft, fail]);
 
-    const step = ENROLLMENT_STEPS[Math.min(stepIndex, ENROLLMENT_STEPS.length - 1)];
-    const progress = Math.round((captured / TOTAL_CAPTURES) * 100);
+    const progress = Math.round((captured / FRONT_SAMPLES) * 100);
 
     return (
         <div className={`relative bg-black w-full aspect-[3/4] overflow-hidden ${className}`}>
@@ -426,22 +280,15 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
                 </div>
             )}
 
-            {/* Instruksi tahap */}
+            {/* Instruksi */}
             {phase === 'camera' && (
                 <div className="absolute top-3 inset-x-3 z-20">
                     <div className="rounded-2xl bg-slate-900/75 backdrop-blur-md border border-white/10 px-3.5 py-2.5 text-white">
                         <div className="flex items-center justify-between gap-2">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-white/60">
-                                Langkah {stepIndex + 1} dari {ENROLLMENT_STEPS.length}
-                            </p>
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-white/60">Wajah menghadap depan</p>
                             <span className={`text-[10px] font-black ${timeLeft <= 15 ? 'text-rose-300' : 'text-white/70'}`}>{timeLeft}s</span>
                         </div>
-                        <p className="text-sm font-extrabold leading-snug mt-0.5">{step.title}</p>
-                        <div className="mt-2 flex gap-1.5">
-                            {ENROLLMENT_STEPS.map((s, i) => (
-                                <span key={s.id} className={`h-1.5 flex-1 rounded-full ${i < stepIndex ? 'bg-emerald-400' : i === stepIndex ? 'bg-white' : 'bg-white/25'}`} />
-                            ))}
-                        </div>
+                        <p className="text-sm font-extrabold leading-snug mt-0.5">Lihat lurus ke kamera dan tahan posisi</p>
                     </div>
                 </div>
             )}
@@ -449,7 +296,6 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
             {/* Petunjuk + progres */}
             {phase === 'camera' && (
                 <div className="absolute bottom-3 inset-x-3 z-20">
-                    {step.relaxed && <YawMeter yaw={yaw} stepId={step.id} turnSign={turnSignRef.current} />}
                     <div className={`rounded-xl px-3 py-2 text-center text-xs font-bold backdrop-blur-md border ${faceOk ? 'bg-emerald-500/25 border-emerald-300/40 text-emerald-50' : 'bg-amber-500/25 border-amber-300/40 text-amber-50'}`}>
                         {hint}
                     </div>
@@ -457,7 +303,7 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
                         <div className="h-full bg-emerald-400 transition-all duration-300" style={{ width: `${progress}%` }} />
                     </div>
                     <p className="mt-1 text-center text-[10px] font-semibold text-white/70">
-                        {captured} / {TOTAL_CAPTURES} titik data wajah terekam
+                        {captured} / {FRONT_SAMPLES} sampel wajah terekam
                     </p>
                 </div>
             )}

@@ -160,7 +160,7 @@ Presensi wajah hanya untuk peserta yang data wajahnya **sudah disetujui admin**.
 }
 ```
 
-> Data wajah tersimpan bisa berupa beberapa vector (pendaftaran multi-sudut dari web). Server mencocokkan `face_descriptor` dengan vector terdekat setelah normalisasi L2, jadi aplikasi cukup mengirim **satu** vector seperti biasa. Jarak kemiripan tidak lagi dikirim dalam pesan error.
+> Data wajah tersimpan bisa berupa beberapa vector (beberapa sampel wajah depan dari pendaftaran web). Server mencocokkan `face_descriptor` dengan vector terdekat setelah normalisasi L2, jadi aplikasi cukup mengirim **satu** vector seperti biasa. Jarak kemiripan tidak lagi dikirim dalam pesan error.
 
 **Responses Error**:
 - **400 Bad Request**: `Idempotency-Key` hilang/bukan UUID, mock location terdeteksi, akurasi GPS terlalu rendah, clock skew, wajah tidak cocok, dimensi `face_descriptor` berbeda dengan data terdaftar.
