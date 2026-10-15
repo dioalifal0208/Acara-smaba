@@ -261,7 +261,10 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!data.participant_id && !data.nis_nip.trim()) return;
+        if (!data.participant_id || !selectedParticipant) {
+            setErrorMsg('Pilih nama atau NIP dari daftar terlebih dahulu.');
+            return;
+        }
         if (!signatureData) {
             setErrorMsg('Tanda tangan wajib diisi sebelum mengirim kehadiran.');
             return;
@@ -392,27 +395,27 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
 
     return (
         <>
-            <Head title="Self Check-In - E-Presensi SMABA" />
+            <Head title="Presensi Workcode - E-Presensi SMABA" />
 
-            <div className="relative min-h-[100dvh] bg-slate-50 text-slate-800 flex flex-col justify-between p-4 sm:p-6 overflow-y-auto">
+            <div className="relative min-h-[100dvh] bg-gradient-to-b from-emerald-50 via-slate-50 to-white text-slate-800 flex flex-col justify-between p-4 sm:p-6 overflow-y-auto">
                 {/* Glow Spots */}
                 <div className="absolute top-0 left-0 -translate-x-1/2 -translate-y-1/2 w-72 h-72 rounded-full bg-green-500/5 blur-3xl pointer-events-none" />
                 <div className="absolute bottom-0 right-0 translate-x-1/2 translate-y-1/2 w-80 h-80 rounded-full bg-emerald-500/5 blur-3xl pointer-events-none" />
 
                 {/* Header Logo */}
-                <header className="relative z-10 mx-auto flex h-[72px] flex-none flex-col items-center justify-center text-center" data-aos="fade-down">
-                    <div className="flex justify-center mb-1">
-                        <img src={appUrl('images/logo.png')} alt="Logo E-Presensi SMABA" className="h-10 w-10 object-contain" />
+                <header className="relative z-10 mx-auto flex h-[76px] flex-none items-center justify-center gap-3 text-left" data-aos="fade-down">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white p-1.5 shadow-sm ring-1 ring-emerald-100">
+                        <img src={appUrl('images/logo.png')} alt="Logo E-Presensi SMABA" className="h-full w-full object-contain" />
                     </div>
                     <div>
-                        <span className="font-extrabold text-sm tracking-tight text-slate-800 block leading-tight">E-Presensi</span>
-                        <span className="text-[9px] text-green-700 block -mt-0.5 font-semibold">SMABA</span>
+                        <span className="block text-sm font-extrabold leading-tight tracking-tight text-slate-800">E-Presensi SMABA</span>
+                        <span className="block text-[10px] font-bold text-emerald-700">SCAN WORKCODE · PRESENSI DIGITAL</span>
                     </div>
                 </header>
 
                 {/* Main Form Card */}
                 <main className="relative z-10 flex-1 flex items-center justify-center my-6 w-full">
-                    <div className="w-full max-w-sm">
+                    <div className="w-full max-w-md">
 
                         {/* Workcode Inactive */}
                         {!activeWorkcode && (
@@ -440,8 +443,8 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
 
                         {/* Form Utama */}
                         {activeWorkcode && !result && (
-                            <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl" data-aos="zoom-in">
-                                <div className="text-center mb-5">
+                            <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-emerald-950/5" data-aos="zoom-in">
+                                <div className="border-b border-emerald-100 bg-emerald-50 px-5 py-4 text-center">
                                     <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-extrabold text-emerald-700 border border-emerald-200 mb-2">
                                         🟢 {activeWorkcode.nama_workcode}
                                     </span>
@@ -449,17 +452,27 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                                     <p className="text-xs text-slate-500 mt-1 font-semibold">Ketik nama atau NIP untuk memilih</p>
                                 </div>
 
-                                <form onSubmit={handleSubmit} className="space-y-4">
+                                <form onSubmit={handleSubmit} className="space-y-4 p-5 sm:p-6">
+                                    <div className="grid grid-cols-2 gap-2" aria-label="Tahapan presensi">
+                                        <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 ring-1 ring-emerald-100">
+                                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-extrabold text-white">1</span>
+                                            <span className="text-[10px] font-extrabold text-emerald-800">Pilih peserta</span>
+                                        </div>
+                                        <div className={`flex items-center gap-2 rounded-xl px-3 py-2 ring-1 ${selectedParticipant ? 'bg-emerald-50 text-emerald-800 ring-emerald-100' : 'bg-slate-50 text-slate-400 ring-slate-100'}`}>
+                                            <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-extrabold ${selectedParticipant ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'}`}>2</span>
+                                            <span className="text-[10px] font-extrabold">Tanda tangan</span>
+                                        </div>
+                                    </div>
                                     <div className="relative" ref={suggestionsRef}>
-                                        <label htmlFor="nis_nip_input" className="sr-only">Ketik Nama atau NIP Anda</label>
+                                        <label htmlFor="nis_nip_input" className="mb-1.5 block text-xs font-extrabold text-slate-700">Nama atau NIP</label>
                                         <input
                                             id="nis_nip_input"
                                             type="text"
-                                            placeholder="Ketik Nama / NIP Anda..."
+                                            placeholder="Ketik minimal 2 huruf nama atau NIP..."
                                             value={data.nis_nip}
                                             onChange={(e) => handleInputChange(e.target.value)}
                                             onFocus={() => { if (!selectedParticipant && data.nis_nip.trim().length >= 2) setShowSuggestions(true); }}
-                                            className="w-full min-h-[48px] rounded-xl border border-slate-200 bg-slate-50 py-3 px-4 text-center text-sm font-semibold tracking-wide text-slate-800 placeholder-slate-400 focus:bg-white focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/10 shadow-sm"
+                                            className="w-full min-h-[50px] rounded-xl border border-slate-200 bg-slate-50 py-3 px-4 text-sm font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/10 shadow-sm"
                                             required
                                             disabled={processing || isLocating}
                                             autoComplete="off"
@@ -478,20 +491,19 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                                                     </div>
                                                 ) : suggestions.length > 0 ? (
                                                     suggestions.map((p) => (
-                                                        <div
+                                                        <button
+                                                            type="button"
                                                             key={p.id}
                                                             role="option"
-                                                            aria-selected="false"
-                                                            tabIndex={0}
+                                                            aria-selected={selectedParticipant?.id === p.id}
                                                             onClick={() => handleSelectSuggestion(p)}
-                                                            onKeyDown={(e) => { if (e.key === 'Enter') handleSelectSuggestion(p); }}
-                                                            className="px-4 py-3 text-left transition-colors hover:bg-slate-50 focus:bg-slate-50 focus:outline-none cursor-pointer"
+                                                            className="block w-full px-4 py-3 text-left transition-colors hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none"
                                                         >
                                                             <p className="text-sm font-semibold text-slate-800">{p.nama}</p>
                                                             <p className="text-[11px] text-green-700 font-bold mt-0.5">
                                                                 {p.nis_nip || `${p.status || 'GTT/PTT'} · Tanpa NIP`}
                                                             </p>
-                                                        </div>
+                                                        </button>
                                                     ))
                                                 ) : (
                                                     <div className="px-4 py-4 text-center">
@@ -502,7 +514,20 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                                         )}
                                     </div>
 
-                                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                                    {selectedParticipant ? (
+                                        <>
+                                            <div className="flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-3">
+                                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-sm font-extrabold text-white">
+                                                    {selectedParticipant.nama?.charAt(0)?.toUpperCase()}
+                                                </span>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="truncate text-sm font-extrabold text-emerald-950">{selectedParticipant.nama}</p>
+                                                    <p className="text-[11px] font-bold text-emerald-700">{selectedParticipant.nis_nip || `${selectedParticipant.status || 'GTT/PTT'} · Tanpa NIP`}</p>
+                                                </div>
+                                                <span className="text-[10px] font-extrabold text-emerald-700">DIPILIH</span>
+                                            </div>
+
+                                    <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-3">
                                         <div className="mb-2 flex items-center justify-between gap-3">
                                             <div>
                                                 <p className="text-xs font-extrabold text-slate-700">
@@ -534,6 +559,14 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                                             {signatureData ? '✓ Tanda tangan siap disimpan' : 'Belum ada tanda tangan'}
                                         </p>
                                     </div>
+                                        </>
+                                    ) : (
+                                        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-center">
+                                            <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-sm font-bold text-slate-500">2</div>
+                                            <p className="text-xs font-extrabold text-slate-600">Pilih nama atau NIP terlebih dahulu</p>
+                                            <p className="mt-1 text-[10px] font-medium text-slate-400">Area tanda tangan akan terbuka setelah peserta dipilih.</p>
+                                        </div>
+                                    )}
 
                                     {errorMsg && (
                                         <p className="text-[11px] text-red-600 text-center font-semibold flex items-center justify-center gap-1" role="alert">
@@ -543,7 +576,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
 
                                     <button
                                         type="submit"
-                                        disabled={processing || isLocating}
+                                        disabled={processing || isLocating || !selectedParticipant || !signatureData}
                                         className="w-full min-h-[48px] rounded-xl bg-green-700 py-3 text-sm font-bold text-white shadow-md shadow-green-500/20 transition-all hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500/50 disabled:opacity-50 flex items-center justify-center gap-2"
                                     >
                                         {isLocating ? (
@@ -556,7 +589,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                                                 <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                                                 Memproses Data...
                                             </>
-                                        ) : 'Kirim Kehadiran'}
+                                        ) : !selectedParticipant ? 'Pilih Peserta Terlebih Dahulu' : !signatureData ? 'Bubuhkan Tanda Tangan' : 'Kirim Kehadiran'}
                                     </button>
                                 </form>
                             </div>
