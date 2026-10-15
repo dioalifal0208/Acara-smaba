@@ -12,6 +12,7 @@ import {
     loadEnrollmentModels,
     visibleRegion,
 } from '@/Utils/faceEnrollment';
+import { createLivenessChallenge } from '@/Utils/liveness';
 
 const cameraErrorMessage = (error) => {
     switch (error?.name) {
@@ -49,8 +50,11 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
     const stableRef = useRef(0);
     const prevBoxRef = useRef(null);
     const photoRef = useRef(null);
+    const stageRef = useRef('samples'); // samples (ambil sampel wajah depan) | liveness (wajah biasa lalu senyum)
+    const livenessRef = useRef(createLivenessChallenge());
 
     const [phase, setPhase] = useState('loading'); // loading | camera | uploading | error
+    const [stage, setStage] = useState('samples');
     const [errorMsg, setErrorMsg] = useState(null);
     const [captured, setCaptured] = useState(0);
     const [hint, setHint] = useState('Menyiapkan kamera...');
@@ -70,6 +74,9 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
         stableRef.current = 0;
         prevBoxRef.current = null;
         photoRef.current = null;
+        stageRef.current = 'samples';
+        livenessRef.current = createLivenessChallenge();
+        setStage('samples');
         setCaptured(0);
     }, []);
 
@@ -121,7 +128,49 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
         }
     }, [stopCamera]);
 
+    /** Tahap verifikasi wajah hidup: wajah biasa lalu senyum, plus cek 3D pasif (lihat Utils/liveness). */
+    const processLiveness = useCallback(async (video) => {
+        const frame = { width: video.videoWidth, height: video.videoHeight };
+        const detection = await faceapi
+            .detectSingleFace(video, DETECTOR_OPTIONS())
+            .withFaceLandmarks()
+            .withFaceExpressions()
+            .withFaceDescriptor();
+
+        if (!detection) {
+            drawOverlay([], frame, false);
+            setFaceOk(false);
+            setHint('Posisikan seluruh wajah di dalam bingkai.');
+            return;
+        }
+
+        const challenge = livenessRef.current;
+        const passed = challenge.validate(detection);
+        drawOverlay([detection], frame, !challenge.failure);
+        setFaceOk(!challenge.failure);
+        setHint(challenge.instruction);
+
+        if (challenge.failure) {
+            fail(challenge.failure);
+            return;
+        }
+        if (!passed) return;
+
+        // Wajah yang tersenyum harus orang yang sama dengan sampel wajah depan.
+        const reference = capturedRef.current[0];
+        if (reference && faceapi.euclideanDistance(reference, detection.descriptor) > SAME_PERSON_MAX_DISTANCE + 0.1) {
+            fail('Wajah saat verifikasi berbeda dengan wajah yang direkam. Ulangi pendaftaran.');
+            return;
+        }
+
+        await finish();
+    }, [fail, finish]);
+
     const processFrame = useCallback(async (video) => {
+        if (stageRef.current === 'liveness') {
+            return processLiveness(video);
+        }
+
         const frame = { width: video.videoWidth, height: video.videoHeight };
         const detections = await faceapi
             .detectAllFaces(video, DETECTOR_OPTIONS())
@@ -178,11 +227,13 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
         prevBoxRef.current = null;
 
         if (capturedRef.current.length >= FRONT_SAMPLES) {
-            await finish();
+            stageRef.current = 'liveness';
+            setStage('liveness');
+            setHint(livenessRef.current.instruction);
             return;
         }
         setHint('Bagus. Tahan sebentar lagi...');
-    }, [finish, resetProgress]);
+    }, [processLiveness, resetProgress]);
 
     // Muat model + nyalakan kamera (ulang setiap kali "Coba Lagi")
     useEffect(() => {
@@ -256,7 +307,7 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
         return () => clearTimeout(timer);
     }, [phase, timeLeft, fail]);
 
-    const progress = Math.round((captured / FRONT_SAMPLES) * 100);
+    const progress = stage === 'liveness' ? 90 : Math.round((captured / FRONT_SAMPLES) * 80);
 
     return (
         <div className={`relative bg-black w-full aspect-[3/4] overflow-hidden ${className}`}>
@@ -285,10 +336,10 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
                 <div className="absolute top-3 inset-x-3 z-20">
                     <div className="rounded-2xl bg-slate-900/75 backdrop-blur-md border border-white/10 px-3.5 py-2.5 text-white">
                         <div className="flex items-center justify-between gap-2">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-white/60">Wajah menghadap depan</p>
+                            <p className="text-[10px] font-bold uppercase tracking-wider text-white/60">{stage === 'samples' ? 'Langkah 1 dari 2 · Wajah menghadap depan' : 'Langkah 2 dari 2 · Verifikasi wajah hidup'}</p>
                             <span className={`text-[10px] font-black ${timeLeft <= 15 ? 'text-rose-300' : 'text-white/70'}`}>{timeLeft}s</span>
                         </div>
-                        <p className="text-sm font-extrabold leading-snug mt-0.5">Lihat lurus ke kamera dan tahan posisi</p>
+                        <p className="text-sm font-extrabold leading-snug mt-0.5">{stage === 'samples' ? 'Lihat lurus ke kamera dan tahan posisi' : 'Wajah biasa dulu, lalu tersenyum saat diminta'}</p>
                     </div>
                 </div>
             )}
@@ -303,7 +354,7 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
                         <div className="h-full bg-emerald-400 transition-all duration-300" style={{ width: `${progress}%` }} />
                     </div>
                     <p className="mt-1 text-center text-[10px] font-semibold text-white/70">
-                        {captured} / {FRONT_SAMPLES} sampel wajah terekam
+                        {stage === 'samples' ? `${captured} / ${FRONT_SAMPLES} sampel wajah terekam` : 'Sampel wajah terekam · memverifikasi wajah hidup'}
                     </p>
                 </div>
             )}

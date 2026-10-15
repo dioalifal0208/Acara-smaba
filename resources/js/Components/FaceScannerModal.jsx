@@ -29,7 +29,7 @@ export default function FaceScannerModal({ activeWorkcode, participant, onClose,
     // Liveness states
     const [challenge, setChallenge] = useState(null);
     const [challengePassed, setChallengePassed] = useState(false);
-    const [timeLeft, setTimeLeft] = useState(15); // 15 seconds for challenge
+    const [timeLeft, setTimeLeft] = useState(25); // detik untuk verifikasi wajah hidup (wajah biasa lalu senyum)
     
     // Result
     const [result, setResult] = useState(null);
@@ -120,7 +120,7 @@ export default function FaceScannerModal({ activeWorkcode, participant, onClose,
         if (isStreamActive && !challenge && !result) {
             const initialChallenge = getRandomChallenge();
             setChallenge(initialChallenge);
-            setTimeLeft(15);
+            setTimeLeft(25);
         }
     }, [isStreamActive, challenge, result]);
 
@@ -171,7 +171,14 @@ export default function FaceScannerModal({ activeWorkcode, participant, onClose,
                         // Execute challenge validator
                         if (challenge.validate(resizedDetection, displaySize)) {
                             setChallengePassed(true);
-                            processAttendance(detection.descriptor);
+                            // Kirim descriptor saat wajah biasa (lebih akurat dari saat tersenyum)
+                            processAttendance(challenge.referenceDescriptor || detection.descriptor);
+                            return;
+                        }
+                        // Foto/layar terdeteksi oleh cek 3D: hentikan dan tampilkan alasannya
+                        if (challenge.failure) {
+                            setErrorMsg(challenge.failure);
+                            stopVideoStream();
                         }
                     }
                 } else {
@@ -351,7 +358,7 @@ export default function FaceScannerModal({ activeWorkcode, participant, onClose,
                                     </svg>
                                 </div>
                                 <p className="text-sm font-bold text-white mb-4">{errorMsg}</p>
-                                <button onClick={() => { setErrorMsg(null); setChallenge(getRandomChallenge(challenge?.id)); setChallengePassed(false); setTimeLeft(15); }} className="rounded-xl bg-white/20 px-6 py-2.5 text-sm font-bold text-white hover:bg-white/30 backdrop-blur-sm mb-2 w-full font-bold">
+                                <button onClick={() => { setErrorMsg(null); setChallenge(getRandomChallenge(challenge?.id)); setChallengePassed(false); setTimeLeft(25); }} className="rounded-xl bg-white/20 px-6 py-2.5 text-sm font-bold text-white hover:bg-white/30 backdrop-blur-sm mb-2 w-full font-bold">
                                     Coba Lagi
                                 </button>
                                 <button onClick={handleClose} className="block rounded-xl bg-slate-800 px-6 py-2.5 text-sm font-bold text-white hover:bg-slate-700 w-full">

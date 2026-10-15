@@ -30,7 +30,7 @@ export default function FaceForm({ token, activeWorkcode }) {
     // Liveness states
     const [challenge, setChallenge] = useState(null);
     const [challengePassed, setChallengePassed] = useState(false);
-    const [timeLeft, setTimeLeft] = useState(15); // 15 seconds for challenge
+    const [timeLeft, setTimeLeft] = useState(25); // detik untuk verifikasi wajah hidup (wajah biasa lalu senyum)
     
     // Result
     const [result, setResult] = useState(null);
@@ -70,6 +70,7 @@ export default function FaceForm({ token, activeWorkcode }) {
                     faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
                     faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
                     faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL),
                 ]);
                 setIsModelsLoaded(true);
             } catch (err) {
@@ -113,7 +114,7 @@ export default function FaceForm({ token, activeWorkcode }) {
         if (isStreamActive && !challenge && !result) {
             const initialChallenge = getRandomChallenge();
             setChallenge(initialChallenge);
-            setTimeLeft(15);
+            setTimeLeft(25);
         }
     }, [isStreamActive, challenge, result]);
 
@@ -149,6 +150,7 @@ export default function FaceForm({ token, activeWorkcode }) {
             try {
                 const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }))
                     .withFaceLandmarks()
+                    .withFaceExpressions()
                     .withFaceDescriptor();
 
                 if (detection) {
@@ -166,7 +168,14 @@ export default function FaceForm({ token, activeWorkcode }) {
                         // Execute challenge validator
                         if (challenge.validate(resizedDetection, displaySize)) {
                             setChallengePassed(true);
-                            processAttendance(detection.descriptor);
+                            // Kirim descriptor saat wajah biasa (lebih akurat dari saat tersenyum)
+                            processAttendance(challenge.referenceDescriptor || detection.descriptor);
+                            return;
+                        }
+                        // Foto/layar terdeteksi oleh cek 3D: hentikan dan tampilkan alasannya
+                        if (challenge.failure) {
+                            setErrorMsg(challenge.failure);
+                            videoRef.current?.srcObject?.getTracks().forEach((t) => t.stop());
                         }
                     }
                 } else {
