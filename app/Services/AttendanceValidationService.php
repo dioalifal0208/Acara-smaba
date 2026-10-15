@@ -25,14 +25,30 @@ class AttendanceValidationService
         }
     }
 
+    /**
+     * Jam buka-tutup presensi datang/pulang untuk hari ini: jadwal per hari (jadwal_per_hari,
+     * kunci 1=Senin s.d. 7=Minggu) bila ada, selain itu jam umum workcode.
+     *
+     * @return array{0: ?string, 1: ?string}
+     */
+    public function todayWindow(Workcode $workcode, bool $isPulang): array
+    {
+        $prefix = $isPulang ? 'jam_pulang' : 'jam_datang';
+        $schedule = $workcode->jadwal_per_hari[now()->dayOfWeekIso] ?? null;
+
+        return [
+            $schedule["{$prefix}_mulai"] ?? $workcode->{"{$prefix}_mulai"},
+            $schedule["{$prefix}_selesai"] ?? $workcode->{"{$prefix}_selesai"},
+        ];
+    }
+
     public function validateTimeWindow(Workcode $workcode, bool $isPulang): void
     {
         if ($workcode->kategori === 'workcode') {
             return;
         }
 
-        $start = $isPulang ? $workcode->jam_pulang_mulai : $workcode->jam_datang_mulai;
-        $end = $isPulang ? $workcode->jam_pulang_selesai : $workcode->jam_datang_selesai;
+        [$start, $end] = $this->todayWindow($workcode, $isPulang);
         $label = $isPulang ? 'pulang' : 'datang';
 
         if (! $start || ! $end) {

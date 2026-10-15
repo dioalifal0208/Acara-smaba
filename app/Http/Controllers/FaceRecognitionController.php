@@ -5,8 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\Attendance;
 use App\Models\Participant;
 use App\Models\Workcode;
-use Carbon\Carbon;
+use App\Services\AttendanceValidationService;
 use App\Support\FaceDescriptor;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -384,17 +385,44 @@ class FaceRecognitionController extends Controller
             ], 422);
         }
 
-        // === Cek apakah sudah absen ===
-        $alreadyAttended = Attendance::where('workcode_id', $activeWorkcode->id)
+        // === Cek presensi hari ini ===
+        // Workcode harian: presensi pertama = datang, presensi kedua = pulang.
+        // Workcode kegiatan: cukup satu kali.
+        $existingAttendance = Attendance::where('workcode_id', $activeWorkcode->id)
             ->where('participant_id', $bestMatch->id)
-            ->whereDate('created_at', now()->toDateString())
-            ->exists();
+            ->whereDate('tanggal', now()->toDateString())
+            ->first();
 
-        if ($alreadyAttended) {
+        if ($existingAttendance) {
+            $isDaily = $activeWorkcode->kategori === 'harian';
+
+            if (! $isDaily || $existingAttendance->waktu_pulang !== null) {
+                return response()->json([
+                    'status' => 'already',
+                    'message' => $isDaily
+                        ? 'Anda sudah melakukan presensi datang dan pulang hari ini untuk workcode "'.$activeWorkcode->nama_workcode.'".'
+                        : 'Anda sudah melakukan presensi untuk workcode "'.$activeWorkcode->nama_workcode.'".',
+                    'participant' => $bestMatch->only(['id', 'nama', 'nis_nip', 'status']),
+                ]);
+            }
+
+            if ($windowError = $this->checkOutWindowError($activeWorkcode)) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => $windowError,
+                ], 400);
+            }
+
+            $existingAttendance->update(['waktu_pulang' => now()]);
+
             return response()->json([
-                'status' => 'already',
-                'message' => 'Anda sudah melakukan presensi untuk workcode "'.$activeWorkcode->nama_workcode.'".',
+                'status' => 'success',
+                'type' => 'pulang',
+                'message' => 'Presensi pulang berhasil dicatat!',
                 'participant' => $bestMatch->only(['id', 'nama', 'nis_nip', 'status']),
+                'timestamp' => $existingAttendance->waktu_pulang->format('H:i:s'),
+                'is_late' => false,
+                'late_formatted' => null,
             ]);
         }
 
@@ -480,12 +508,42 @@ class FaceRecognitionController extends Controller
 
         return response()->json([
             'status' => 'success',
+            'type' => 'datang',
             'message' => 'Presensi berhasil dicatat!',
             'participant' => $bestMatch->only(['id', 'nama', 'nis_nip', 'status']),
             'timestamp' => $attendance->waktu_hadir->format('H:i:s'),
             'is_late' => $isLate,
             'late_formatted' => $lateFormatted,
         ]);
+    }
+
+    /**
+     * Pesan error bila sekarang di luar jam presensi pulang workcode harian, atau null bila boleh.
+     * Memakai jadwal hari ini (jadwal_per_hari) bila ada, selain itu jam pulang umum workcode.
+     */
+    private function checkOutWindowError(Workcode $workcode): ?string
+    {
+        $now = now();
+        [$start, $end] = app(AttendanceValidationService::class)->todayWindow($workcode, isPulang: true);
+
+        if (! $start || ! $end) {
+            return null;
+        }
+
+        $startAt = Carbon::createFromTimeString($start)->setDate($now->year, $now->month, $now->day);
+        $endAt = Carbon::createFromTimeString($end)->setDate($now->year, $now->month, $now->day);
+        if ($endAt->lt($startAt)) {
+            $endAt->addDay();
+        }
+
+        if ($now->lt($startAt)) {
+            return "Presensi datang sudah tercatat. Presensi pulang baru dibuka pukul {$start} WIB.";
+        }
+        if ($now->gt($endAt)) {
+            return "Waktu presensi pulang sudah ditutup ({$start} – {$end} WIB).";
+        }
+
+        return null;
     }
 
     private function storeFaceCapture(string $dataUrl): string

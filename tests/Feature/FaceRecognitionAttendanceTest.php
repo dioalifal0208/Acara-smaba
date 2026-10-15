@@ -107,6 +107,58 @@ class FaceRecognitionAttendanceTest extends TestCase
         $this->assertDatabaseCount('attendances', 0);
     }
 
+    public function test_daily_face_attendance_records_check_in_then_check_out(): void
+    {
+        // Kamis 2026-10-15: jadwal khusus Kamis (4) pulang 14:25-15:30, berbeda dari jam umum 15:30-22:00.
+        Carbon::setTestNow('2026-10-15 06:30:00');
+        $workcode = Workcode::create([
+            'nama_workcode' => 'Presensi Harian',
+            'kategori' => 'harian',
+            'jam_datang_mulai' => '06:00',
+            'jam_datang_selesai' => '07:00',
+            'jam_pulang_mulai' => '15:30',
+            'jam_pulang_selesai' => '22:00',
+            'jadwal_per_hari' => [4 => ['jam_datang_mulai' => '06:00', 'jam_datang_selesai' => '07:00', 'jam_pulang_mulai' => '14:25', 'jam_pulang_selesai' => '15:30']],
+            'is_active' => true,
+        ]);
+        $participant = $this->createParticipantWithFace();
+        $scan = fn () => $this->postJson(route('face.match'), [
+            'descriptor' => array_fill(0, 128, 0.0),
+            'device_id' => 'daily-checkout-device',
+        ]);
+
+        $scan()->assertOk()->assertJsonPath('status', 'success')->assertJsonPath('type', 'datang');
+
+        // Sebelum jam pulang hari ini dibuka: ditolak dengan pesan jelas, bukan "sudah absen".
+        Carbon::setTestNow('2026-10-15 10:00:00');
+        $scan()->assertStatus(400)->assertJsonPath('status', 'error');
+
+        // Jam pulang mengikuti jadwal Kamis (14:25), bukan jam umum (15:30).
+        Carbon::setTestNow('2026-10-15 14:30:00');
+        $scan()->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('type', 'pulang')
+            ->assertJsonPath('timestamp', '14:30:00');
+
+        $scan()->assertOk()->assertJsonPath('status', 'already');
+
+        $attendance = Attendance::where('workcode_id', $workcode->id)->where('participant_id', $participant->id)->sole();
+        $this->assertSame('06:30:00', $attendance->waktu_hadir->format('H:i:s'));
+        $this->assertSame('14:30:00', $attendance->waktu_pulang->format('H:i:s'));
+    }
+
+    public function test_activity_face_attendance_is_only_recorded_once(): void
+    {
+        Carbon::setTestNow('2026-10-15 09:00:00');
+        Workcode::create(['nama_workcode' => 'Rapat', 'kategori' => 'workcode', 'is_active' => true]);
+        $this->createParticipantWithFace();
+        $scan = fn () => $this->postJson(route('face.match'), ['descriptor' => array_fill(0, 128, 0.0), 'device_id' => 'activity-device']);
+
+        $scan()->assertOk()->assertJsonPath('status', 'success');
+        $scan()->assertOk()->assertJsonPath('status', 'already');
+        $this->assertNull(Attendance::sole()->waktu_pulang);
+    }
+
     private function createParticipantWithFace(): Participant
     {
         return Participant::create([

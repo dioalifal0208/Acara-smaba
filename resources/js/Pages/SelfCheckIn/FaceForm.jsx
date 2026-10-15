@@ -308,7 +308,7 @@ export default function FaceForm({ token, activeWorkcode }) {
                             <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
                     </div>
-                    <h2 className="text-lg font-extrabold text-emerald-800 mb-1">{result.status === 'already' ? 'Sudah Absen' : 'Presensi Berhasil!'}</h2>
+                    <h2 className="text-lg font-extrabold text-emerald-800 mb-1">{result.status === 'already' ? 'Sudah Absen' : result.type === 'pulang' ? 'Presensi Pulang Berhasil!' : 'Presensi Datang Berhasil!'}</h2>
                     <p className="text-xs text-slate-500 font-semibold mb-4">{activeWorkcode?.nama_workcode || 'Workcode Aktif'}</p>
                     
                     <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mb-4">
