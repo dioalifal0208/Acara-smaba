@@ -1,0 +1,126 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  php:
+    name: PHP (test, format, audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3' # sama dengan produksi Hostinger
+          extensions: mbstring, sqlite3, pdo_sqlite, gd, zip, intl, xml, fileinfo, curl
+          coverage: none
+
+      - name: Cache Composer
+        uses: actions/cache@v4
+        with:
+          path: ~/.composer/cache/files
+          key: composer-${{ hashFiles('composer.lock') }}
+
+      - run: composer install --no-interaction --prefer-dist --no-progress
+
+      - name: Siapkan .env
+        run: cp .env.example .env && php artisan key:generate
+
+      - name: Format kode (Pint)
+        run: vendor/bin/pint --test
+
+      - name: Test
+        run: php artisan test --compact
+
+      - name: Audit keamanan dependency PHP
+        run: composer audit
+
+  frontend:
+    name: Frontend (build, audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Manifest build yang di-commit merujuk file yang ada
+        run: |
+          node -e '
+            const fs = require("fs");
+            const manifest = JSON.parse(fs.readFileSync("public/build/manifest.json", "utf8"));
+            const files = Object.values(manifest).flatMap((e) => [e.file, ...(e.css || [])]);
+            const missing = files.filter((f) => !fs.existsSync("public/build/" + f));
+            if (missing.length) { console.error("File build hilang:", missing); process.exit(1); }
+            console.log(files.length + " file build OK");
+          '
+
+      # Dependency yang ikut terkirim ke browser: tidak boleh ada celah high/critical.
+      - name: Audit dependency runtime
+        run: npm audit --omit=dev --audit-level=high
+
+      # Tool build (Tailwind 3, dll.) tidak terkirim ke browser: hanya blokir critical.
+      # Sisa celah high di rantai Tailwind 3 tercatat; selesai saat migrasi ke Tailwind 4.
+      - name: Audit seluruh dependency (critical)
+        run: npm audit --audit-level=critical
+
+  secrets:
+    name: Pindai rahasia (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Pasang gitleaks
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz | tar -xz gitleaks
+          sudo mv gitleaks /usr/local/bin/
+
+      # Seluruh riwayat dipindai; temuan lama yang sudah ditinjau ada di .gitleaksignore.
+      - name: Pindai seluruh riwayat Git
+        run: gitleaks git --no-banner --redact --config .gitleaks.toml --gitleaks-ignore-path .gitleaksignore .
+
+  guards:
+    name: Aturan privasi
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tidak ada data wajah yang dicatat ke log
+        run: |
+          # Menangkap VARIABEL descriptor/jarak yang dikirim ke log (bukan sekadar kata di pesan).
+          if grep -rniE 'Log::[a-z]+\(.*\$[a-z_>-]*(descriptor|distance|jarak)' app; then
+            echo "::error::Jangan mencatat descriptor/jarak wajah ke log (docs/security.md)."; exit 1
+          fi
+
+      - name: Data pribadi tidak disimpan di disk publik
+        run: |
+          # MigratePrivateFiles memang membaca disk publik untuk memindahkan file lama.
+          if grep -rnE --exclude=MigratePrivateFiles.php "disk\(['\"]public['\"]\)|->store(As)?\([^)]*['\"]public['\"]" app; then
+            echo "::error::Foto/dokumen peserta harus di disk 'private' (App\\Support\\PrivateFile)."; exit 1
+          fi
+
+      - name: Tidak ada URL /storage untuk file pribadi
+        run: |
+          if grep -rnE "(url|asset)\(['\"]/?storage/" app; then
+            echo "::error::Gunakan PrivateFile::url(), bukan URL /storage."; exit 1
+          fi

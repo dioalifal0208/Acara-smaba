@@ -58,7 +58,7 @@ class PhotoChangeRequestTest extends TestCase
         Storage::disk('private')->put('faces/approved.jpg', 'approved-photo');
 
         Sanctum::actingAs($user, ['role:participant']);
-        $key = '2ec2c422-f8af-4c7b-a045-e6a2d6dd2355';
+        $key = '2ec2c422-f8af-4c7b-a045-e6a2d6dd2355'; // gitleaks:allow (UUID contoh Idempotency-Key, bukan rahasia)
 
         $response = $this->withHeaders(['Idempotency-Key' => $key])
             ->post('/api/v1/me/photo-change-requests', [
@@ -86,7 +86,7 @@ class PhotoChangeRequestTest extends TestCase
 
         $this->assertSame(1, PhotoChangeRequest::count());
 
-        $this->withHeaders(['Idempotency-Key' => 'b40b6bf7-2a21-45ae-ae91-7d5c76be1dc6'])
+        $this->withHeaders(['Idempotency-Key' => 'b40b6bf7-2a21-45ae-ae91-7d5c76be1dc6']) // gitleaks:allow (UUID contoh)
             ->post('/api/v1/me/photo-change-requests', [
                 'photo' => UploadedFile::fake()->image('wajah-lain.jpg', 320, 320),
                 'face_descriptor' => [0.7, 0.6],

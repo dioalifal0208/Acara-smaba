@@ -99,7 +99,12 @@ Catatan:
 
 ## Definition of Done Fase 3
 
-- [ ] `php artisan test` jalan di lokal dan CI; hasil baseline terdokumentasi.
-- [ ] Seluruh test keamanan di §3.3 ada dan lulus.
-- [ ] CI menjalankan test, Pint, audit dependensi, build frontend, dan secret scan; `main` terproteksi.
-- [ ] Tidak ada test yang di-skip tanpa catatan alasan.
+Status per 15 Oktober 2026 — detail di [baseline.md](baseline.md).
+
+- [x] `php artisan test` jalan di lokal (155 lulus, ±7,5 detik) dan CI; baseline terdokumentasi. Test tidak lagi mengirim push FCM sungguhan (stub di `tests/TestCase.php`).
+- [x] Test keamanan §3.3 ada dan lulus (pemetaan ke file test di `baseline.md`).
+- [x] CI (`.github/workflows/ci.yml`) menjalankan test, Pint, `composer audit`, build frontend + cek manifest, `npm audit`, gitleaks seluruh riwayat, dan aturan privasi. Celah dependency PHP/JS runtime yang ada sudah diperbarui.
+- [ ] `main` terproteksi — **perlu pemilik di GitHub** (Settings → Branches). Karena `deploy` mendorong langsung ke `main`, cukup larang force-push dan penghapusan branch; jangan wajibkan pull request agar skrip deploy tetap jalan.
+- [x] Tidak ada test yang di-skip.
+- [ ] 3.5 pre-commit lokal (opsional) — tidak dikerjakan; skrip `deploy` sudah menjalankan seluruh test sebelum commit.
+- [ ] Migrasi Tailwind 3 → 4 untuk menutup sisa celah *high* pada tool build (tidak terkirim ke browser).

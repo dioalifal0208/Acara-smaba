@@ -1,0 +1,8 @@
+# Temuan lama yang sudah ditinjau (lihat docs/implementation/phase-3-baseline-ci.md).
+# - generic-api-key di test: UUID Idempotency-Key contoh, bukan rahasia.
+# - hardcoded-deploy-password: password SSH Hostinger di riwayat lama; sudah dihapus dari kode,
+#   TIDAK dirotasi atas keputusan pemilik (akun dipakai bersama). Lihat docs/implementation/phase-0-emergency.md.
+c86128ab19f1711357af8d7416d7555a90a63594:tests/Feature/Api/PhotoChangeRequestTest.php:generic-api-key:56
+c86128ab19f1711357af8d7416d7555a90a63594:tests/Feature/Api/PhotoChangeRequestTest.php:generic-api-key:84
+a2bcfc308d084e29c8df4c1645ebde175f1ed3fc:deploy/test.ps1:hardcoded-deploy-password:14
+3f7376d1558f496833139717c0505fcab0ea841f:deploy/deploy.ps1:hardcoded-deploy-password:14

@@ -1,0 +1,16 @@
+# Konfigurasi pemindai rahasia (gitleaks): aturan bawaan + aturan khusus project.
+# Dijalankan di CI (.github/workflows/ci.yml) untuk setiap push/PR.
+[extend]
+useDefault = true
+
+# Password yang ditulis langsung di skrip deploy/env (contoh bocoran lama: $SSH_PASS di deploy/test.ps1).
+[[rules]]
+id = "hardcoded-deploy-password"
+description = "Password SSH/DB/hosting tertulis langsung di kode atau skrip"
+regex = '''(?i)\$?\b(ssh_pass(word)?|ftp_pass(word)?|db_password|mysql_pwd|hostinger_pass(word)?)\b\s*[:=]\s*["']?[^\s"'$]{6,}'''
+keywords = ["ssh_pass", "ftp_pass", "db_password", "mysql_pwd", "hostinger_pass"]
+
+[rules.allowlist]
+# Nilai placeholder/kosong di contoh konfigurasi bukan rahasia.
+regexes = ['''(?i)(=|:)\s*["']?(null|\$\{|<|your|example|changeme|secret\b)''']
+paths = ['''\.env\.example$''', '''\.env\.deploy\.example$''']
