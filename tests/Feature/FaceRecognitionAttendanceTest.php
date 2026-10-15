@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Attendance;
 use App\Models\Participant;
+use App\Models\User;
 use App\Models\Workcode;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -13,6 +14,14 @@ use Tests\TestCase;
 class FaceRecognitionAttendanceTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // /api/face/match wajib login; skenario di sini = scanner wajah oleh admin.
+        $this->actingAs(User::factory()->create(['role' => 'admin']));
+    }
 
     protected function tearDown(): void
     {

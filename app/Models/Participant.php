@@ -37,7 +37,37 @@ class Participant extends Model
     protected $hidden = [
         'face_descriptor',
         'photo_path',
+        // Isi QR pribadi: siapa pun yang memegangnya bisa dipresensikan lewat scanner.
+        'qr_token',
     ];
+
+    /**
+     * NIS/NIP tersamar (4 digit terakhir) untuk membedakan peserta bernama sama di halaman
+     * publik tanpa membocorkan nomor lengkap.
+     */
+    public function maskedNisNip(): ?string
+    {
+        if (! $this->nis_nip) {
+            return null;
+        }
+
+        return str_repeat('•', max(0, mb_strlen($this->nis_nip) - 4)).mb_substr($this->nis_nip, -4);
+    }
+
+    /**
+     * Data peserta minimal untuk respons publik (self check-in).
+     *
+     * @return array{id: int, nama: string, nis_nip: ?string, status: ?string}
+     */
+    public function toPublicArray(): array
+    {
+        return [
+            'id' => $this->id,
+            'nama' => $this->nama,
+            'nis_nip' => $this->maskedNisNip(),
+            'status' => $this->status,
+        ];
+    }
 
     /**
      * URL foto wajah bertanda tangan sementara (lihat App\Support\PrivateFile).

@@ -4,6 +4,12 @@ Dokumen ini mendeskripsikan spesifikasi endpoint API untuk modul presensi pada s
 
 ---
 
+## Masa Berlaku Token (sejak Okt 2026)
+
+Token dari `POST /api/v1/auth/login` **kedaluwarsa setelah 30 hari**. Setiap respons `401 Unauthenticated` berarti token habis atau dicabut: hapus token tersimpan dan arahkan pengguna ke layar login. Satu akun menyimpan maksimal **5 token** (5 perangkat/login terakhir); login ke-6 otomatis mencabut token terlama.
+
+---
+
 ## Header Idempotency-Key
 
 Header `Idempotency-Key` **wajib** dikirim pada setiap **request tulis (POST)** berikut:

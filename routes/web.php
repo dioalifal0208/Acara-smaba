@@ -66,12 +66,6 @@ Route::get('/', function () {
     ]);
 });
 
-// Route publik untuk lookup peserta & download QR Code
-Route::get('/api/participants/lookup', [ParticipantController::class, 'lookup'])->name('participants.lookup');
-Route::get('/participants/{participant}/qr', [ParticipantController::class, 'qrCode'])->name('participants.qr');
-Route::get('/participants/{participant}/download-svg', [ParticipantController::class, 'downloadSvg'])->name('participants.download.svg');
-Route::get('/participants/{participant}/download-png', [ParticipantController::class, 'downloadPng'])->name('participants.download.png');
-
 Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     // Dashboard route
     Route::get('/dashboard', function () {
@@ -118,6 +112,7 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::post('/participants/import/confirm', [ParticipantController::class, 'importConfirm'])->name('participants.import.confirm');
     Route::delete('/participants/bulk-delete', [ParticipantController::class, 'bulkDestroy'])->name('participants.bulk-destroy');
     Route::put('/participants/{participant}', [ParticipantController::class, 'update'])->name('participants.update');
+    Route::post('/participants/{participant}/qr/regenerate', [ParticipantController::class, 'regenerateQrToken'])->name('participants.qr.regenerate');
     Route::delete('/participants/{participant}', [ParticipantController::class, 'destroy'])->name('participants.destroy');
 
     // Face Registration routes (Admin)
@@ -183,30 +178,42 @@ Route::middleware(['auth', 'verified', 'role:participant'])->group(function () {
 });
 
 Route::middleware('auth')->group(function () {
+    // QR pribadi peserta: hanya admin atau peserta pemiliknya (dicek di ParticipantController).
+    // Isi QR = token presensi, jadi tidak boleh bisa diambil publik.
+    Route::get('/participants/{participant}/qr', [ParticipantController::class, 'qrCode'])->name('participants.qr');
+    Route::get('/participants/{participant}/download-svg', [ParticipantController::class, 'downloadSvg'])->name('participants.download.svg');
+    Route::get('/participants/{participant}/download-png', [ParticipantController::class, 'downloadPng'])->name('participants.download.png');
+
     // Profile routes
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
-// Public Self Check-In routes (no login required)
-Route::get('/api/participants/search', [ParticipantController::class, 'search'])->name('participants.search');
-Route::get('/self-checkin/{token}/participants', [SelfCheckInController::class, 'searchParticipants'])->name('self-checkin.participants');
-Route::get('/self-checkin/{token}', [SelfCheckInController::class, 'showForm'])->name('self-checkin.show');
-Route::post('/self-checkin/{token}', [SelfCheckInController::class, 'submitForm'])->name('self-checkin.submit');
+// Self check-in publik (tanpa login) lewat token Master QR. Dibatasi per IP, tapi longgar karena
+// banyak peserta bisa berbagi satu IP WiFi sekolah (NAT) saat acara.
+Route::get('/self-checkin/{token}/participants', [SelfCheckInController::class, 'searchParticipants'])
+    ->middleware('throttle:300,1')->name('self-checkin.participants');
+Route::get('/self-checkin/{token}', [SelfCheckInController::class, 'showForm'])
+    ->middleware('throttle:300,1')->name('self-checkin.show');
+Route::post('/self-checkin/{token}', [SelfCheckInController::class, 'submitForm'])
+    ->middleware('throttle:120,1')->name('self-checkin.submit');
 
 // Public Holidays API
-Route::get('/api/holidays', [HolidayController::class, 'index'])->name('api.holidays');
+Route::get('/api/holidays', [HolidayController::class, 'index'])->middleware('throttle:120,1')->name('api.holidays');
 
-// Public Face Recognition routes
-Route::post('/api/face/match', [FaceRecognitionController::class, 'match'])->name('face.match');
+// Presensi wajah web: wajib login. Admin (scanner) mencocokkan ke semua wajah yang disetujui;
+// peserta hanya dicocokkan 1:1 dengan wajahnya sendiri (lihat FaceRecognitionController::match).
+Route::post('/api/face/match', [FaceRecognitionController::class, 'match'])
+    ->middleware(['auth', 'throttle:face-match'])
+    ->name('face.match');
 
 // File pribadi peserta (foto wajah, foto presensi, tanda tangan, dokumen izin).
 // Hanya bisa dibuka lewat URL bertanda tangan sementara buatan server (App\Support\PrivateFile).
 Route::get('/files/{type}/{id}', [PrivateFileController::class, 'show'])
     ->whereIn('type', array_keys(PrivateFile::TYPES))
     ->whereNumber('id')
-    ->middleware(['signed', 'throttle:120,1'])
+    ->middleware(['signed', 'throttle:600,1']) // halaman admin bisa memuat ratusan foto sekaligus
     ->name('files.show');
 
 // Fallback untuk file publik non-sensitif bila symlink storage tidak tersedia di hosting.
@@ -227,6 +234,8 @@ Route::get('/storage/{path}', function (string $path) {
 })->where('path', '.*')->name('storage.file');
 
 // Verification route
-Route::get('/verify-signature/{workcode}', [VerificationController::class, 'verify'])->name('signature.verify');
+Route::get('/verify-signature/{workcode}', [VerificationController::class, 'verify'])
+    ->middleware(['signed', 'throttle:60,1'])
+    ->name('signature.verify');
 
 require __DIR__.'/auth.php';

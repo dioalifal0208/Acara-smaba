@@ -50,7 +50,8 @@ return [
     |
     */
 
-    'expiration' => null,
+    // Token API (Android) kedaluwarsa setelah 30 hari (menit). Aplikasi harus login ulang saat 401.
+    'expiration' => env('SANCTUM_EXPIRATION', 60 * 24 * 30),
 
     /*
     |--------------------------------------------------------------------------

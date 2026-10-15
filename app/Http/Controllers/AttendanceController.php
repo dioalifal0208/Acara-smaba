@@ -12,6 +12,7 @@ use App\Services\QrCodeService;
 use App\Support\PrivateFile;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
@@ -512,7 +513,9 @@ class AttendanceController extends Controller
     public function qrSignature(Workcode $workcode, QrCodeService $qrCodeService)
     {
         // URL verifikasi tanda tangan digital
-        $verifyUrl = route('signature.verify', $workcode->id);
+        // URL bertanda tangan permanen (QR tercetak di laporan): ID workcode berurutan tidak bisa
+        // ditebak untuk membuka laporan lain.
+        $verifyUrl = URL::signedRoute('signature.verify', ['workcode' => $workcode->id]);
         $svg = $qrCodeService->generate($verifyUrl, 200);
 
         return response($svg, 200, [

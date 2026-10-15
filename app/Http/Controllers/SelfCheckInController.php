@@ -22,7 +22,7 @@ class SelfCheckInController extends Controller
     private function getWorkcodeToken()
     {
         return Cache::remember('active_workcode_token', now()->endOfDay(), function () {
-            return Str::random(16);
+            return Str::random(32); // berganti otomatis tiap hari (cache s.d. akhir hari)
         });
     }
 
@@ -81,7 +81,7 @@ class SelfCheckInController extends Controller
         $activeToken = $this->getWorkcodeToken();
         $activeWorkcode = Workcode::getActive();
 
-        if ($token !== $activeToken) {
+        if (! hash_equals($activeToken, (string) $token)) {
             abort(403, 'Tautan presensi tidak valid atau telah kadaluarsa.');
         }
 
@@ -96,7 +96,7 @@ class SelfCheckInController extends Controller
      */
     public function searchParticipants(Request $request, string $token)
     {
-        if ($token !== $this->getWorkcodeToken()) {
+        if (! hash_equals($this->getWorkcodeToken(), $token)) {
             return response()->json([
                 'message' => 'Tautan presensi telah kadaluarsa atau tidak valid.',
             ], 403);
@@ -105,13 +105,15 @@ class SelfCheckInController extends Controller
         $query = trim((string) $request->query('query', ''));
         $activeWorkcodes = Workcode::getActiveWorkcodes();
 
-        if (mb_strlen($query) < 2 || $activeWorkcodes->isEmpty()) {
+        // Nama minimal 3 huruf; NIS/NIP hanya cocok bila diketik lengkap (bukan awalan),
+        // agar endpoint publik ini tidak bisa dipakai menebak/mendaftar nomor peserta.
+        if (mb_strlen($query) < 3 || $activeWorkcodes->isEmpty()) {
             return response()->json([]);
         }
 
         $participants = Participant::query()
             ->where(function ($participantQuery) use ($query) {
-                $participantQuery->where('nis_nip', 'like', $query.'%')
+                $participantQuery->where('nis_nip', $query)
                     ->orWhere('nama', 'like', '%'.$query.'%');
             })
             ->limit(30)
@@ -133,27 +135,13 @@ class SelfCheckInController extends Controller
             })
             ->filter(fn (Participant $participant) => $participant->available_workcodes->isNotEmpty())
             ->take(5)
+            ->map(fn (Participant $participant) => [
+                ...$participant->toPublicArray(),
+                'available_workcodes' => $participant->available_workcodes,
+            ])
             ->values();
 
         return response()->json($participants);
-    }
-
-    /**
-     * Tampilkan halaman form Face Check-In.
-     */
-    public function showFaceForm($token)
-    {
-        $activeToken = $this->getWorkcodeToken();
-        $activeWorkcode = Workcode::getActive();
-
-        if ($token !== $activeToken) {
-            abort(403, 'Tautan presensi tidak valid atau telah kadaluarsa.');
-        }
-
-        return Inertia::render('SelfCheckIn/FaceForm', [
-            'activeWorkcode' => $activeWorkcode,
-            'token' => $token,
-        ]);
     }
 
     /**
@@ -163,7 +151,7 @@ class SelfCheckInController extends Controller
     {
         $activeToken = $this->getWorkcodeToken();
 
-        if ($token !== $activeToken) {
+        if (! hash_equals($activeToken, (string) $token)) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'Tautan presensi telah kadaluarsa atau tidak valid.',
@@ -245,7 +233,7 @@ class SelfCheckInController extends Controller
             return response()->json([
                 'status' => 'already',
                 'message' => 'Anda sudah melakukan presensi untuk workcode "'.$activeWorkcode->nama_workcode.'".',
-                'participant' => $participant,
+                'participant' => $participant->toPublicArray(),
             ]);
         }
 
@@ -272,7 +260,7 @@ class SelfCheckInController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Presensi berhasil dicatat untuk workcode "'.$activeWorkcode->nama_workcode.'"!',
-            'participant' => $participant,
+            'participant' => $participant->toPublicArray(),
             'timestamp' => $attendance->waktu_hadir->format('H:i:s'),
         ]);
     }

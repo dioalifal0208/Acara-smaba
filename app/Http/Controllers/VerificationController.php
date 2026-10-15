@@ -14,7 +14,9 @@ class VerificationController extends Controller
         $nipKepsek = Setting::get('kepala_sekolah_nip', '197205172006041015');
 
         return Inertia::render('VerifySignature', [
-            'workcode' => $workcode,
+            // Halaman publik: hanya data yang memang perlu tampil, bukan seluruh workcode
+            // (lokasi, jadwal, dll).
+            'workcode' => $workcode->only(['nama_workcode', 'kategori', 'tanggal']),
             'kepalaSekolahNama' => $namaKepsek,
             'kepalaSekolahNip' => $nipKepsek,
             'waktuCetak' => now()->translatedFormat('l, d F Y H:i').' WIB',

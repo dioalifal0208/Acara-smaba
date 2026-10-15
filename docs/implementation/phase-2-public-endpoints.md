@@ -77,8 +77,16 @@ Tambahan: tombol admin "Reset QR peserta" (regenerasi `qr_token`) bila token did
 
 ## Definition of Done Fase 2
 
-- [ ] `face/match` hanya 1:1, butuh nonce, ter-throttle, tidak mengembalikan jarak/data lain.
-- [ ] `search`/`lookup`/`qr` tidak dapat dipakai untuk enumerasi atau unduh QR milik orang lain.
-- [ ] `trustProxies` terbatas; security header aktif; CSP report-only berjalan tanpa error berarti.
-- [ ] Token Sanctum kedaluwarsa dan terpangkas otomatis.
-- [ ] Test untuk seluruh poin di atas lulus; Android diuji terhadap staging.
+Status per 15 Oktober 2026. Keputusan pemilik: QR pribadi pindah ke dashboard peserta; self check-in Master QR tetap tanpa login tetapi diperketat.
+
+- [x] `face/match` **wajib login** (ternyata tidak ada pemanggil tamu: halaman `SelfCheckIn/FaceForm` tidak punya route dan sudah dihapus), sehingga nonce tidak diperlukan. Peserta 1:1 dengan wajahnya sendiri; akun non-admin tanpa data peserta ditolak; admin (scanner) 1:N. Throttle `face-match` per akun (30/menit), kunci 15 menit setelah 5 gagal dalam 10 menit, ambang dari `config/attendance.php`, tidak ada jarak/descriptor di respons.
+- [x] `GET /api/participants/lookup` dan `/search` (publik, membocorkan `qr_token`) **dihapus**. QR/unduh QR hanya untuk admin atau pemilik; peserta melihat "QR Presensi Saya" di dashboard; admin punya tombol **Reset QR**. `qr_token`, `face_descriptor`, `photo_path` tersembunyi dari serialisasi `Participant`.
+- [x] Self check-in: pencarian nama ≥ 3 huruf, NIS/NIP hanya cocok bila lengkap, respons hanya `id`, `nama`, NIS/NIP tersamar (4 digit terakhir), `status`; token Master QR 32 karakter, rotasi harian, dibandingkan dengan `hash_equals`.
+- [x] `/verify-signature/{workcode}` memakai URL bertanda tangan permanen dan hanya mengirim nama/kategori/tanggal workcode. **QR di laporan yang dicetak sebelum perubahan ini tidak berlaku lagi** — cetak ulang bila perlu.
+- [x] Throttle: `forgot-password`/`reset-password` 6/menit; self check-in 300/120 per menit per IP dan hari libur 120/menit (longgar karena banyak peserta berbagi satu IP WiFi sekolah); login web tetap dikunci per username+IP oleh `LoginRequest`.
+- [x] Header keamanan aktif (`SecurityHeaders`: X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy, HSTS produksi, CSP **report-only**). CORS API hanya domain aplikasi.
+- [~] `trustProxies('*')` **dipertahankan**: situs di belakang CDN Hostinger (hCDN) tanpa daftar IP publik; tanpa ini semua pengguna tampak ber-IP sama. Risiko sisa: server asal (45.90.229.210) bisa diakses langsung sehingga `X-Forwarded-For` bisa dipalsukan untuk mengakali batas per-IP. Tindak lanjut: minta rentang IP hCDN ke Hostinger, atau blokir akses langsung ke server asal.
+- [x] Token Sanctum kedaluwarsa 30 hari (`SANCTUM_EXPIRATION`), dipangkas harian (`sanctum:prune-expired`), maksimal 5 token per akun.
+- [x] Test seluruh poin di atas lulus (`tests/Feature/PublicEndpointsHardeningTest.php`).
+- [ ] Android diuji terhadap staging (token kedaluwarsa → 401 → login ulang).
+- [ ] Setelah CSP report-only berjalan tanpa pelanggaran berarti, ubah menjadi `Content-Security-Policy` (enforce).

@@ -34,6 +34,12 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
         });
 
+        // Presensi wajah web (scanner admin & peserta login). Dibatasi per pengguna, bukan per IP,
+        // agar sekolah dengan satu IP publik (NAT) tidak saling memblokir saat ramai.
+        RateLimiter::for('face-match', function (Request $request) {
+            return Limit::perMinute(config('attendance.face.rate_per_minute'))->by('face-match|'.($request->user()?->id ?: $request->ip()));
+        });
+
         RateLimiter::for('api-login', function (Request $request) {
             return Limit::perMinute(5)->by(strtolower($request->input('login', '')).'|'.$request->ip());
         });

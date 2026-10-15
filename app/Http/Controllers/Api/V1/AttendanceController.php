@@ -248,7 +248,7 @@ class AttendanceController extends Controller
             ]), 400);
         }
 
-        if ($distance > 0.85) {
+        if ($distance > (float) config('attendance.face.threshold_mobile')) {
             throw new \Exception(json_encode([
                 'status' => 'error',
                 'message' => 'Wajah tidak cocok dengan data wajah Anda. Coba lagi dengan pencahayaan cukup.',

@@ -13,6 +13,7 @@ export default function ParticipantDashboard({ activeWorkcode, participant }) {
     const [showLeaveModal, setShowLeaveModal] = useState(false);
     const [showFaceRegistrationModal, setShowFaceRegistrationModal] = useState(false);
     const [showScannerModal, setShowScannerModal] = useState(false);
+    const [showMyQr, setShowMyQr] = useState(false);
     
     // Initialize & refresh AOS
     useEffect(() => {
@@ -199,6 +200,18 @@ export default function ParticipantDashboard({ activeWorkcode, participant }) {
                                     </svg>
                                     Wajah Belum Terdaftar
                                 </div>
+                            )}
+                            {participant && (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowMyQr(true)}
+                                    className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-extrabold shadow-sm hover:bg-indigo-100 transition-colors"
+                                >
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
+                                    </svg>
+                                    QR Presensi Saya
+                                </button>
                             )}
                         </div>
                     </div>
@@ -465,6 +478,30 @@ export default function ParticipantDashboard({ activeWorkcode, participant }) {
                         window.location.reload();
                     }}
                 />
+            )}
+
+            {/* QR presensi pribadi (hanya pemilik/admin yang bisa memuat gambar QR ini) */}
+            {showMyQr && participant && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-sm" onClick={() => setShowMyQr(false)}>
+                    <div className="w-full max-w-xs rounded-2xl bg-white p-6 text-center shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        <h3 className="text-base font-extrabold text-slate-800">QR Presensi Saya</h3>
+                        <p className="mt-0.5 text-xs font-semibold text-slate-500">{participant.nama}</p>
+                        <div className="my-4 flex justify-center rounded-xl border border-slate-200 bg-slate-50 p-4">
+                            <img src={route('participants.qr', participant.id)} alt="QR Presensi" className="h-52 w-52" />
+                        </div>
+                        <p className="mb-4 text-[11px] leading-relaxed text-slate-500">
+                            Tunjukkan QR ini ke petugas scanner. <strong className="text-slate-700">Jangan bagikan ke orang lain</strong> — siapa pun yang memegang QR ini bisa dipresensikan atas nama Anda.
+                        </p>
+                        <div className="flex gap-2">
+                            <a href={route('participants.download.png', participant.id)} className="flex-1 rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white hover:bg-indigo-700">
+                                Unduh
+                            </a>
+                            <button type="button" onClick={() => setShowMyQr(false)} className="flex-1 rounded-xl border border-slate-200 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-100">
+                                Tutup
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </AuthenticatedLayout>
     );

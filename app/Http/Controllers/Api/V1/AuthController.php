@@ -37,6 +37,11 @@ class AuthController extends Controller
 
         $token = $user->createToken($request->input('device_name'), $abilities);
 
+        // Cegah token menumpuk tiap login ulang: simpan hanya 5 sesi perangkat terbaru.
+        $user->tokens()
+            ->whereNotIn('id', $user->tokens()->latest('id')->limit(5)->pluck('id'))
+            ->delete();
+
         return response()->json([
             'status' => 'success',
             'data' => [

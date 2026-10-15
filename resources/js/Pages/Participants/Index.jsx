@@ -103,6 +103,22 @@ export default function ParticipantsIndex({ participants }) {
         });
     };
 
+    const handleResetQr = async (participant) => {
+        const confirmed = await confirm({
+            title: 'Reset QR Peserta',
+            message: `QR lama milik "${participant.nama}" tidak akan berlaku lagi di scanner. Gunakan bila QR diduga dipakai orang lain. Lanjutkan?`,
+            type: 'danger',
+            confirmText: 'Ya, Reset QR',
+            cancelText: 'Batal',
+        });
+        if (confirmed) {
+            router.post(route('participants.qr.regenerate', participant.id), {}, {
+                preserveScroll: true,
+                onSuccess: () => setShowQr(null),
+            });
+        }
+    };
+
     const handleDelete = async (id, nama) => {
         const confirmed = await confirm({
             title: 'Hapus Peserta',
@@ -1030,6 +1046,14 @@ export default function ParticipantsIndex({ participants }) {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
                                 </svg>
                                 Cetak
+                            </button>
+                        </div>
+                        <div className="px-6 pb-4 bg-slate-50 rounded-b-2xl">
+                            <button
+                                onClick={() => handleResetQr(showQr)}
+                                className="w-full rounded-xl border border-rose-200 bg-white px-3 py-2 text-[11px] font-bold text-rose-600 transition-colors hover:bg-rose-50"
+                            >
+                                Reset QR (QR lama tidak berlaku)
                             </button>
                         </div>
                     </div>

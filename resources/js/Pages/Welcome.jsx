@@ -32,17 +32,6 @@ export default function Welcome({ auth, stats: initialStats, recentScans: initia
     const [cooldownActive, setCooldownActive] = useState(false);
     const [scanCount, setScanCount] = useState(0);
 
-    // Lookup states (Public/Guru)
-    const [searchQuery, setSearchQuery] = useState('');
-    const [lookupResult, setLookupResult] = useState(null);
-    const [lookupError, setLookupError] = useState(null);
-    const [isSearching, setIsSearching] = useState(false);
-
-    // Autocomplete states
-    const [suggestions, setSuggestions] = useState([]);
-    const [showSuggestions, setShowSuggestions] = useState(false);
-    const [isSearchingSuggestions, setIsSearchingSuggestions] = useState(false);
-    const suggestionsRef = useRef(null);
 
     const html5QrCodeRef = useRef(null);
     const isProcessingRef = useRef(false);
@@ -221,109 +210,6 @@ export default function Welcome({ auth, stats: initialStats, recentScans: initia
             }
         };
     }, []);
-
-    useEffect(() => {
-        const handleClickOutside = (e) => {
-            if (suggestionsRef.current && !suggestionsRef.current.contains(e.target)) {
-                setShowSuggestions(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
-
-    const handleInputChange = (val) => {
-        setSearchQuery(val);
-        setLookupError(null);
-
-        if (val.trim().length >= 2) {
-            setIsSearchingSuggestions(true);
-            fetch(route('participants.search') + `?query=${encodeURIComponent(val)}`)
-                .then((res) => res.json())
-                .then((data) => {
-                    setSuggestions(data);
-                    setShowSuggestions(data.length > 0);
-                    setIsSearchingSuggestions(false);
-                })
-                .catch(() => {
-                    setIsSearchingSuggestions(false);
-                });
-        } else {
-            setSuggestions([]);
-            setShowSuggestions(false);
-        }
-    };
-
-    const handleSelectSuggestion = (participant) => {
-        setSearchQuery(participant.nama);
-        setLookupResult(participant);
-        setSuggestions([]);
-        setShowSuggestions(false);
-    };
-
-    const handleLookup = async (e) => {
-        e.preventDefault();
-        if (!searchQuery.trim()) return;
-
-        setIsSearching(true);
-        setLookupResult(null);
-        setLookupError(null);
-        setShowSuggestions(false);
-
-        try {
-            const response = await fetch(route('participants.lookup') + `?query=${encodeURIComponent(searchQuery)}`);
-            const data = await response.json();
-
-            if (data.participant) {
-                setLookupResult(data.participant);
-            } else {
-                setLookupError('Data tidak ditemukan. Pastikan Anda memasukkan nama atau NIP yang sesuai.');
-            }
-        } catch (err) {
-            setLookupError('Terjadi kesalahan sistem. Silakan coba lagi.');
-        } finally {
-            setIsSearching(false);
-        }
-    };
-
-    const handlePrint = (p) => {
-        const printWindow = window.open('', '_blank', 'width=500,height=600');
-        printWindow.document.write(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>QR Code Presensi - ${p.nama}</title>
-                <style>
-                    * { margin: 0; padding: 0; box-sizing: border-box; }
-                    body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #fff; }
-                    .card { text-align: center; padding: 40px; border: 2px solid #e5e7eb; border-radius: 16px; max-width: 400px; }
-                    .card h2 { font-size: 20px; color: #1e1b4b; margin-bottom: 4px; }
-                    .card p { font-size: 14px; color: #6366f1; margin-bottom: 20px; font-weight: 600; }
-                    .qr-container { display: flex; justify-content: center; margin-bottom: 10px; }
-                    .qr-container svg { width: 220px; height: 220px; }
-                    .footer { font-size: 11px; color: #9ca3af; margin-top: 15px; }
-                </style>
-            </head>
-            <body>
-                <div class="card">
-                    <h2>${p.nama}</h2>
-                    <p>${p.nis_nip}</p>
-                    <div class="qr-container">
-                        <img src="${route('participants.qr', p.id)}" alt="QR Code" />
-                    </div>
-                    <div class="footer">E-Presensi SMA Negeri 1 Babat</div>
-                </div>
-                <script>
-                    window.onload = function() {
-                        window.print();
-                        setTimeout(function() { window.close(); }, 500);
-                    };
-                </script>
-            </body>
-            </html>
-        `);
-        printWindow.document.close();
-    };
 
     const getStatusBadge = (status) => {
         if (status === 'success') {

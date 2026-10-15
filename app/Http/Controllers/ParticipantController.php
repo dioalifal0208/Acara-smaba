@@ -306,15 +306,37 @@ class ParticipantController extends Controller
     }
 
     /**
+     * QR pribadi berisi token presensi: hanya admin atau peserta pemiliknya yang boleh melihat.
+     */
+    private function authorizeQrAccess(Participant $participant): void
+    {
+        $user = auth()->user();
+
+        abort_unless($user && ($user->role === 'admin' || (int) $user->participant_id === $participant->id), 403);
+    }
+
+    /**
+     * Ganti token QR peserta (mis. bila QR diduga bocor). QR lama langsung tidak berlaku di scanner.
+     */
+    public function regenerateQrToken(Participant $participant)
+    {
+        $participant->forceFill(['qr_token' => Str::uuid()->toString()])->save();
+
+        return redirect()->back()->with('success', "QR {$participant->nama} berhasil direset. QR lama tidak berlaku lagi.");
+    }
+
+    /**
      * Generate & tampilkan QR code SVG untuk peserta (inline view).
      */
     public function qrCode(Participant $participant, QrCodeService $qrCodeService)
     {
+        $this->authorizeQrAccess($participant);
+
         $svg = $qrCodeService->generate($participant->qr_token, 400);
 
         return response($svg, 200, [
             'Content-Type' => 'image/svg+xml',
-            'Cache-Control' => 'public, max-age=86400',
+            'Cache-Control' => 'private, no-store',
         ]);
     }
 
@@ -323,6 +345,8 @@ class ParticipantController extends Controller
      */
     public function downloadSvg(Participant $participant, QrCodeService $qrCodeService)
     {
+        $this->authorizeQrAccess($participant);
+
         $svg = $qrCodeService->generateWithLabel(
             $participant->qr_token,
             $participant->nama,
@@ -344,6 +368,8 @@ class ParticipantController extends Controller
      */
     public function downloadPng(Participant $participant, QrCodeService $qrCodeService)
     {
+        $this->authorizeQrAccess($participant);
+
         $png = $qrCodeService->generatePng($participant->qr_token, 400);
 
         if ($png) {
@@ -357,54 +383,6 @@ class ParticipantController extends Controller
 
         // Fallback ke SVG download jika PNG tidak bisa di-generate
         return $this->downloadSvg($participant, $qrCodeService);
-    }
-
-    /**
-     * Cari peserta berdasarkan NIP/NIS atau nama (untuk pencarian QR publik).
-     */
-    public function lookup(Request $request)
-    {
-        $query = trim($request->query('query'));
-
-        if (empty($query)) {
-            return response()->json(['participant' => null]);
-        }
-
-        $participant = Participant::where('nis_nip', $query)
-            ->orWhere('nama', 'like', '%'.$query.'%')
-            ->first();
-
-        if (! $participant) {
-            return response()->json(['participant' => null]);
-        }
-
-        return response()->json([
-            'participant' => [
-                'id' => $participant->id,
-                'nama' => $participant->nama,
-                'nis_nip' => $participant->nis_nip,
-                'qr_token' => $participant->qr_token,
-            ],
-        ]);
-    }
-
-    /**
-     * Cari daftar peserta untuk autocomplete (rekomendasi).
-     */
-    public function search(Request $request)
-    {
-        $query = trim($request->query('query'));
-
-        if (strlen($query) < 2) {
-            return response()->json([]);
-        }
-
-        $participants = Participant::where('nis_nip', 'like', $query.'%')
-            ->orWhere('nama', 'like', '%'.$query.'%')
-            ->limit(5)
-            ->get(['id', 'nama', 'nis_nip', 'status']);
-
-        return response()->json($participants);
     }
 
     /**

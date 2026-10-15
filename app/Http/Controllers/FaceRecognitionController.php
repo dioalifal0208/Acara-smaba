@@ -8,7 +8,9 @@ use App\Models\Workcode;
 use App\Services\AttendanceValidationService;
 use App\Support\FaceDescriptor;
 use Carbon\Carbon;
+use Illuminate\Cache\RateLimiter;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -37,10 +39,36 @@ class FaceRecognitionController extends Controller
     }
 
     /**
-     * Ambang jarak Euclidean face-api.js (standar dlib ~0.6).
+     * Ambang jarak Euclidean face-api.js (standar dlib ~0.6), dari config/attendance.php.
      * 0.45 sebelumnya terlalu ketat sehingga menolak wajah asli karena pencahayaan webcam.
      */
-    private const MATCH_THRESHOLD = 0.58;
+    private function matchThreshold(): float
+    {
+        return (float) config('attendance.face.threshold_web');
+    }
+
+    private function faceFailureLimiter(): RateLimiter
+    {
+        return app(RateLimiter::class);
+    }
+
+    /** Penghitung kegagalan wajah per peserta (jendela failure_window_minutes). */
+    private function faceFailureKey(Participant $participant): string
+    {
+        return 'face-match-failures|'.$participant->id;
+    }
+
+    /** Kunci sementara presensi wajah per peserta (lockout_minutes). */
+    private function faceLockKey(Participant $participant): string
+    {
+        return 'face-match-lock|'.$participant->id;
+    }
+
+    private function lockFaceAttempts(Participant $participant): void
+    {
+        $this->faceFailureLimiter()->hit($this->faceLockKey($participant), config('attendance.face.lockout_minutes') * 60);
+        $this->faceFailureLimiter()->clear($this->faceFailureKey($participant));
+    }
 
     /**
      * Jarak terdekat antara input descriptor dan descriptor tersimpan (single atau beberapa sampel wajah depan).
@@ -239,9 +267,13 @@ class FaceRecognitionController extends Controller
         // Peserta yang login hanya boleh dicocokkan dengan wajahnya sendiri (1:1), dan hanya
         // setelah wajahnya disetujui admin. Jangan pernah mencari ke peserta lain, karena itu
         // bisa mencatat presensi atas nama orang lain yang mirip.
+        // Selain admin, HANYA peserta dengan data peserta tertaut yang boleh memakai endpoint ini;
+        // akun lain tidak pernah mendapat pencarian ke seluruh wajah.
         $selfParticipant = null;
-        if (! $isAdmin && auth()->user()?->participant_id) {
-            $selfParticipant = Participant::find(auth()->user()->participant_id);
+        if (! $isAdmin) {
+            $selfParticipant = auth()->user()?->participant_id
+                ? Participant::find(auth()->user()->participant_id)
+                : null;
 
             if (! $selfParticipant) {
                 return response()->json([
@@ -252,6 +284,16 @@ class FaceRecognitionController extends Controller
 
             if ($blocker = $selfParticipant->faceAttendanceBlocker()) {
                 return response()->json($blocker, 403);
+            }
+
+            // Terkunci sementara setelah gagal berulang (mencegah coba-coba dengan foto/wajah lain).
+            if ($this->faceFailureLimiter()->tooManyAttempts($this->faceLockKey($selfParticipant), 1)) {
+                $minutes = max(1, (int) ceil($this->faceFailureLimiter()->availableIn($this->faceLockKey($selfParticipant)) / 60));
+
+                return response()->json([
+                    'status' => 'locked',
+                    'message' => "Terlalu banyak percobaan wajah yang gagal. Coba lagi dalam {$minutes} menit atau hubungi admin.",
+                ], 429);
             }
         }
 
@@ -317,19 +359,31 @@ class FaceRecognitionController extends Controller
 
         if ($selfParticipant) {
             // Peserta login: hanya bandingkan dengan wajahnya sendiri.
-            if ($this->getMinDistance($inputDescriptor, $selfParticipant->face_descriptor) < self::MATCH_THRESHOLD) {
+            if ($this->getMinDistance($inputDescriptor, $selfParticipant->face_descriptor) < $this->matchThreshold()) {
                 $bestMatch = $selfParticipant;
+                $this->faceFailureLimiter()->clear($this->faceFailureKey($selfParticipant));
             }
 
             if (! $bestMatch) {
+                $this->faceFailureLimiter()->hit(
+                    $this->faceFailureKey($selfParticipant),
+                    config('attendance.face.failure_window_minutes') * 60,
+                );
+
+                // Gagal ke-N mengaktifkan kunci sementara.
+                if ($this->faceFailureLimiter()->tooManyAttempts($this->faceFailureKey($selfParticipant), config('attendance.face.max_failures'))) {
+                    $this->lockFaceAttempts($selfParticipant);
+                    Log::warning('Presensi wajah dikunci sementara setelah gagal berulang.', ['participant_id' => $selfParticipant->id]);
+                }
+
                 return response()->json([
                     'status' => 'not_recognized',
                     'message' => 'Wajah tidak cocok dengan data wajah Anda. Hadapkan wajah lurus ke kamera dengan pencahayaan cukup lalu coba lagi.',
                 ], 404);
             }
         } else {
-            // Scanner admin / self check-in publik: cari di antara wajah yang sudah disetujui.
-            $bestDistance = self::MATCH_THRESHOLD;
+            // Scanner admin: cari di antara wajah yang sudah disetujui.
+            $bestDistance = $this->matchThreshold();
             $participants = Participant::whereNotNull('face_descriptor')
                 ->where('face_status', 'approved')
                 ->get();

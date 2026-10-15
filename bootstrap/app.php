@@ -3,6 +3,7 @@
 use App\Http\Middleware\AdminMiddleware;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\RoleMiddleware;
+use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -21,8 +22,13 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
+            SecurityHeaders::class,
         ]);
 
+        // Situs berada di belakang CDN Hostinger (hCDN) yang rentang IP-nya tidak dipublikasikan, jadi
+        // semua proxy dipercaya agar request()->ip() = IP klien asli. Risiko sisa: server asal juga bisa
+        // diakses langsung, sehingga X-Forwarded-For bisa dipalsukan untuk mengakali batas per-IP.
+        // Proteksi utama (face match per akun, login per username, kunci perangkat) tidak bergantung IP.
         $middleware->trustProxies(at: '*');
 
         $middleware->alias([

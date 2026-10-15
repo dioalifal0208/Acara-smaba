@@ -96,7 +96,7 @@ class SelfCheckInWebTest extends TestCase
             'status' => 'GTT',
         ]);
 
-        $this->getJson(route('participants.search', ['query' => 'Guru Tidak']))
+        $this->getJson(route('self-checkin.participants', ['token' => $this->token, 'query' => 'Guru Tidak']))
             ->assertOk()
             ->assertJsonFragment([
                 'id' => $participant->id,

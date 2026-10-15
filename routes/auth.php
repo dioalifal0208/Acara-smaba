@@ -13,18 +13,22 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('guest')->group(function () {
     Route::get('login', fn () => redirect('/'))->name('login');
 
+    // Brute-force dicegah LoginRequest (kunci 5 percobaan per username+IP). Sengaja tanpa batas per IP
+    // saja, karena banyak guru login bersamaan dari satu IP WiFi sekolah (NAT).
     Route::post('login', [AuthenticatedSessionController::class, 'store']);
 
     Route::get('forgot-password', [PasswordResetLinkController::class, 'create'])
         ->name('password.request');
 
     Route::post('forgot-password', [PasswordResetLinkController::class, 'store'])
+        ->middleware('throttle:6,1')
         ->name('password.email');
 
     Route::get('reset-password/{token}', [NewPasswordController::class, 'create'])
         ->name('password.reset');
 
     Route::post('reset-password', [NewPasswordController::class, 'store'])
+        ->middleware('throttle:6,1')
         ->name('password.store');
 });
 
