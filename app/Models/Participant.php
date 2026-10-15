@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\FaceDescriptor;
+use App\Support\PrivateFile;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
@@ -25,16 +26,25 @@ class Participant extends Model
         'face_descriptor' => 'array',
     ];
 
-    protected $appends = [
-        'photo_url',
+    /**
+     * Data biometrik/pribadi tidak pernah ikut terserialisasi otomatis (mis. ke Inertia props
+     * atau endpoint publik). `photo_url` sengaja TIDAK di-append: tambahkan eksplisit
+     * (`->append('photo_url')`) hanya untuk admin atau pemilik data.
+     */
+    /** @var list<string> path file pribadi yang dihapus setelah peserta terhapus (bukan kolom). */
+    public array $privateFilesToDelete = [];
+
+    protected $hidden = [
+        'face_descriptor',
+        'photo_path',
     ];
 
     /**
-     * Get photo URL for participant.
+     * URL foto wajah bertanda tangan sementara (lihat App\Support\PrivateFile).
      */
     public function getPhotoUrlAttribute(): ?string
     {
-        return $this->photo_path ? asset('storage/'.$this->photo_path) : null;
+        return PrivateFile::url('participant-photo', $this);
     }
 
     /**
@@ -48,6 +58,15 @@ class Participant extends Model
             if (empty($participant->qr_token)) {
                 $participant->qr_token = Str::uuid()->toString();
             }
+        });
+
+        // Hapus seluruh file pribadi peserta. Path dikumpulkan sebelum delete (baris turunan
+        // terhapus lewat cascade DB), file baru dihapus setelah baris benar-benar terhapus.
+        static::deleting(function (Participant $participant) {
+            $participant->privateFilesToDelete = PrivateFile::pathsOwnedByParticipant($participant->id);
+        });
+        static::deleted(function (Participant $participant) {
+            PrivateFile::disk()->delete($participant->privateFilesToDelete);
         });
     }
 

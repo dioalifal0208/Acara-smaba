@@ -195,7 +195,7 @@ class UpdateFaceDescriptor extends Command
             'face_status' => 'approved',
         ]);
 
-        Log::info("[face:update-descriptor] Descriptor participant [{$participant->id}] {$participant->nama} diperbarui via CLI.", [
+        Log::info("[face:update-descriptor] Descriptor participant [{$participant->id}] diperbarui via CLI.", [
             'dimensi' => $size,
             'l2_norm' => number_format($l2norm, 6),
             'normalized' => $isNormalized,

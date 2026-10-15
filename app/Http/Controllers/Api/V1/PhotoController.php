@@ -7,6 +7,7 @@ use App\Http\Resources\Api\V1\PhotoChangeRequestResource;
 use App\Models\ApiIdempotencyLog;
 use App\Models\Participant;
 use App\Models\PhotoChangeRequest;
+use App\Support\PrivateFile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -102,7 +103,7 @@ class PhotoController extends Controller
                     ]);
                 }
 
-                $storedPath = $request->file('photo')->store('photo-change-requests', 'public');
+                $storedPath = $request->file('photo')->store('photo-change-requests', 'private');
                 $changeRequest = PhotoChangeRequest::create([
                     'participant_id' => $user->participant_id,
                     'photo_path' => $storedPath,
@@ -122,7 +123,7 @@ class PhotoController extends Controller
             });
         } catch (\Throwable $exception) {
             if ($storedPath) {
-                Storage::disk('public')->delete($storedPath);
+                Storage::disk('private')->delete($storedPath);
             }
 
             throw $exception;
@@ -210,7 +211,7 @@ class PhotoController extends Controller
         }
 
         if ($oldPhotoPath && $oldPhotoPath !== $result->photo_path) {
-            Storage::disk('public')->delete($oldPhotoPath);
+            Storage::disk('private')->delete($oldPhotoPath);
         }
 
         return response()->json([
@@ -265,7 +266,7 @@ class PhotoController extends Controller
         }
 
         if ($candidatePath) {
-            Storage::disk('public')->delete($candidatePath);
+            Storage::disk('private')->delete($candidatePath);
         }
 
         return response()->json([
@@ -320,8 +321,8 @@ class PhotoController extends Controller
             return null;
         }
 
-        return Storage::disk('public')->exists($participant->photo_path)
-            ? url('/storage/'.$participant->photo_path)
+        return PrivateFile::disk()->exists($participant->photo_path)
+            ? PrivateFile::url('participant-photo', $participant)
             : null;
     }
 

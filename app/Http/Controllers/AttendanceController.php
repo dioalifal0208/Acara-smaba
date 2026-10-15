@@ -9,6 +9,7 @@ use App\Models\Setting;
 use App\Models\Workcode;
 use App\Services\AttendanceValidationService;
 use App\Services\QrCodeService;
+use App\Support\PrivateFile;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -274,8 +275,8 @@ class AttendanceController extends Controller
                         'jam_masuk' => $att?->waktu_hadir?->format('H:i'),
                         'waktu_hadir' => $att?->waktu_hadir?->format('H:i:s') ?? '-',
                         'waktu_pulang' => $att?->waktu_pulang?->format('H:i:s') ?? '-',
-                        'signature_url' => $att?->signature_path ? asset('storage/'.$att->signature_path) : null,
-                        'face_capture_url' => $att?->face_capture_path ? asset('storage/'.$att->face_capture_path) : null,
+                        'signature_url' => PrivateFile::url('attendance-signature', $att),
+                        'face_capture_url' => PrivateFile::url('attendance-face', $att),
                         'attendance_method' => $this->attendanceMethodLabel($att),
                         'status' => $att ? ($att->status ?? 'hadir') : 'alpha',
                     ];
@@ -327,8 +328,8 @@ class AttendanceController extends Controller
                     'jam_pulang' => $att->waktu_pulang?->format('H:i') ?? '-',
                     'waktu_hadir' => $att->waktu_hadir?->format('H:i') ?? '-',
                     'waktu_pulang' => $att->waktu_pulang?->format('H:i') ?? '-',
-                    'signature_url' => $att->signature_path ? asset('storage/'.$att->signature_path) : null,
-                    'face_capture_url' => $att->face_capture_path ? asset('storage/'.$att->face_capture_path) : null,
+                    'signature_url' => PrivateFile::url('attendance-signature', $att),
+                    'face_capture_url' => PrivateFile::url('attendance-face', $att),
                     'attendance_method' => $this->attendanceMethodLabel($att),
                     'status' => $att->status ?? 'hadir',
                 ];

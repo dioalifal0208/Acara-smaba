@@ -75,7 +75,7 @@ class LeaveRequestController extends Controller
             return back()->with('error', 'Anda sudah mengajukan izin untuk workcode ini pada tanggal tersebut.');
         }
 
-        $path = $request->file('dokumen')->store('dokumen_izin', 'public');
+        $path = $request->file('dokumen')->store('dokumen_izin', 'private');
 
         LeaveRequest::create([
             'participant_id' => $participant->id,

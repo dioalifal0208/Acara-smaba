@@ -70,7 +70,7 @@ class FaceRecognitionAttendanceTest extends TestCase
 
     public function test_face_attendance_stores_camera_capture_for_report_detail(): void
     {
-        Storage::fake('public');
+        Storage::fake('private');
         Workcode::create([
             'nama_workcode' => 'Presensi Wajah Dengan Foto',
             'kategori' => 'workcode',
@@ -86,7 +86,7 @@ class FaceRecognitionAttendanceTest extends TestCase
 
         $attendance = Attendance::where('participant_id', $participant->id)->firstOrFail();
         $this->assertNotNull($attendance->face_capture_path);
-        Storage::disk('public')->assertExists($attendance->face_capture_path);
+        Storage::disk('private')->assertExists($attendance->face_capture_path);
     }
 
     public function test_face_attendance_requires_workcode_choice_when_participant_has_multiple_active_workcodes(): void

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\Api\V1;
 
+use App\Support\PrivateFile;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Storage;
@@ -35,8 +36,8 @@ class UserResource extends JsonResource
                 'face_status' => $participant->face_status,
             ];
 
-            if ($participant->face_status === 'approved' && $participant->photo_path && Storage::disk('public')->exists($participant->photo_path)) {
-                $participantData['photo_url'] = url('/storage/'.$participant->photo_path);
+            if ($participant->face_status === 'approved' && $participant->photo_path && Storage::disk('private')->exists($participant->photo_path)) {
+                $participantData['photo_url'] = PrivateFile::url('participant-photo', $participant);
             } else {
                 $participantData['photo_url'] = null;
             }

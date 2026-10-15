@@ -18,21 +18,26 @@ class PhotoChangeRequestTest extends TestCase
 
     public function test_authenticated_participant_can_read_only_an_approved_active_photo(): void
     {
-        Storage::fake('public');
+        Storage::fake('private');
         [$user, $participant] = $this->participantUser();
         $participant->update([
             'face_status' => 'approved',
             'photo_path' => 'faces/active.jpg',
         ]);
-        Storage::disk('public')->put('faces/active.jpg', 'active-photo');
+        Storage::disk('private')->put('faces/active.jpg', 'active-photo');
 
         Sanctum::actingAs($user, ['role:participant']);
 
-        $this->getJson('/api/v1/me/photo')
+        $photoUrl = $this->getJson('/api/v1/me/photo')
             ->assertOk()
             ->assertJsonPath('data.face_status', 'approved')
-            ->assertJsonPath('data.photo_url', url('/storage/faces/active.jpg'))
-            ->assertJsonPath('data.photo_change_request', null);
+            ->assertJsonPath('data.photo_change_request', null)
+            ->json('data.photo_url');
+
+        // Foto disajikan lewat URL bertanda tangan (bisa dimuat Android tanpa header Authorization).
+        $this->assertStringContainsString("/files/participant-photo/{$participant->id}", $photoUrl);
+        $this->assertStringContainsString('signature=', $photoUrl);
+        $this->get($photoUrl)->assertOk()->assertStreamedContent('active-photo');
 
         $participant->update(['face_status' => 'pending']);
 
@@ -43,14 +48,14 @@ class PhotoChangeRequestTest extends TestCase
 
     public function test_participant_can_submit_one_pending_photo_change_without_replacing_active_photo(): void
     {
-        Storage::fake('public');
+        Storage::fake('private');
         [$user, $participant] = $this->participantUser();
         $participant->update([
             'face_status' => 'approved',
             'photo_path' => 'faces/approved.jpg',
             'face_descriptor' => [0.1, 0.2],
         ]);
-        Storage::disk('public')->put('faces/approved.jpg', 'approved-photo');
+        Storage::disk('private')->put('faces/approved.jpg', 'approved-photo');
 
         Sanctum::actingAs($user, ['role:participant']);
         $key = '2ec2c422-f8af-4c7b-a045-e6a2d6dd2355';
@@ -70,7 +75,7 @@ class PhotoChangeRequestTest extends TestCase
         $this->assertSame('faces/approved.jpg', $participant->photo_path);
         $this->assertSame('approved', $participant->face_status);
         $this->assertSame([0.1, 0.2], $participant->face_descriptor);
-        Storage::disk('public')->assertExists($changeRequest->photo_path);
+        Storage::disk('private')->assertExists($changeRequest->photo_path);
 
         $this->withHeaders(['Idempotency-Key' => $key])
             ->post('/api/v1/me/photo-change-requests', [
@@ -91,14 +96,14 @@ class PhotoChangeRequestTest extends TestCase
 
     public function test_admin_approval_activates_candidate_photo_and_descriptor(): void
     {
-        Storage::fake('public');
+        Storage::fake('private');
         [, $participant] = $this->participantUser();
         $participant->update([
             'face_status' => 'approved',
             'photo_path' => 'faces/previous.jpg',
             'face_descriptor' => [0.1, 0.2],
         ]);
-        Storage::disk('public')->put('faces/previous.jpg', 'previous-photo');
+        Storage::disk('private')->put('faces/previous.jpg', 'previous-photo');
 
         $changeRequest = PhotoChangeRequest::create([
             'participant_id' => $participant->id,
@@ -106,7 +111,7 @@ class PhotoChangeRequestTest extends TestCase
             'face_descriptor' => [0.8, 0.7],
             'status' => 'pending',
         ]);
-        Storage::disk('public')->put($changeRequest->photo_path, 'candidate-photo');
+        Storage::disk('private')->put($changeRequest->photo_path, 'candidate-photo');
 
         $admin = User::factory()->create(['role' => 'admin']);
         Sanctum::actingAs($admin, ['role:admin']);
@@ -122,26 +127,26 @@ class PhotoChangeRequestTest extends TestCase
         $this->assertSame([0.8, 0.7], $participant->face_descriptor);
         $this->assertSame('approved', $changeRequest->status);
         $this->assertSame($admin->id, $changeRequest->reviewed_by);
-        Storage::disk('public')->assertMissing('faces/previous.jpg');
-        Storage::disk('public')->assertExists('photo-change-requests/candidate.jpg');
+        Storage::disk('private')->assertMissing('faces/previous.jpg');
+        Storage::disk('private')->assertExists('photo-change-requests/candidate.jpg');
     }
 
     public function test_admin_rejection_keeps_active_photo_and_removes_candidate(): void
     {
-        Storage::fake('public');
+        Storage::fake('private');
         [, $participant] = $this->participantUser();
         $participant->update([
             'face_status' => 'approved',
             'photo_path' => 'faces/approved.jpg',
         ]);
-        Storage::disk('public')->put('faces/approved.jpg', 'approved-photo');
+        Storage::disk('private')->put('faces/approved.jpg', 'approved-photo');
 
         $changeRequest = PhotoChangeRequest::create([
             'participant_id' => $participant->id,
             'photo_path' => 'photo-change-requests/rejected.jpg',
             'status' => 'pending',
         ]);
-        Storage::disk('public')->put($changeRequest->photo_path, 'candidate-photo');
+        Storage::disk('private')->put($changeRequest->photo_path, 'candidate-photo');
 
         $admin = User::factory()->create(['role' => 'admin']);
         Sanctum::actingAs($admin, ['role:admin']);
@@ -157,8 +162,8 @@ class PhotoChangeRequestTest extends TestCase
         $this->assertSame('approved', $participant->face_status);
         $this->assertSame('rejected', $changeRequest->status);
         $this->assertSame('Wajah tidak terlihat jelas.', $changeRequest->rejection_reason);
-        Storage::disk('public')->assertExists('faces/approved.jpg');
-        Storage::disk('public')->assertMissing('photo-change-requests/rejected.jpg');
+        Storage::disk('private')->assertExists('faces/approved.jpg');
+        Storage::disk('private')->assertMissing('photo-change-requests/rejected.jpg');
     }
 
     public function test_non_participants_and_non_admins_cannot_use_other_roles_endpoints(): void

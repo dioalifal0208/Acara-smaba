@@ -70,7 +70,7 @@ export default function FaceRegistrationModal({ participant, onClose, onSuccess 
                 {/* Camera Section: pemindaian wajah depan terpandu, tersimpan otomatis setelah selesai */}
                 {showCamera ? (
                     <>
-                        <FaceEnrollmentCamera onComplete={handleComplete} className="rounded-2xl" />
+                        <FaceEnrollmentCamera onComplete={handleComplete} className="rounded-2xl" subjectLabel="peserta" />
                         <p className="mt-3 text-center text-xs font-semibold text-slate-500">
                             Minta peserta mengikuti instruksi di layar. Data wajah tersimpan otomatis setelah semua langkah selesai.
                         </p>

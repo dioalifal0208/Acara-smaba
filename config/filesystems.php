@@ -38,12 +38,24 @@ return [
             'report' => false,
         ],
 
+        // Data pribadi (foto wajah, foto presensi, tanda tangan, dokumen izin). Tidak pernah
+        // disajikan langsung; akses hanya lewat URL bertanda tangan (App\Support\PrivateFile).
+        'private' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private'),
+            'serve' => false,
+            'throw' => false,
+            'report' => false,
+        ],
+
+        // Hanya untuk file yang memang boleh publik. Jangan simpan data peserta di sini:
+        // folder ini disajikan langsung oleh web server lewat symlink public/storage.
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),
             'url' => rtrim(env('APP_URL', 'http://localhost'), '/').'/storage',
             'visibility' => 'public',
-            'serve' => true,
+            'serve' => false,
             'throw' => false,
             'report' => false,
         ],

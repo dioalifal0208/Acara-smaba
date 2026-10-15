@@ -45,7 +45,7 @@ class PhotoChangeRequestController extends Controller
         }
 
         if ($oldPhotoPath && $oldPhotoPath !== $approvedRequest->photo_path) {
-            Storage::disk('public')->delete($oldPhotoPath);
+            Storage::disk('private')->delete($oldPhotoPath);
         }
 
         return back()->with('success', 'Foto baru peserta telah disetujui dan diaktifkan.');
@@ -80,7 +80,7 @@ class PhotoChangeRequestController extends Controller
         }
 
         if ($candidatePath) {
-            Storage::disk('public')->delete($candidatePath);
+            Storage::disk('private')->delete($candidatePath);
         }
 
         return back()->with('success', 'Pengajuan perubahan foto ditolak.');

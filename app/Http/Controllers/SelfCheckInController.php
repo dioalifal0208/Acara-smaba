@@ -264,7 +264,7 @@ class SelfCheckInController extends Controller
                 'attendance_method' => 'tanda_tangan',
             ]);
         } catch (\Throwable $exception) {
-            Storage::disk('public')->delete($signaturePath);
+            Storage::disk('private')->delete($signaturePath);
 
             throw $exception;
         }
@@ -289,7 +289,7 @@ class SelfCheckInController extends Controller
 
         $path = 'attendance-signatures/'.Str::uuid().'.png';
 
-        if (! Storage::disk('public')->put($path, $signature)) {
+        if (! Storage::disk('private')->put($path, $signature)) {
             throw ValidationException::withMessages([
                 'signature' => 'Tanda tangan gagal disimpan. Silakan coba kembali.',
             ]);

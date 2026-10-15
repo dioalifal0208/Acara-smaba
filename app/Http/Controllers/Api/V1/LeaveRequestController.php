@@ -181,7 +181,7 @@ class LeaveRequestController extends Controller
                 ]);
             }
 
-            $path = $request->file('dokumen')->store('dokumen_izin', 'public');
+            $path = $request->file('dokumen')->store('dokumen_izin', 'private');
 
             $leaveRequest = LeaveRequest::create([
                 'participant_id' => $user->participant_id,

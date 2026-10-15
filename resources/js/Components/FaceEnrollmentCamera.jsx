@@ -37,7 +37,7 @@ const cameraErrorMessage = (error) => {
  * yang sama; sampel inilah data acuan presensi. `onComplete({ descriptors, photo })` boleh async;
  * bila melempar error, pesan ditampilkan dan pengguna bisa mengulang.
  */
-export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
+export default function FaceEnrollmentCamera({ onComplete, className = '', subjectLabel = 'Anda' }) {
     const videoRef = useRef(null);
     const canvasRef = useRef(null);
     const samplerRef = useRef(typeof document !== 'undefined' ? document.createElement('canvas') : null);
@@ -61,6 +61,7 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
     const [faceOk, setFaceOk] = useState(false);
     const [timeLeft, setTimeLeft] = useState(ENROLLMENT_TIMEOUT_SECONDS);
     const [attempt, setAttempt] = useState(0);
+    const [consented, setConsented] = useState(false);
 
     const stopCamera = useCallback(() => {
         runningRef.current = false;
@@ -237,6 +238,7 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
 
     // Muat model + nyalakan kamera (ulang setiap kali "Coba Lagi")
     useEffect(() => {
+        if (!consented) return undefined;
         let cancelled = false;
 
         const start = async () => {
@@ -294,7 +296,7 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
             cancelled = true;
             stopCamera();
         };
-    }, [attempt]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [attempt, consented]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Batas waktu keseluruhan
     useEffect(() => {
@@ -311,6 +313,29 @@ export default function FaceEnrollmentCamera({ onComplete, className = '' }) {
 
     return (
         <div className={`relative bg-black w-full aspect-[3/4] overflow-hidden ${className}`}>
+            {/* Persetujuan pemrosesan data wajah: kamera baru menyala setelah disetujui */}
+            {!consented && (
+                <div className="absolute inset-0 z-40 flex flex-col justify-center bg-slate-900 px-5 text-white">
+                    <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-emerald-500/20">
+                        <svg className="h-6 w-6 text-emerald-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                        </svg>
+                    </div>
+                    <h3 className="text-center text-sm font-extrabold">Persetujuan Data Wajah</h3>
+                    <ul className="mt-3 space-y-1.5 text-[11px] leading-relaxed text-slate-300 list-disc pl-4">
+                        <li>Foto dan data titik wajah {subjectLabel} disimpan <strong className="text-white">hanya untuk presensi</strong> di SMA Negeri 1 Babat.</li>
+                        <li>Data disimpan di server sekolah secara privat dan hanya bisa dilihat admin presensi{subjectLabel === 'Anda' ? ' dan Anda sendiri' : ''}.</li>
+                        <li>Data wajah dihapus saat data peserta dihapus atau bila {subjectLabel === 'Anda' ? 'Anda' : 'peserta'} meminta penghapusan kepada admin.</li>
+                    </ul>
+                    <button
+                        type="button"
+                        onClick={() => setConsented(true)}
+                        className="mt-5 w-full rounded-xl bg-emerald-500 py-2.5 text-sm font-extrabold text-white hover:bg-emerald-600"
+                    >
+                        Setuju &amp; Mulai
+                    </button>
+                </div>
+            )}
             <video
                 ref={videoRef}
                 autoPlay

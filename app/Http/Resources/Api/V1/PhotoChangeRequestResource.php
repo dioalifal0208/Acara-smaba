@@ -2,9 +2,9 @@
 
 namespace App\Http\Resources\Api\V1;
 
+use App\Support\PrivateFile;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\Storage;
 
 class PhotoChangeRequestResource extends JsonResource
 {
@@ -18,8 +18,8 @@ class PhotoChangeRequestResource extends JsonResource
         $data = [
             'id' => $this->id,
             'status' => $this->status,
-            'photo_url' => $this->photo_path && Storage::disk('public')->exists($this->photo_path)
-                ? url('/storage/'.$this->photo_path)
+            'photo_url' => $this->photo_path && PrivateFile::disk()->exists($this->photo_path)
+                ? PrivateFile::url('photo-change-request', $this->resource)
                 : null,
             'created_at' => $this->created_at?->toIso8601String(),
             'reviewed_at' => $this->reviewed_at?->toIso8601String(),

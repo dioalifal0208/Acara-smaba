@@ -7,6 +7,7 @@ use App\Http\Controllers\HolidayController;
 use App\Http\Controllers\LeaveRequestController;
 use App\Http\Controllers\ParticipantController;
 use App\Http\Controllers\PhotoChangeRequestController;
+use App\Http\Controllers\PrivateFileController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SelfCheckInController;
 use App\Http\Controllers\SettingController;
@@ -16,9 +17,11 @@ use App\Models\Attendance;
 use App\Models\LeaveRequest;
 use App\Models\Participant;
 use App\Models\Workcode;
+use App\Support\PrivateFile;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 Route::get('/', function () {
@@ -161,7 +164,7 @@ Route::middleware(['auth', 'verified', 'role:participant'])->group(function () {
 
         return Inertia::render('Participant/Dashboard', [
             'activeWorkcode' => $activeWorkcode,
-            'participant' => auth()->user()->participant,
+            'participant' => auth()->user()->participant?->append('photo_url'), // pemilik data: boleh melihat fotonya sendiri
         ]);
     })->name('participant.dashboard');
 
@@ -198,14 +201,28 @@ Route::get('/api/holidays', [HolidayController::class, 'index'])->name('api.holi
 // Public Face Recognition routes
 Route::post('/api/face/match', [FaceRecognitionController::class, 'match'])->name('face.match');
 
-// Fallback & direct handler for public storage files (works even if storage:link is missing/broken on hosting/cPanel)
-Route::get('/storage/{path}', function ($path) {
-    if (! Storage::disk('public')->exists($path)) {
+// File pribadi peserta (foto wajah, foto presensi, tanda tangan, dokumen izin).
+// Hanya bisa dibuka lewat URL bertanda tangan sementara buatan server (App\Support\PrivateFile).
+Route::get('/files/{type}/{id}', [PrivateFileController::class, 'show'])
+    ->whereIn('type', array_keys(PrivateFile::TYPES))
+    ->whereNumber('id')
+    ->middleware(['signed', 'throttle:120,1'])
+    ->name('files.show');
+
+// Fallback untuk file publik non-sensitif bila symlink storage tidak tersedia di hosting.
+// Hanya prefix yang di-whitelist; data peserta TIDAK PERNAH disimpan di disk publik.
+Route::get('/storage/{path}', function (string $path) {
+    $allowedPrefixes = ['branding/'];
+
+    if (! PrivateFile::isSafePath($path)
+        || ! Str::startsWith($path, $allowedPrefixes)
+        || ! Storage::disk('public')->exists($path)) {
         abort(404);
     }
 
     return Storage::disk('public')->response($path, null, [
-        'Cache-Control' => 'public, max-age=31536000',
+        'Cache-Control' => 'public, max-age=86400',
+        'X-Content-Type-Options' => 'nosniff',
     ]);
 })->where('path', '.*')->name('storage.file');
 

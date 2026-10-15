@@ -2,12 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Workcode;
 use App\Models\Participant;
+use App\Models\Workcode;
 use App\Services\FcmService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class WorkcodeController extends Controller
@@ -136,16 +135,12 @@ class WorkcodeController extends Controller
     public function destroy(Workcode $workcode, FcmService $fcmService)
     {
         $nama = $workcode->nama_workcode;
-        $signaturePaths = $workcode->attendances()
-            ->whereNotNull('signature_path')
-            ->pluck('signature_path')
-            ->all();
 
         // Kirim FCM notification sebelum delete (masih punya ID)
         $fcmService->sendWorkcodeUpdate('deleted', $workcode);
 
+        // File presensi & dokumen izin terkait dibersihkan oleh event model Workcode.
         $workcode->delete();
-        Storage::disk('public')->delete($signaturePaths);
 
         return redirect()->back()->with('success', "Workcode '{$nama}' berhasil dihapus.");
     }

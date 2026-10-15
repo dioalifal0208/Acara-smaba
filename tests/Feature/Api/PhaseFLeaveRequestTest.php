@@ -113,7 +113,7 @@ class PhaseFLeaveRequestTest extends TestCase
 
     public function test_leave_submission_success()
     {
-        Storage::fake('public');
+        Storage::fake('private');
 
         $user = User::factory()->create(['role' => 'participant']);
         $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid()]);
@@ -201,12 +201,12 @@ class PhaseFLeaveRequestTest extends TestCase
         // Assert file was stored
         $leave = LeaveRequest::first();
         $this->assertSame(now()->addDays(4)->toDateString(), $leave->tanggal_selesai->toDateString());
-        Storage::disk('public')->assertExists($leave->bukti_path);
+        Storage::disk('private')->assertExists($leave->bukti_path);
     }
 
     public function test_leave_submission_accepts_a_pdf_document(): void
     {
-        Storage::fake('public');
+        Storage::fake('private');
 
         $user = User::factory()->create(['role' => 'participant']);
         $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '124', 'qr_token' => Str::uuid()]);
@@ -236,7 +236,7 @@ class PhaseFLeaveRequestTest extends TestCase
 
     public function test_multi_day_leave_requires_an_end_date_after_the_start_date(): void
     {
-        Storage::fake('public');
+        Storage::fake('private');
 
         $user = User::factory()->create(['role' => 'participant']);
         $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '125', 'qr_token' => Str::uuid()]);
@@ -261,7 +261,7 @@ class PhaseFLeaveRequestTest extends TestCase
 
     public function test_leave_submission_idempotency_replay_success()
     {
-        Storage::fake('public');
+        Storage::fake('private');
 
         $user = User::factory()->create(['role' => 'participant']);
         $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid()]);
@@ -305,7 +305,7 @@ class PhaseFLeaveRequestTest extends TestCase
 
     public function test_leave_submission_idempotency_conflict_when_payload_changes()
     {
-        Storage::fake('public');
+        Storage::fake('private');
 
         $user = User::factory()->create(['role' => 'participant']);
         $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid()]);

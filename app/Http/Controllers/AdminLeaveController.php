@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Attendance;
 use App\Models\LeaveRequest;
+use App\Support\PrivateFile;
 use Inertia\Inertia;
 
 class AdminLeaveController extends Controller
@@ -29,7 +30,7 @@ class AdminLeaveController extends Controller
                     'jenis_izin' => $req->jenis_izin,
                     'jenis_izin_label' => $this->jenisIzinLabel($req->jenis_izin),
                     'keterangan' => $req->keterangan ?? $req->alasan,
-                    'bukti_url' => $req->bukti_path ? asset('storage/'.$req->bukti_path) : null,
+                    'bukti_url' => PrivateFile::url('leave-document', $req),
                     'status_approval' => $req->status_approval,
                     'created_at' => $req->created_at->format('d M Y H:i'),
                 ];

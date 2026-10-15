@@ -86,11 +86,11 @@ class FaceRecognitionController extends Controller
                 if (in_array($type, ['jpg', 'jpeg', 'png'])) {
                     $photoData = base64_decode($photoData);
                     $filename = 'faces/'.$participant->id.'_'.time().'.'.$type;
-                    Storage::disk('public')->put($filename, $photoData);
+                    Storage::disk('private')->put($filename, $photoData);
 
                     // delete old photo if exists
                     if ($participant->photo_path) {
-                        Storage::disk('public')->delete($participant->photo_path);
+                        Storage::disk('private')->delete($participant->photo_path);
                     }
 
                     $updateData['photo_path'] = $filename;
@@ -137,11 +137,11 @@ class FaceRecognitionController extends Controller
                 if (in_array($type, ['jpg', 'jpeg', 'png'])) {
                     $photoData = base64_decode($photoData);
                     $filename = 'faces/'.$participant->id.'_self_'.time().'.'.$type;
-                    Storage::disk('public')->put($filename, $photoData);
+                    Storage::disk('private')->put($filename, $photoData);
 
                     // delete old photo if exists
                     if ($participant->photo_path) {
-                        Storage::disk('public')->delete($participant->photo_path);
+                        Storage::disk('private')->delete($participant->photo_path);
                     }
 
                     $updateData['photo_path'] = $filename;
@@ -174,7 +174,7 @@ class FaceRecognitionController extends Controller
     {
         // Hapus foto jika ditolak
         if ($participant->photo_path) {
-            Storage::disk('public')->delete($participant->photo_path);
+            Storage::disk('private')->delete($participant->photo_path);
         }
 
         $participant->update([
@@ -192,7 +192,7 @@ class FaceRecognitionController extends Controller
     public function deleteFace(Participant $participant)
     {
         if ($participant->photo_path) {
-            Storage::disk('public')->delete($participant->photo_path);
+            Storage::disk('private')->delete($participant->photo_path);
         }
 
         $participant->update([
@@ -500,7 +500,7 @@ class FaceRecognitionController extends Controller
             ]);
         } catch (\Throwable $exception) {
             if ($faceCapturePath) {
-                Storage::disk('public')->delete($faceCapturePath);
+                Storage::disk('private')->delete($faceCapturePath);
             }
 
             throw $exception;
@@ -558,7 +558,7 @@ class FaceRecognitionController extends Controller
 
         $path = 'attendance-face-captures/'.Str::uuid().'.jpg';
 
-        if (! Storage::disk('public')->put($path, $capture)) {
+        if (! Storage::disk('private')->put($path, $capture)) {
             throw ValidationException::withMessages([
                 'face_capture' => 'Foto presensi wajah gagal disimpan. Silakan coba lagi.',
             ]);

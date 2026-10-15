@@ -76,7 +76,6 @@ class FcmService
 
             Log::info('FCM token subscribed to topic', [
                 'topic' => self::TOPIC,
-                'token' => substr($token, 0, 20).'...',
             ]);
         } catch (\Throwable $e) {
             Log::error('FCM subscribe failed', [
@@ -95,7 +94,6 @@ class FcmService
 
             Log::info('FCM token unsubscribed from topic', [
                 'topic' => self::TOPIC,
-                'token' => substr($token, 0, 20).'...',
             ]);
         } catch (\Throwable $e) {
             Log::error('FCM unsubscribe failed', [

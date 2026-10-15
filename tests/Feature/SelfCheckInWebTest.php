@@ -23,7 +23,7 @@ class SelfCheckInWebTest extends TestCase
 
         $this->token = Str::random(16);
         Cache::put('active_workcode_token', $this->token, now()->endOfDay());
-        Storage::fake('public');
+        Storage::fake('private');
     }
 
     public function test_fails_if_no_active_workcode()
@@ -79,7 +79,7 @@ class SelfCheckInWebTest extends TestCase
         $attendance = Attendance::where('participant_id', $participant->id)->firstOrFail();
         $this->assertNotNull($attendance->signature_path);
         $this->assertSame('tanda_tangan', $attendance->attendance_method);
-        Storage::disk('public')->assertExists($attendance->signature_path);
+        Storage::disk('private')->assertExists($attendance->signature_path);
     }
 
     public function test_gtt_participant_without_nip_can_be_selected_and_check_in()

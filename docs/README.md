@@ -8,6 +8,7 @@ Indeks seluruh dokumentasi teknis. Untuk gambaran umum dan instalasi, mulai dari
 | [api/API_CONTRACT.md](api/API_CONTRACT.md) | Kontrak request/response `/api/v1`, header `Idempotency-Key`, kode error | Developer aplikasi Android |
 | [implementation/](implementation/README.md) | Rencana perbaikan Fase 0–6 (keamanan, privasi, konsolidasi presensi, operasional) | Developer yang mengerjakan perbaikan |
 | [audits/audit_report.md](audits/audit_report.md) | Audit fondasi model data dan API | Referensi riwayat |
+| [security.md](security.md) | Kebijakan data biometrik dan data pribadi: data yang disimpan, akses, retensi, insiden | Admin sekolah & developer |
 | [ux/walkthrough.md](ux/walkthrough.md) | Catatan perbaikan UX mobile-first (layout, kamera, scanner) | Referensi riwayat |
 
 Perbarui dokumen arsitektur setiap kali schema, route, role, alur presensi, atau proses deployment berubah.

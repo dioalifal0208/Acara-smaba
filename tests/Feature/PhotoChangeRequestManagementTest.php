@@ -16,7 +16,7 @@ class PhotoChangeRequestManagementTest extends TestCase
 
     public function test_participant_list_marks_a_pending_photo_change_request(): void
     {
-        Storage::fake('public');
+        Storage::fake('private');
         $admin = User::factory()->create(['role' => 'admin']);
         $participant = Participant::create([
             'nama' => 'Peserta Foto Baru',
@@ -27,7 +27,7 @@ class PhotoChangeRequestManagementTest extends TestCase
             'photo_path' => 'photo-change-requests/peserta.jpg',
             'status' => 'pending',
         ]);
-        Storage::disk('public')->put($request->photo_path, 'candidate-photo');
+        Storage::disk('private')->put($request->photo_path, 'candidate-photo');
 
         $this->actingAs($admin)
             ->get(route('participants.index'))
@@ -35,12 +35,13 @@ class PhotoChangeRequestManagementTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Participants/Index')
                 ->where('participants.0.pending_photo_change_request.id', $request->id)
-                ->where('participants.0.pending_photo_change_request.photo_url', url('/storage/'.$request->photo_path)));
+                ->where('participants.0.pending_photo_change_request.photo_url', fn (string $url) => str_contains($url, "/files/photo-change-request/{$request->id}")
+                    && str_contains($url, 'signature=')));
     }
 
     public function test_admin_can_approve_pending_photo_change_from_participant_management(): void
     {
-        Storage::fake('public');
+        Storage::fake('private');
         $admin = User::factory()->create(['role' => 'admin']);
         $participant = Participant::create([
             'nama' => 'Peserta Foto Baru',
@@ -49,14 +50,14 @@ class PhotoChangeRequestManagementTest extends TestCase
             'face_status' => 'approved',
             'face_descriptor' => [0.1, 0.2],
         ]);
-        Storage::disk('public')->put('faces/old.jpg', 'old-photo');
+        Storage::disk('private')->put('faces/old.jpg', 'old-photo');
         $request = PhotoChangeRequest::create([
             'participant_id' => $participant->id,
             'photo_path' => 'photo-change-requests/new.jpg',
             'face_descriptor' => [0.8, 0.7],
             'status' => 'pending',
         ]);
-        Storage::disk('public')->put($request->photo_path, 'candidate-photo');
+        Storage::disk('private')->put($request->photo_path, 'candidate-photo');
 
         $this->actingAs($admin)
             ->post(route('photo-change-requests.approve', $request))
@@ -68,6 +69,6 @@ class PhotoChangeRequestManagementTest extends TestCase
         $this->assertSame($admin->id, $request->reviewed_by);
         $this->assertSame('photo-change-requests/new.jpg', $participant->photo_path);
         $this->assertSame([0.8, 0.7], $participant->face_descriptor);
-        Storage::disk('public')->assertMissing('faces/old.jpg');
+        Storage::disk('private')->assertMissing('faces/old.jpg');
     }
 }

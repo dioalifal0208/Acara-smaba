@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\PrivateFile;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
@@ -9,6 +10,20 @@ use Illuminate\Support\Carbon;
 class Workcode extends Model
 {
     use HasFactory;
+
+    /** @var list<string> path file pribadi yang dihapus setelah workcode terhapus (bukan kolom). */
+    public array $privateFilesToDelete = [];
+
+    protected static function booted(): void
+    {
+        // Presensi & izin terhapus lewat cascade DB; bersihkan foto presensi, tanda tangan, dan dokumen izinnya.
+        static::deleting(function (Workcode $workcode) {
+            $workcode->privateFilesToDelete = PrivateFile::pathsOwnedByWorkcode($workcode->id);
+        });
+        static::deleted(function (Workcode $workcode) {
+            PrivateFile::disk()->delete($workcode->privateFilesToDelete);
+        });
+    }
 
     protected $fillable = [
         'nama_workcode',
@@ -141,5 +156,4 @@ class Workcode extends Model
 
         return $workcodes->values();
     }
-
 }

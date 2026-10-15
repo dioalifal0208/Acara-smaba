@@ -472,9 +472,9 @@ Production harus memakai `APP_ENV=production`, `APP_DEBUG=false`, HTTPS, databas
 
 ### Tinggi
 
-3. **Data biometrik lengkap dicatat ke log oleh API attendance.** `Api/V1/AttendanceController` mencatat seluruh incoming face descriptor. Hapus logging descriptor dan sanitasi log lama karena descriptor merupakan data biometrik sensitif.
+3. ~~**Data biometrik lengkap dicatat ke log oleh API attendance.**~~ **Selesai (Fase 1, Okt 2026).** Log descriptor/jarak dihapus, penyaring log `App\Logging\RedactSensitiveData` aktif, dan log lama dibersihkan.
 
-4. **Dokumen izin disimpan pada disk publik.** Bukti izin ditempatkan di `storage/app/public/dokumen_izin` dan dapat disajikan oleh symlink/fallback `/storage/{path}`. Pindahkan ke disk privat dan sediakan endpoint download berotorisasi.
+4. ~~**Dokumen izin disimpan pada disk publik.**~~ **Selesai (Fase 1, Okt 2026).** Foto wajah, foto presensi, tanda tangan, dan dokumen izin kini di disk `private` dan hanya disajikan lewat URL bertanda tangan (`App\Support\PrivateFile`); fallback `/storage/{path}` di-whitelist. Lihat `docs/security.md`.
 
 5. **Endpoint face match bersifat publik dan melakukan pencarian 1:N ke seluruh peserta approved.** Endpoint juga dapat membuat attendance. Tambahkan token sesi/nonce Master QR berumur pendek, rate limit khusus, validasi liveness yang diwajibkan, dan pertimbangkan pencocokan 1:1 setelah identitas peserta dipilih.
 

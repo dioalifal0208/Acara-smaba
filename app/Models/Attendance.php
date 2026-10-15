@@ -33,7 +33,7 @@ class Attendance extends Model
     protected static function booted(): void
     {
         static::deleting(function (Attendance $attendance) {
-            Storage::disk('public')->delete(array_filter([
+            Storage::disk('private')->delete(array_filter([
                 $attendance->signature_path,
                 $attendance->face_capture_path,
             ]));

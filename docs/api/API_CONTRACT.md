@@ -264,6 +264,8 @@ dokumen:            file (jpg/png/pdf, opsional)
 
 ## 5. Photo Change Request
 
+> **URL foto (`photo_url`) — berlaku sejak Fase 1 (Okt 2026):** semua `photo_url` di `/me`, `/me/photo`, dan respons ganti foto kini berupa **URL bertanda tangan sementara** ke `/files/...` (berlaku 60 menit), bukan lagi `/storage/...`. URL bisa langsung dimuat library gambar (Glide/Coil) **tanpa** header `Authorization`. Jangan menyimpan URL ini permanen atau memakai URL lama di cache: ambil ulang dari API bila gambar gagal dimuat (HTTP 403 = URL kedaluwarsa). Cache gambar sebaiknya memakai key `participant_id`, bukan URL lengkap.
+
 **URL**: `POST /api/v1/me/photo-change-requests`
 **Headers**:
 - `Authorization: Bearer <token>`

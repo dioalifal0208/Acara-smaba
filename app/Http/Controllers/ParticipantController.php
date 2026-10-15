@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Participant;
 use App\Models\User;
 use App\Services\QrCodeService;
+use App\Support\PrivateFile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
@@ -49,9 +50,7 @@ class ParticipantController extends Controller
                     'photo_url' => $participant->photo_url,
                     'pending_photo_change_request' => $pendingPhotoChangeRequest ? [
                         'id' => $pendingPhotoChangeRequest->id,
-                        'photo_url' => $pendingPhotoChangeRequest->photo_path
-                            ? url('/storage/'.$pendingPhotoChangeRequest->photo_path)
-                            : null,
+                        'photo_url' => PrivateFile::url('photo-change-request', $pendingPhotoChangeRequest),
                         'created_at' => $pendingPhotoChangeRequest->created_at->toIso8601String(),
                     ] : null,
                     'has_attended' => $participant->attendances_count > 0,
@@ -265,8 +264,8 @@ class ParticipantController extends Controller
      */
     public function destroy(Participant $participant)
     {
-        if ($participant->photo_path && Storage::disk('public')->exists($participant->photo_path)) {
-            Storage::disk('public')->delete($participant->photo_path);
+        if ($participant->photo_path && Storage::disk('private')->exists($participant->photo_path)) {
+            Storage::disk('private')->delete($participant->photo_path);
         }
 
         $this->deleteParticipantUser($participant);
@@ -292,8 +291,8 @@ class ParticipantController extends Controller
 
         $count = 0;
         foreach ($participants as $participant) {
-            if ($participant->photo_path && Storage::disk('public')->exists($participant->photo_path)) {
-                Storage::disk('public')->delete($participant->photo_path);
+            if ($participant->photo_path && Storage::disk('private')->exists($participant->photo_path)) {
+                Storage::disk('private')->delete($participant->photo_path);
             }
 
             $this->deleteParticipantUser($participant);
