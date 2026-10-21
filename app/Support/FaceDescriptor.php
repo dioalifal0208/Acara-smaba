@@ -52,6 +52,7 @@ final class FaceDescriptor
     /**
      * Jarak Euclidean terdekat antara input dan salah satu vector tersimpan berdimensi sama.
      * Mengembalikan null bila tidak ada vector berdimensi sama (beda model AI).
+     * Untuk pencocokan presensi pakai App\Support\FaceMatcher (aturan tunggal web & Android).
      *
      * @param  bool  $normalize  L2-normalisasi kedua sisi (Android mengirim vector ternormalisasi)
      */
@@ -127,6 +128,24 @@ final class FaceDescriptor
         return max(array_map(fn ($vector) => self::distance($vector, $mean), $vectors));
     }
 
+    /**
+     * Ubah angka (mis. string dari multipart) menjadi float, mempertahankan bentuk single/multi.
+     */
+    public static function toFloats(array $value): array
+    {
+        if (self::isVector($value)) {
+            return array_map('floatval', array_values($value));
+        }
+
+        return array_map(fn ($vector) => is_array($vector) ? array_map('floatval', array_values($vector)) : $vector, array_values($value));
+    }
+
+    /** Benar bila nilai adalah satu vector numerik 128-d (model face-api.js). */
+    public static function isCompatibleVector(mixed $value): bool
+    {
+        return is_array($value) && count($value) === self::DIMENSIONS && self::isVector($value);
+    }
+
     private static function isVector(array $value): bool
     {
         foreach ($value as $item) {
@@ -138,7 +157,7 @@ final class FaceDescriptor
         return true;
     }
 
-    private static function distance(array $a, array $b): float
+    public static function distance(array $a, array $b): float
     {
         $sum = 0.0;
         foreach ($a as $i => $value) {
@@ -148,7 +167,7 @@ final class FaceDescriptor
         return sqrt($sum);
     }
 
-    private static function normalize(array $vector): array
+    public static function normalize(array $vector): array
     {
         $norm = sqrt(array_sum(array_map(fn ($v) => $v * $v, $vector)));
 

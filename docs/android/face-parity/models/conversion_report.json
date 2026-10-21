@@ -1,0 +1,215 @@
+{
+  "tensorflow_version": "2.16.1",
+  "python_version": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+  "numpy_version": "1.26.4",
+  "converter_sha256": "4b07bae101010faf8fb86d70a4178452491c0b1600dc29fad3a018f39b9755e4",
+  "runtime": {
+    "tflite_resolver": "BUILTIN_WITHOUT_DEFAULT_DELEGATES",
+    "num_threads": 1,
+    "TF_ENABLE_ONEDNN_OPTS": "0"
+  },
+  "android_contract": {
+    "input": "float32 NHWC RGB 0..255 after centered zero padding and resize",
+    "normalization": "inside models; Android must not normalize again",
+    "mirror": "inference pixels are not mirrored; preview may be mirrored",
+    "resize": "bilinear align_corners=false half_pixel_centers=false",
+    "embedding_output": "raw 128-dimensional descriptor, no L2 inside model"
+  },
+  "source": {
+    "face_api_version": "0.22.2",
+    "weights": [
+      {
+        "file": "public/models/face_landmark_68_model-shard1",
+        "bytes": 356840,
+        "sha256": "4611ef65c87d836d03d684b30eec4d195d8b219fa1dd58fc58945831c6b9299b"
+      },
+      {
+        "file": "public/models/face_landmark_68_model-weights_manifest.json",
+        "bytes": 7889,
+        "sha256": "d30f6cc341009ea4f8223876959289b96576fc54a2615f92da9741ab9c5f0bbc"
+      },
+      {
+        "file": "public/models/face_recognition_model-shard1",
+        "bytes": 4194304,
+        "sha256": "412566a2b8d814d84c60b8055ec5d3b3b2328ef7cd7853384e03ec3db7b053d8"
+      },
+      {
+        "file": "public/models/face_recognition_model-shard2",
+        "bytes": 2249728,
+        "sha256": "69350fdecd845c532e44dd8f7d0521c773505ef46b87cc34f46640a0cc334ecc"
+      },
+      {
+        "file": "public/models/face_recognition_model-weights_manifest.json",
+        "bytes": 18303,
+        "sha256": "6619f4126f845c1f7857f39cbd79565f375734f46e0dd25d9602f8dc21cda9f5"
+      }
+    ],
+    "fixtures_sha256": "74a0ddaa4c32a106e359cb148bfb3e7a4ae3d57719e9a719b65051773d7cf879"
+  },
+  "tolerances": {
+    "element_max_abs": 0.001,
+    "descriptor_l2": 0.005,
+    "landmark_px": 0.5,
+    "pipeline_descriptor_l2": 0.01
+  },
+  "models": {
+    "face_landmark_68": {
+      "bytes": 1443480,
+      "sha256": "7661b4fd200a26204bc002b66ae592a9f6183bd1a0c593fefe99c0a845f9d7fe",
+      "inputs": [
+        {
+          "name": "serving_default_rgb_0_255:0",
+          "shape": [
+            1,
+            112,
+            112,
+            3
+          ],
+          "dtype": "float32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "PartitionedCall:0",
+          "shape": [
+            1,
+            136
+          ],
+          "dtype": "float32"
+        }
+      ],
+      "ops": [
+        "ADD",
+        "AVERAGE_POOL_2D",
+        "CONV_2D",
+        "DEPTHWISE_CONV_2D",
+        "FULLY_CONNECTED",
+        "SUB"
+      ]
+    },
+    "face_recognition": {
+      "bytes": 22507284,
+      "sha256": "af9b49c0a4d31e71a605b3d749bd420170dee85f43b49731e6444cf04c66b512",
+      "inputs": [
+        {
+          "name": "serving_default_rgb_0_255:0",
+          "shape": [
+            1,
+            150,
+            150,
+            3
+          ],
+          "dtype": "float32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "PartitionedCall:0",
+          "shape": [
+            1,
+            128
+          ],
+          "dtype": "float32"
+        }
+      ],
+      "ops": [
+        "ADD",
+        "AVERAGE_POOL_2D",
+        "CONCATENATION",
+        "CONV_2D",
+        "FULLY_CONNECTED",
+        "MAX_POOL_2D",
+        "MEAN",
+        "PAD",
+        "SUB"
+      ]
+    }
+  },
+  "verification": {
+    "tensorflow": {
+      "recognition": [
+        {
+          "name": "recog_150_a",
+          "max_abs": 1.492942352521176e-07,
+          "l2_distance": 4.936614093811338e-07,
+          "pass": true
+        },
+        {
+          "name": "recog_150_b",
+          "max_abs": 1.8624026336400146e-07,
+          "l2_distance": 5.357297772554283e-07,
+          "pass": true
+        },
+        {
+          "name": "recog_150_c",
+          "max_abs": 1.7927586477319013e-07,
+          "l2_distance": 5.474313307546891e-07,
+          "pass": true
+        },
+        {
+          "name": "recog_120x150_pad",
+          "max_abs": 1.6765509262134382e-07,
+          "l2_distance": 5.644305345662581e-07,
+          "pass": true
+        }
+      ],
+      "pipeline": {
+        "landmark_max_px": 0.0002521352539019972,
+        "aligned_rect": {
+          "x": 141,
+          "y": 88,
+          "width": 61,
+          "height": 61
+        },
+        "aligned_rect_match": true,
+        "max_abs": 3.017500930790895e-07,
+        "l2_distance": 1.0263843346037485e-06,
+        "pass": true
+      },
+      "pass": true
+    },
+    "tflite": {
+      "recognition": [
+        {
+          "name": "recog_150_a",
+          "max_abs": 1.492942352521176e-07,
+          "l2_distance": 5.15758778044531e-07,
+          "pass": true
+        },
+        {
+          "name": "recog_150_b",
+          "max_abs": 2.6074606933323974e-07,
+          "l2_distance": 6.79423360165037e-07,
+          "pass": true
+        },
+        {
+          "name": "recog_150_c",
+          "max_abs": 1.791655883653931e-07,
+          "l2_distance": 6.02519514010706e-07,
+          "pass": true
+        },
+        {
+          "name": "recog_120x150_pad",
+          "max_abs": 2.2354136886004738e-07,
+          "l2_distance": 6.332086671431084e-07,
+          "pass": true
+        }
+      ],
+      "pipeline": {
+        "landmark_max_px": 0.0002521352539019972,
+        "aligned_rect": {
+          "x": 141,
+          "y": 88,
+          "width": 61,
+          "height": 61
+        },
+        "aligned_rect_match": true,
+        "max_abs": 3.9115706024217545e-07,
+        "l2_distance": 1.2034816947094385e-06,
+        "pass": true
+      },
+      "pass": true
+    }
+  },
+  "pass": true
+}

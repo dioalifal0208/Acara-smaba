@@ -156,21 +156,11 @@ class AttendanceController extends Controller
         $lateMinutes = 0;
         $lateFormatted = '';
 
-        if ($activeWorkcode->kategori === 'harian' && $activeWorkcode->jam_datang_selesai) {
-            $batasJamDatang = Carbon::createFromTimeString($activeWorkcode->jam_datang_selesai)
-                ->setDate($waktuHadir->year, $waktuHadir->month, $waktuHadir->day);
-
-            if ($waktuHadir->greaterThan($batasJamDatang)) {
-                $isLate = true;
-                $lateMinutes = (int) $batasJamDatang->diffInMinutes($waktuHadir);
-                if ($lateMinutes >= 60) {
-                    $hours = floor($lateMinutes / 60);
-                    $mins = $lateMinutes % 60;
-                    $lateFormatted = $mins > 0 ? "{$hours} jam {$mins} menit" : "{$hours} jam";
-                } else {
-                    $lateFormatted = "{$lateMinutes} menit";
-                }
-            }
+        // Batas jam datang mengikuti jadwal hari ini (jadwal_per_hari), sama seperti presensi wajah.
+        if ($activeWorkcode->isLateAt($waktuHadir)) {
+            $isLate = true;
+            $lateMinutes = $activeWorkcode->lateMinutes($waktuHadir);
+            $lateFormatted = Workcode::formatLateDuration($lateMinutes);
         }
 
         // Catat presensi datang
@@ -321,7 +311,9 @@ class AttendanceController extends Controller
             })
             ->orderBy('created_at')
             ->get()
-            ->map(function ($att) {
+            ->map(function ($att) use ($workcode) {
+                $late = ($att->status ?? 'hadir') === 'hadir' && $att->waktu_hadir && $workcode->isLateAt($att->waktu_hadir);
+
                 return [
                     'id' => $att->id,
                     'tanggal' => $att->tanggal ?? $att->waktu_hadir?->toDateString() ?? $att->created_at->format('Y-m-d'),
@@ -331,8 +323,11 @@ class AttendanceController extends Controller
                     'waktu_pulang' => $att->waktu_pulang?->format('H:i') ?? '-',
                     'signature_url' => PrivateFile::url('attendance-signature', $att),
                     'face_capture_url' => PrivateFile::url('attendance-face', $att),
+                    'face_capture_pulang_url' => PrivateFile::url('attendance-face-pulang', $att),
                     'attendance_method' => $this->attendanceMethodLabel($att),
                     'status' => $att->status ?? 'hadir',
+                    'is_late' => $late,
+                    'late_minutes' => $late ? $workcode->lateMinutes($att->waktu_hadir) : 0,
                 ];
             });
 
@@ -572,11 +567,7 @@ class AttendanceController extends Controller
             ->get()
             ->groupBy('participant_id');
 
-        $batasJamDatang = $workcode->jam_datang_selesai
-            ? Carbon::createFromTimeString($workcode->jam_datang_selesai)
-            : Carbon::createFromTimeString('07:00:00');
-
-        return $allParticipants->map(function ($p) use ($attendanceRecords, $leaveRecords, $batasJamDatang) {
+        return $allParticipants->map(function ($p) use ($attendanceRecords, $leaveRecords, $workcode) {
             $participantAttendances = $attendanceRecords->get($p->id, collect());
             $participantLeaves = $leaveRecords->get($p->id, collect());
 
@@ -605,11 +596,7 @@ class AttendanceController extends Controller
                     case 'hadir':
                     default:
                         if ($att->waktu_hadir) {
-                            $jamHadir = Carbon::parse($att->waktu_hadir);
-                            $batas = $batasJamDatang->copy()->setDate($jamHadir->year, $jamHadir->month, $jamHadir->day);
-                            if ($jamHadir->greaterThan($batas)) {
-                                $totalMenitTerlambat += (int) $batas->diffInMinutes($jamHadir);
-                            }
+                            $totalMenitTerlambat += $workcode->lateMinutes($att->waktu_hadir);
                         }
                         break;
                 }

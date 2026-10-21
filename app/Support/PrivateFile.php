@@ -36,6 +36,7 @@ final class PrivateFile
         'photo-change-request' => [PhotoChangeRequest::class, 'photo_path'],
         'leave-document' => [LeaveRequest::class, 'bukti_path'],
         'attendance-face' => [Attendance::class, 'face_capture_path'],
+        'attendance-face-pulang' => [Attendance::class, 'face_capture_pulang_path'],
         'attendance-signature' => [Attendance::class, 'signature_path'],
     ];
 
@@ -99,6 +100,7 @@ final class PrivateFile
             Participant::query()->whereKey($participantId)->pluck('photo_path'),
             PhotoChangeRequest::query()->where('participant_id', $participantId)->pluck('photo_path'),
             Attendance::query()->where('participant_id', $participantId)->pluck('face_capture_path'),
+            Attendance::query()->where('participant_id', $participantId)->pluck('face_capture_pulang_path'),
             Attendance::query()->where('participant_id', $participantId)->pluck('signature_path'),
             LeaveRequest::query()->where('participant_id', $participantId)->pluck('bukti_path'),
         ]);
@@ -113,6 +115,7 @@ final class PrivateFile
     {
         return self::collect([
             Attendance::query()->where('workcode_id', $workcodeId)->pluck('face_capture_path'),
+            Attendance::query()->where('workcode_id', $workcodeId)->pluck('face_capture_pulang_path'),
             Attendance::query()->where('workcode_id', $workcodeId)->pluck('signature_path'),
             LeaveRequest::query()->where('workcode_id', $workcodeId)->pluck('bukti_path'),
         ]);

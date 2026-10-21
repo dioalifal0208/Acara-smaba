@@ -202,7 +202,7 @@ Kelompok halaman:
 
 Komponen penting:
 
-- scanner/biometrik: `AdminFaceScanner`, `FaceScannerModal`, `FaceRegistrationModal`, `SelfFaceRegistrationModal`;
+- biometrik (pendaftaran wajah saja; presensi wajah hanya di Android): `FaceRegistrationModal`, `SelfFaceRegistrationModal`;
 - workflow: `ImportModal`, `LeaveRequestModal`, `ApproveFaceModal`, `ApprovePhotoChangeRequestModal`, `AttendanceCalendarModal`;
 - UI umum: modal, dialog konfirmasi, toast, dropdown, button, input, checkbox, dan navigation link;
 - `Utils/liveness.js`: utility pemeriksaan liveness wajah;
@@ -322,7 +322,6 @@ erDiagram
 - lookup/search peserta dan unduh QR peserta;
 - `GET|POST /self-checkin/{token}`;
 - `GET /api/holidays`;
-- `POST /api/face/match`;
 - `GET /verify-signature/{workcode}`;
 - fallback `GET /storage/{path}` untuk hosting tanpa symlink;
 - route login dan reset password dari `routes/auth.php` (registrasi publik sudah ditutup).

@@ -47,7 +47,18 @@ class LeaveRequestController extends Controller
             'participant_id' => 'nullable|integer|exists:participants,id',
         ]);
 
-        if ($validator->fails()) {
+        try {
+            $validationFails = $validator->fails();
+        } catch (\Throwable) {
+            // File sementara yang tidak dapat dibaca (termasuk file tersamarkan) tidak boleh
+            // berubah menjadi 500 atau membocorkan detail path server.
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Dokumen tidak dapat dibaca atau formatnya tidak valid.',
+            ], 422);
+        }
+
+        if ($validationFails) {
             return response()->json([
                 'status' => 'error',
                 'message' => $validator->errors()->first(),
@@ -109,7 +120,18 @@ class LeaveRequestController extends Controller
             'dokumen' => 'required|file|mimes:jpg,jpeg,png,pdf|max:5120',
         ]);
 
-        if ($validator->fails()) {
+        try {
+            $validationFails = $validator->fails();
+        } catch (\Throwable) {
+            // File sementara yang tidak dapat dibaca (termasuk file tersamarkan) tidak boleh
+            // berubah menjadi 500 atau membocorkan detail path server.
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Dokumen tidak dapat dibaca atau formatnya tidak valid.',
+            ], 422);
+        }
+
+        if ($validationFails) {
             return response()->json([
                 'status' => 'error',
                 'message' => $validator->errors()->first(),

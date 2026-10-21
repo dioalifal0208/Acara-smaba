@@ -3,6 +3,9 @@
 namespace App\Console\Commands;
 
 use App\Models\Participant;
+use App\Services\FcmService;
+use App\Support\FaceDescriptor;
+use App\Support\FaceMatcher;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
@@ -15,14 +18,16 @@ class UpdateFaceDescriptor extends Command
      *   php artisan face:update-descriptor
      *   php artisan face:update-descriptor --id=5
      *   php artisan face:update-descriptor --list
+     *   php artisan face:update-descriptor --list --reenroll
      *   php artisan face:update-descriptor --id=5 --dry-run
      */
     protected $signature = 'face:update-descriptor
                             {--id=      : ID participant yang ingin di-update (opsional, bisa dipilih interaktif)}
                             {--list     : Tampilkan semua participant beserta status face_descriptor-nya}
+                            {--reenroll : Bersama --list: hanya peserta yang harus mendaftar ulang wajah (data tidak kompatibel)}
                             {--dry-run  : Jalankan tanpa menyimpan ke database (preview saja)}';
 
-    protected $description = 'Update kolom face_descriptor (128-D atau 512-D) pada tabel participants langsung dari terminal.';
+    protected $description = 'Update face_descriptor 128-D (model '.FaceMatcher::MODEL_ID.') peserta dari terminal, atau daftar peserta yang perlu daftar ulang.';
 
     public function handle(): int
     {
@@ -34,7 +39,7 @@ class UpdateFaceDescriptor extends Command
 
         // ── Opsi --list: tampilkan semua participant ───────────────────────
         if ($this->option('list')) {
-            return $this->showParticipantList();
+            return $this->showParticipantList((bool) $this->option('reenroll'));
         }
 
         // ── Pilih participant ──────────────────────────────────────────────
@@ -73,13 +78,10 @@ class UpdateFaceDescriptor extends Command
 
         $this->info("Participant ditemukan: [{$participant->id}] {$participant->nama}");
 
-        // Info descriptor lama
-        if ($participant->face_descriptor) {
-            $oldDesc = is_array($participant->face_descriptor)
-                ? $participant->face_descriptor
-                : json_decode($participant->face_descriptor, true);
-            $oldCount = is_array($oldDesc) ? count($oldDesc) : '?';
-            $this->warn("⚠  Sudah ada face_descriptor ({$oldCount}-D) — akan ditimpa.");
+        // Info descriptor lama (ringkasan saja, tanpa isi vector)
+        $oldVectors = FaceDescriptor::vectors($participant->face_descriptor);
+        if ($oldVectors !== []) {
+            $this->warn('⚠  Sudah ada face_descriptor ('.$this->describeVectors($oldVectors).') — akan ditimpa.');
         } else {
             $this->line('ℹ  Belum ada face_descriptor.');
         }
@@ -87,9 +89,9 @@ class UpdateFaceDescriptor extends Command
         $this->newLine();
 
         // ── Panduan input ─────────────────────────────────────────────────
-        $this->line('Paste JSON array face_descriptor di bawah ini.');
-        $this->line('Format  : [0.123, -0.045, 0.211, ...]');
-        $this->line('Diterima: 128-D (model Web) atau 512-D (model Android)');
+        $this->line('Paste JSON face_descriptor di bawah ini.');
+        $this->line('Format  : [0.123, -0.045, ...] (1 vector) atau [[...], [...], [...]] (3–10 sampel)');
+        $this->line('Diterima: hanya 128-D dari model '.FaceMatcher::MODEL_ID.' (face-api.js web / TFLite Android).');
         $this->line('Tekan ENTER lalu ketik "DONE" dan ENTER lagi jika sudah selesai.');
         $this->newLine();
 
@@ -121,59 +123,25 @@ class UpdateFaceDescriptor extends Command
             return self::FAILURE;
         }
 
-        if (! is_array($descriptor)) {
-            $this->error('Input harus berupa JSON array (dimulai [ diakhiri ]), bukan objek atau nilai lain.');
+        // Aturan yang sama dengan pendaftaran web & Android (128-D, sampel konsisten).
+        if ($error = FaceDescriptor::validateEnrollment($descriptor, requireMultiple: false)) {
+            $this->error($error);
+            $this->line('Hanya descriptor 128-D model '.FaceMatcher::MODEL_ID.' yang diterima. Vector 512-D dari aplikasi Android lama tidak kompatibel.');
 
             return self::FAILURE;
         }
 
-        $size = count($descriptor);
+        $vectors = FaceDescriptor::vectors($descriptor);
 
-        if (! in_array($size, [128, 512])) {
-            $this->error("Ukuran array tidak valid: {$size} elemen.");
-            $this->error('Yang diterima hanya: 128 (model Web) atau 512 (model Android).');
-
-            return self::FAILURE;
-        }
-
-        $allNumeric = collect($descriptor)->every(fn ($v) => is_numeric($v));
-        if (! $allNumeric) {
-            $this->error('Array mengandung elemen non-numerik. Periksa kembali data Anda.');
-
-            return self::FAILURE;
-        }
-
-        // Cast eksplisit ke float (cegah integer 0 → int bukan float)
-        $descriptor = array_map('floatval', $descriptor);
-
-        // ── Hitung L2 Norm ────────────────────────────────────────────────
-        $l2norm = sqrt(array_sum(array_map(fn ($x) => $x * $x, $descriptor)));
-        $isNormalized = abs($l2norm - 1.0) < 0.01;
-
-        // ── Tampilkan preview ─────────────────────────────────────────────
+        // Descriptor disimpan mentah seperti pendaftaran web; normalisasi L2 dilakukan saat pencocokan.
+        // Isi vector sengaja tidak ditampilkan karena termasuk data biometrik.
         $this->newLine();
         $this->line('┌─────────────────────── PREVIEW DATA ───────────────────────┐');
-        $this->line("  Participant      : [{$participant->id}] {$participant->nama}");
-        $this->line("  Dimensi Array    : {$size}-D");
-        $this->line('  5 Elemen Pertama : '.implode(', ', array_slice($descriptor, 0, 5)));
-        $this->line('  5 Elemen Terakhir: '.implode(', ', array_slice($descriptor, -5)));
-        $normLabel = number_format($l2norm, 6).($isNormalized ? '  ✅ Sudah normalized' : '  ⚠  BELUM normalized');
-        $this->line("  L2 Norm          : {$normLabel}");
+        $this->line("  Participant : [{$participant->id}] {$participant->nama}");
+        $this->line('  Data        : '.$this->describeVectors($vectors));
+        $this->line('  Model       : '.FaceMatcher::MODEL_ID);
         $this->line('└────────────────────────────────────────────────────────────┘');
         $this->newLine();
-
-        // ── Tawarkan auto-normalisasi jika belum ─────────────────────────
-        if (! $isNormalized) {
-            $this->warn('L2 Norm ≠ 1.0 — Array ini belum di-L2 Normalize.');
-            $autoNorm = $this->confirm('Lakukan L2 Normalization otomatis sekarang?', true);
-
-            if ($autoNorm) {
-                $descriptor = array_map(fn ($x) => $x / $l2norm, $descriptor);
-                $newNorm = sqrt(array_sum(array_map(fn ($x) => $x * $x, $descriptor)));
-                $this->info('✅ L2 Normalization selesai. Norm baru: '.number_format($newNorm, 6));
-                $this->newLine();
-            }
-        }
 
         // ── Dry-run mode ──────────────────────────────────────────────────
         if ($this->option('dry-run')) {
@@ -183,7 +151,7 @@ class UpdateFaceDescriptor extends Command
         }
 
         // ── Konfirmasi ────────────────────────────────────────────────────
-        if (! $this->confirm("Simpan face_descriptor ({$size}-D) untuk [{$participant->id}] {$participant->nama}?", true)) {
+        if (! $this->confirm("Simpan face_descriptor untuk [{$participant->id}] {$participant->nama}?", true)) {
             $this->line('Dibatalkan.');
 
             return self::SUCCESS;
@@ -195,16 +163,17 @@ class UpdateFaceDescriptor extends Command
             'face_status' => 'approved',
         ]);
 
+        // Aplikasi Android peserta menyegarkan status wajah tanpa harus dibuka ulang.
+        app(FcmService::class)->sendStateChanged($participant, 'face');
+
         Log::info("[face:update-descriptor] Descriptor participant [{$participant->id}] diperbarui via CLI.", [
-            'dimensi' => $size,
-            'l2_norm' => number_format($l2norm, 6),
-            'normalized' => $isNormalized,
+            'sampel' => count($vectors),
         ]);
 
         $this->newLine();
         $this->info('✅ face_descriptor berhasil disimpan!');
         $this->line("   Participant  : [{$participant->id}] {$participant->nama}");
-        $this->line("   Dimensi      : {$size}-D");
+        $this->line('   Data         : '.$this->describeVectors($vectors));
         $this->line('   face_status  : approved');
         $this->newLine();
 
@@ -212,47 +181,58 @@ class UpdateFaceDescriptor extends Command
     }
 
     /**
-     * Tampilkan daftar semua participant dengan detail descriptor.
+     * Tampilkan daftar participant dengan ringkasan descriptor (tanpa isi vector).
      */
-    private function showParticipantList(): int
+    private function showParticipantList(bool $onlyReenroll): int
     {
         $participants = Participant::orderBy('id')->get();
 
-        if ($participants->isEmpty()) {
-            $this->error('Tidak ada data participant.');
-
-            return self::FAILURE;
-        }
-
         $rows = $participants->map(function ($p) {
-            $desc = $p->face_descriptor;
-            $size = '-';
-            $norm = '-';
-
-            if ($desc) {
-                $arr = is_array($desc) ? $desc : json_decode($desc, true);
-                if (is_array($arr) && count($arr) > 0) {
-                    $size = count($arr).'-D';
-                    $n = sqrt(array_sum(array_map(fn ($x) => floatval($x) ** 2, $arr)));
-                    $norm = number_format($n, 4).(abs($n - 1.0) < 0.01 ? ' ✅' : ' ⚠');
-                }
-            }
+            $vectors = FaceDescriptor::vectors($p->face_descriptor);
+            $compatible = FaceMatcher::compatibleSampleCount($p->face_descriptor);
+            $needsReenroll = $vectors !== [] && $compatible === 0;
 
             return [
-                $p->id,
-                $p->nama,
-                $p->nis_nip ?? '-',
-                $p->face_status ?? 'none',
-                $size,
-                $norm,
+                'row' => [
+                    $p->id,
+                    $p->nama,
+                    $p->nis_nip ?? '-',
+                    $p->face_status ?? 'none',
+                    $vectors === [] ? '-' : $this->describeVectors($vectors),
+                    $compatible,
+                    $needsReenroll ? 'YA' : '-',
+                ],
+                'reenroll' => $needsReenroll,
             ];
-        })->toArray();
+        })
+            ->when($onlyReenroll, fn ($rows) => $rows->where('reenroll', true))
+            ->pluck('row')
+            ->values()
+            ->toArray();
+
+        if ($rows === []) {
+            $this->info($onlyReenroll ? 'Tidak ada peserta yang perlu daftar ulang wajah.' : 'Tidak ada data participant.');
+
+            return self::SUCCESS;
+        }
 
         $this->table(
-            ['ID', 'Nama', 'NIS/NIP', 'Face Status', 'Dimensi', 'L2 Norm'],
+            ['ID', 'Nama', 'NIS/NIP', 'Face Status', 'Data', 'Sampel 128-D', 'Daftar Ulang'],
             $rows
         );
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Ringkasan data wajah, mis. "3 sampel × 128-D" atau "1 sampel × 512-D".
+     *
+     * @param  list<list<float>>  $vectors
+     */
+    private function describeVectors(array $vectors): string
+    {
+        $dimensions = collect($vectors)->map(fn ($vector) => count($vector).'-D')->unique()->implode('/');
+
+        return count($vectors).' sampel × '.$dimensions;
     }
 }

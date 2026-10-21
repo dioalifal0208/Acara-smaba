@@ -1,5 +1,6 @@
 import { Head, router, useForm } from '@inertiajs/react';
 import { appUrl } from '@/lib/appUrl';
+import { backgroundReload, jitteredInterval } from '@/lib/backgroundReload';
 import { useState, useCallback, useEffect, useRef } from 'react';
 
 // ── Helper: Simple Lightweight Device Fingerprint (tanpa library eksternal) ──
@@ -46,13 +47,13 @@ function setLocalLock(workcodeId, participant, timestamp) {
 // ── Komponen: Halaman Terkunci Permanen (sudah absen) ──
 function LockedScreen({ lock, activeWorkcode }) {
     return (
-        <div className="relative min-h-[100dvh] bg-gradient-to-br from-emerald-50 via-white to-green-50 flex flex-col items-center justify-center p-4 sm:p-6 text-center overflow-y-auto">
+        <div className="relative min-h-[100dvh] bg-canvas flex flex-col items-center justify-center p-4 sm:p-6 text-center overflow-y-auto">
             {/* Glow */}
-            <div className="absolute top-0 left-0 w-64 h-64 rounded-full bg-emerald-400/10 blur-3xl pointer-events-none -translate-x-1/2 -translate-y-1/2" />
-            <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full bg-green-400/10 blur-3xl pointer-events-none translate-x-1/2 translate-y-1/2" />
+            <div className="absolute top-0 left-0 w-64 h-64 rounded-full bg-brand-500/10 blur-3xl pointer-events-none -translate-x-1/2 -translate-y-1/2" />
+            <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full bg-brand-violet/10 blur-3xl pointer-events-none translate-x-1/2 translate-y-1/2" />
 
             {/* Card */}
-            <div className="relative z-10 w-full max-w-sm rounded-3xl bg-white border border-emerald-200 shadow-2xl p-7">
+            <div className="relative z-10 w-full max-w-sm rounded-xl bg-white border border-emerald-100 shadow-soft-lg p-7">
                 {/* Logo */}
                 <div className="flex justify-center mb-4">
                     <img src={appUrl('images/logo.png')} alt="Logo E-Presensi SMABA" className="h-12 w-12 object-contain" />
@@ -130,18 +131,24 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
 
     // Halaman dari QR workcode dapat dibiarkan terbuka sebelum kegiatan dimulai.
     // Perbarui data dari server secara ringan agar workcode yang baru dibuat/diubah
-    // segera tampil tanpa scheduler server atau refresh manual.
+    // segera tampil tanpa scheduler server atau refresh manual. Berhenti setelah presensi berhasil,
+    // agar layar konfirmasi tidak berganti menjadi halaman "sesi berakhir" saat workcode selesai.
+    const isLocked = Boolean(deviceLock);
     useEffect(() => {
+        if (isLocked) {
+            return;
+        }
+
         const refreshInterval = window.setInterval(() => {
-            router.reload({
+            backgroundReload({
                 only: ['activeWorkcode'],
                 preserveScroll: true,
                 preserveState: true,
             });
-        }, 30000);
+        }, jitteredInterval(30000));
 
         return () => window.clearInterval(refreshInterval);
-    }, []);
+    }, [isLocked]);
 
     // Umpan balik audio sederhana untuk HP peserta
     const playAudio = useCallback((type) => {
@@ -239,10 +246,17 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
         if (val.trim().length >= 2) {
             setIsSearchingSuggestions(true);
             setShowSuggestions(true);
-            fetch(route('self-checkin.participants', token) + `?query=${encodeURIComponent(val)}`)
-                .then((res) => res.json())
+            fetch(route('self-checkin.participants', token) + `?query=${encodeURIComponent(val)}`, { headers: { Accept: 'application/json' } })
+                .then((res) => {
+                    // 410 = workcode QR ini sudah berakhir/ditutup: muat ulang agar halaman informasi tampil.
+                    if (res.status === 410) {
+                        router.reload();
+                    }
+
+                    return res.ok ? res.json() : [];
+                })
                 .then((d) => {
-                    setSuggestions(d);
+                    setSuggestions(Array.isArray(d) ? d : []);
                     setIsSearchingSuggestions(false);
                 })
                 .catch(() => {
@@ -347,6 +361,12 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
 
                     const resData = await response.json();
 
+                    if (response.status === 410) {
+                        // Sesi workcode berakhir/ditutup saat form masih terbuka: tampilkan halaman informasi.
+                        router.reload();
+                        return;
+                    }
+
                     if (response.ok) {
                         if (resData.status === 'success') {
                             // Kunci browser secara lokal - permanen untuk workcode ini
@@ -416,19 +436,19 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
         <>
             <Head title="Presensi Workcode - E-Presensi SMABA" />
 
-            <div className="relative min-h-[100dvh] bg-gradient-to-b from-emerald-50 via-slate-50 to-white text-slate-800 flex flex-col justify-between p-4 sm:p-6 overflow-y-auto">
+            <div className="relative min-h-[100dvh] bg-canvas text-slate-800 flex flex-col justify-between p-4 sm:p-6 overflow-y-auto">
                 {/* Glow Spots */}
-                <div className="absolute top-0 left-0 -translate-x-1/2 -translate-y-1/2 w-72 h-72 rounded-full bg-green-500/5 blur-3xl pointer-events-none" />
-                <div className="absolute bottom-0 right-0 translate-x-1/2 translate-y-1/2 w-80 h-80 rounded-full bg-emerald-500/5 blur-3xl pointer-events-none" />
+                <div className="absolute top-0 left-0 -translate-x-1/2 -translate-y-1/2 w-72 h-72 rounded-full bg-brand-500/10 blur-3xl pointer-events-none" />
+                <div className="absolute bottom-0 right-0 translate-x-1/2 translate-y-1/2 w-80 h-80 rounded-full bg-brand-violet/10 blur-3xl pointer-events-none" />
 
                 {/* Header Logo */}
-                <header className="relative z-10 mx-auto flex h-[76px] flex-none items-center justify-center gap-3 text-left" data-aos="fade-down">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white p-1.5 shadow-sm ring-1 ring-emerald-100">
+                <header data-aos="fade-down" className="relative z-10 mx-auto flex h-[76px] flex-none items-center justify-center gap-3 text-left" data-aos="fade-down">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white p-1.5 shadow-soft ring-1 ring-brand-100">
                         <img src={appUrl('images/logo.png')} alt="Logo E-Presensi SMABA" className="h-full w-full object-contain" />
                     </div>
                     <div>
                         <span className="block text-sm font-extrabold leading-tight tracking-tight text-slate-800">E-Presensi SMABA</span>
-                        <span className="block text-[10px] font-bold text-emerald-700">SCAN WORKCODE · PRESENSI DIGITAL</span>
+                        <span className="block text-[10px] font-bold text-brand-600">SCAN WORKCODE · PRESENSI DIGITAL</span>
                     </div>
                 </header>
 
@@ -438,7 +458,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
 
                         {/* Workcode Inactive */}
                         {!activeWorkcode && (
-                            <div className="bg-white border border-amber-200 rounded-3xl p-6 shadow-2xl text-center" data-aos="zoom-in">
+                            <div className="bg-white border border-amber-200 rounded-xl p-6 shadow-2xl text-center" data-aos="zoom-in">
                                 <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-xl font-bold">
                                     ⚠️
                                 </div>
@@ -451,7 +471,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
 
                         {/* Status Result Card (sudah/already) */}
                         {activeWorkcode && result && (
-                            <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-center shadow-xl animate-[slideUp_0.3s_ease-out] text-amber-800" data-aos="zoom-in">
+                            <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center shadow-xl animate-[slideUp_0.3s_ease-out] text-amber-800" data-aos="zoom-in">
                                 <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-lg font-bold">
                                     ⚠
                                 </div>
@@ -462,9 +482,9 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
 
                         {/* Form Utama */}
                         {activeWorkcode && !result && (
-                            <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-xl shadow-emerald-950/5" data-aos="zoom-in">
-                                <div className="border-b border-emerald-100 bg-emerald-50 px-5 py-4 text-center">
-                                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-[10px] font-extrabold text-emerald-700 border border-emerald-200 mb-2">
+                            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-soft-lg" data-aos="zoom-in">
+                                <div className="border-b border-brand-100 bg-brand-soft px-5 py-4 text-center">
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-[10px] font-extrabold text-brand-600 border border-brand-100 mb-2">
                                         🟢 {activeWorkcode.nama_workcode}
                                     </span>
                                     <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Presensi Mandiri</h2>
@@ -473,12 +493,12 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
 
                                 <form onSubmit={handleSubmit} className="space-y-4 p-5 sm:p-6">
                                     <div className="grid grid-cols-2 gap-2" aria-label="Tahapan presensi">
-                                        <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2 ring-1 ring-emerald-100">
-                                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-600 text-[10px] font-extrabold text-white">1</span>
-                                            <span className="text-[10px] font-extrabold text-emerald-800">Pilih peserta</span>
+                                        <div className="flex items-center gap-2 rounded-xl bg-brand-soft px-3 py-2 ring-1 ring-brand-100">
+                                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-gradient text-[10px] font-extrabold text-white">1</span>
+                                            <span className="text-[10px] font-extrabold text-brand-700">Pilih peserta</span>
                                         </div>
-                                        <div className={`flex items-center gap-2 rounded-xl px-3 py-2 ring-1 ${selectedParticipant ? 'bg-emerald-50 text-emerald-800 ring-emerald-100' : 'bg-slate-50 text-slate-400 ring-slate-100'}`}>
-                                            <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-extrabold ${selectedParticipant ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'}`}>2</span>
+                                        <div className={`flex items-center gap-2 rounded-xl px-3 py-2 ring-1 ${selectedParticipant ? 'bg-brand-soft text-brand-700 ring-brand-100' : 'bg-slate-50 text-slate-400 ring-slate-100'}`}>
+                                            <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-extrabold ${selectedParticipant ? 'bg-brand-gradient text-white' : 'bg-slate-200 text-slate-500'}`}>2</span>
                                             <span className="text-[10px] font-extrabold">Tanda tangan</span>
                                         </div>
                                     </div>
@@ -491,7 +511,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                                             value={data.nis_nip}
                                             onChange={(e) => handleInputChange(e.target.value)}
                                             onFocus={() => { if (!selectedParticipant && data.nis_nip.trim().length >= 2) setShowSuggestions(true); }}
-                                            className="w-full min-h-[50px] rounded-xl border border-slate-200 bg-slate-50 py-3 px-4 text-sm font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/10 shadow-sm"
+                                            className="w-full min-h-[50px] rounded-2xl border border-slate-200 bg-slate-50 py-3 px-4 text-sm font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10"
                                             required
                                             disabled={processing || isLocating}
                                             autoComplete="off"
@@ -503,7 +523,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                                         />
 
                                         {showSuggestions && (
-                                            <div id="suggestions-list" role="listbox" className="absolute left-0 right-0 mt-2 z-50 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl max-h-56 overflow-y-auto divide-y divide-slate-100 animate-[fadeIn_0.15s_ease-out]">
+                                            <div id="suggestions-list" role="listbox" className="absolute left-0 right-0 mt-2 z-50 overflow-hidden rounded-xl border border-slate-100 bg-white shadow-2xl max-h-56 overflow-y-auto divide-y divide-slate-100 animate-[fadeIn_0.15s_ease-out]">
                                                 {isSearchingSuggestions ? (
                                                     <div className="px-4 py-4 text-center">
                                                         <p className="text-xs font-semibold text-slate-500">Mencari data...</p>
@@ -516,10 +536,10 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                                                             role="option"
                                                             aria-selected={selectedParticipant?.id === p.id}
                                                             onClick={() => handleSelectSuggestion(p)}
-                                                            className="block w-full px-4 py-3 text-left transition-colors hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none"
+                                                            className="block w-full px-4 py-3 text-left transition-colors hover:bg-brand-soft focus:bg-brand-soft focus:outline-none"
                                                         >
                                                             <p className="text-sm font-semibold text-slate-800">{p.nama}</p>
-                                                            <p className="text-[11px] text-green-700 font-bold mt-0.5">
+                                                            <p className="text-[11px] text-brand-600 font-bold mt-0.5">
                                                                 {p.nis_nip || `${p.status || 'GTT/PTT'} · Tanpa NIP`}
                                                             </p>
                                                         </button>
@@ -535,15 +555,15 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
 
                                     {selectedParticipant ? (
                                         <>
-                                            <div className="flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-3">
-                                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-600 text-sm font-extrabold text-white">
+                                            <div className="flex items-center gap-3 rounded-2xl border border-brand-100 bg-brand-soft p-3">
+                                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-gradient text-sm font-extrabold text-white">
                                                     {selectedParticipant.nama?.charAt(0)?.toUpperCase()}
                                                 </span>
                                                 <div className="min-w-0 flex-1">
-                                                    <p className="truncate text-sm font-extrabold text-emerald-950">{selectedParticipant.nama}</p>
-                                                    <p className="text-[11px] font-bold text-emerald-700">{selectedParticipant.nis_nip || `${selectedParticipant.status || 'GTT/PTT'} · Tanpa NIP`}</p>
+                                                    <p className="truncate text-sm font-extrabold text-slate-900">{selectedParticipant.nama}</p>
+                                                    <p className="text-[11px] font-bold text-brand-600">{selectedParticipant.nis_nip || `${selectedParticipant.status || 'GTT/PTT'} · Tanpa NIP`}</p>
                                                 </div>
-                                                <span className="text-[10px] font-extrabold text-emerald-700">DIPILIH</span>
+                                                <span className="text-[10px] font-extrabold text-brand-600">DIPILIH</span>
                                             </div>
 
                                             <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3">
@@ -553,7 +573,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                                                 </select>
                                             </div>
 
-                                    <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-3">
+                                    <div className="rounded-2xl border border-brand-100 bg-brand-soft/50 p-3">
                                         <div className="mb-2 flex items-center justify-between gap-3">
                                             <div>
                                                 <p className="text-xs font-extrabold text-slate-700">
@@ -603,7 +623,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                                     <button
                                         type="submit"
                                         disabled={processing || isLocating || !selectedParticipant || !signatureData}
-                                        className="w-full min-h-[48px] rounded-xl bg-green-700 py-3 text-sm font-bold text-white shadow-md shadow-green-500/20 transition-all hover:bg-green-800 focus:outline-none focus:ring-2 focus:ring-green-500/50 disabled:opacity-50 flex items-center justify-center gap-2"
+                                        className="btn-brand w-full min-h-[48px] gap-2 disabled:opacity-50"
                                     >
                                         {isLocating ? (
                                             <>

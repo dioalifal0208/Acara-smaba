@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Support\FaceAttemptLimiter;
 use App\Support\FaceDescriptor;
+use App\Support\FaceMatcher;
 use App\Support\PrivateFile;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -122,15 +124,26 @@ class Participant extends Model
     }
 
     /**
-     * Alasan peserta belum boleh presensi wajah, atau null bila wajahnya sudah disetujui admin.
+     * Alasan peserta belum boleh presensi wajah, atau null bila wajahnya sudah disetujui admin
+     * dan punya minimal satu sampel 128-d yang kompatibel dengan model wajah kanonik.
      * Dipakai bersama oleh presensi wajah web dan API Android.
      *
      * @return array{status: string, message: string}|null
      */
     public function faceAttendanceBlocker(): ?array
     {
-        if ($this->face_status === 'approved' && FaceDescriptor::vectors($this->face_descriptor) !== []) {
-            return null;
+        if ($this->face_status === 'approved') {
+            if (FaceMatcher::compatibleSampleCount($this->face_descriptor) > 0) {
+                return null;
+            }
+
+            // Disetujui tetapi tidak ada sampel 128-d (mis. 512-d dari aplikasi Android lama, atau kosong).
+            return [
+                'status' => 'face_reenroll_required',
+                'message' => FaceDescriptor::vectors($this->face_descriptor) !== []
+                    ? 'Data wajah Anda berasal dari versi aplikasi lama dan tidak kompatibel. Silakan daftarkan ulang wajah.'
+                    : 'Data wajah Anda tidak ditemukan. Silakan daftarkan ulang wajah.',
+            ];
         }
 
         return match ($this->face_status) {
@@ -147,6 +160,30 @@ class Participant extends Model
                 'message' => 'Data wajah Anda belum terdaftar. Silakan daftarkan wajah terlebih dahulu dan tunggu persetujuan admin.',
             ],
         };
+    }
+
+    /**
+     * Status wajah untuk klien (kontrak `face` di GET /api/v1/me/state dan /me). Tidak berisi descriptor.
+     *
+     * @return array{status: string, ready: bool, blocker: ?array, model: string, sample_count: int, can_enroll: bool, locked: bool, retry_after_seconds: ?int}
+     */
+    public function faceState(): array
+    {
+        $status = $this->face_status ?: 'none';
+        $blocker = $this->faceAttendanceBlocker();
+        $retryAfter = FaceAttemptLimiter::retryAfterSeconds($this);
+
+        return [
+            'status' => $status,
+            'ready' => $blocker === null,
+            'blocker' => $blocker,
+            'model' => FaceMatcher::MODEL_ID,
+            'sample_count' => FaceMatcher::compatibleSampleCount($this->face_descriptor),
+            'can_enroll' => in_array($status, ['none', 'rejected', 'pending'], true)
+                || ($blocker['status'] ?? null) === 'face_reenroll_required',
+            'locked' => $retryAfter !== null,
+            'retry_after_seconds' => $retryAfter,
+        ];
     }
 
     /**

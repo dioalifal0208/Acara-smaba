@@ -3,7 +3,6 @@ import { Head, Link, usePage } from '@inertiajs/react';
 import Dropdown from '@/Components/Dropdown';
 import LeaveRequestModal from '@/Components/LeaveRequestModal';
 import SelfFaceRegistrationModal from '@/Components/SelfFaceRegistrationModal';
-import FaceScannerModal from '@/Components/FaceScannerModal';
 import { useState, useEffect } from 'react';
 import AOS from 'aos';
 
@@ -12,7 +11,6 @@ export default function ParticipantDashboard({ activeWorkcode, participant }) {
     const user = auth.user;
     const [showLeaveModal, setShowLeaveModal] = useState(false);
     const [showFaceRegistrationModal, setShowFaceRegistrationModal] = useState(false);
-    const [showScannerModal, setShowScannerModal] = useState(false);
     const [showMyQr, setShowMyQr] = useState(false);
     
     // Initialize & refresh AOS
@@ -62,7 +60,7 @@ export default function ParticipantDashboard({ activeWorkcode, participant }) {
                                         type="button"
                                         className="group inline-flex items-center gap-3 rounded-2xl bg-white border border-slate-200/80 p-1.5 pr-4 text-sm font-bold text-slate-700 shadow-sm transition-all hover:bg-slate-50 hover:border-slate-300 hover:shadow focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
                                     >
-                                        <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-purple-600 p-[2px] shadow-sm">
+                                        <div className="h-9 w-9 rounded-xl bg-brand-gradient p-[2px] shadow-sm">
                                             <div className="h-full w-full rounded-[10px] bg-white flex items-center justify-center text-indigo-700 font-black text-sm">
                                                 {(participant?.nama || user.name).charAt(0).toUpperCase()}
                                             </div>
@@ -114,7 +112,7 @@ export default function ParticipantDashboard({ activeWorkcode, participant }) {
 
                     {/* Participant Summary / Status Card */}
                     <div 
-                        className="rounded-2xl bg-white border border-slate-200/80 p-5 sm:p-6 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-5 relative overflow-hidden"
+                        className="rounded-xl bg-white border border-slate-100 p-5 sm:p-6 shadow-soft flex flex-col md:flex-row md:items-center justify-between gap-5 relative overflow-hidden"
                         data-aos="fade-up"
                     >
                         <div className="flex items-center gap-4">
@@ -133,7 +131,7 @@ export default function ParticipantDashboard({ activeWorkcode, participant }) {
                                     />
                                 )}
                                 <div 
-                                    className={`h-16 w-16 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 items-center justify-center text-white font-black text-2xl shadow-md shadow-indigo-500/20 ${participant?.photo_url ? 'hidden' : 'flex'}`}
+                                    className={`h-16 w-16 rounded-2xl bg-brand-gradient items-center justify-center text-white font-black text-2xl shadow-md shadow-indigo-500/20 ${participant?.photo_url ? 'hidden' : 'flex'}`}
                                 >
                                     {(participant?.nama || user.name).charAt(0).toUpperCase()}
                                 </div>
@@ -219,13 +217,13 @@ export default function ParticipantDashboard({ activeWorkcode, participant }) {
                     {/* Main Workcode Banner */}
                     {activeWorkcode ? (
                         <div 
-                            className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 text-white shadow-xl shadow-indigo-600/10 border border-indigo-400/20"
+                            className="relative overflow-hidden rounded-xl bg-brand-gradient text-white shadow-xl shadow-indigo-600/10 border border-indigo-400/20"
                             data-aos="fade-up"
                             data-aos-delay="100"
                         >
                             {/* Decorative Background Elements */}
                             <div className="absolute top-0 right-0 -mr-16 -mt-16 w-80 h-80 rounded-full bg-white/10 blur-2xl pointer-events-none"></div>
-                            <div className="absolute bottom-0 left-1/3 -mb-16 w-60 h-60 rounded-full bg-purple-500/20 blur-3xl pointer-events-none"></div>
+                            <div className="absolute bottom-0 left-1/3 -mb-16 w-60 h-60 rounded-full bg-brand-500/20 blur-3xl pointer-events-none"></div>
 
                             <div className="relative z-10 p-6 sm:p-8 lg:p-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-8">
                                 <div className="flex-1 max-w-2xl">
@@ -254,7 +252,7 @@ export default function ParticipantDashboard({ activeWorkcode, participant }) {
 
                                     {/* Workcode Description */}
                                     <p className="text-indigo-100/90 text-sm sm:text-base leading-relaxed mb-6 font-normal">
-                                        {activeWorkcode.deskripsi || 'Silakan lakukan presensi sekarang dengan menggunakan fitur Face Recognition langsung dari perangkat Anda.'}
+                                        {activeWorkcode.deskripsi || 'Silakan lakukan presensi dengan scan wajah di aplikasi Android, atau scan QR workcode yang disediakan panitia.'}
                                     </p>
                                     
                                     {/* Special Notification Alert for Rejected Face Status */}
@@ -291,7 +289,7 @@ export default function ParticipantDashboard({ activeWorkcode, participant }) {
                                             <div>
                                                 <h4 className="font-extrabold text-white text-sm">Menunggu Persetujuan Admin</h4>
                                                 <p className="text-xs text-amber-100/90 mt-1 leading-relaxed">
-                                                    Pendaftaran wajah Anda telah dikirim dan sedang dalam antrean review oleh Administrator. Setelah disetujui, tombol presensi wajah akan aktif otomatis.
+                                                    Pendaftaran wajah Anda telah dikirim dan sedang dalam antrean review oleh Administrator. Setelah disetujui, Anda bisa presensi wajah lewat aplikasi Android.
                                                 </p>
                                             </div>
                                         </div>
@@ -301,16 +299,12 @@ export default function ParticipantDashboard({ activeWorkcode, participant }) {
                                     <div className="flex flex-col sm:flex-row sm:items-center gap-3.5 w-full">
                                         {participant ? (
                                             faceStatus === 'approved' ? (
-                                                <button 
-                                                    onClick={() => setShowScannerModal(true)}
-                                                    className="inline-flex items-center justify-center gap-2.5 px-6 py-3.5 bg-white text-indigo-700 font-black text-sm rounded-xl shadow-lg hover:bg-indigo-50 hover:shadow-indigo-900/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 w-full sm:w-auto"
-                                                >
-                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                <div className="inline-flex items-center justify-center gap-2.5 px-5 py-3.5 bg-white/15 text-white font-bold text-sm rounded-xl border border-white/25 backdrop-blur-md w-full sm:w-auto">
+                                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white/90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
                                                     </svg>
-                                                    Presensi via Wajah Sekarang
-                                                </button>
+                                                    Presensi wajah lewat aplikasi Android
+                                                </div>
                                             ) : faceStatus === 'pending' ? (
                                                 <div className="inline-flex items-center justify-center gap-2.5 px-5 py-3.5 bg-amber-400/20 text-amber-100 font-bold text-sm rounded-xl border border-amber-300/40 backdrop-blur-md w-full sm:w-auto cursor-not-allowed">
                                                     <svg className="animate-spin h-5 w-5 text-amber-300" fill="none" viewBox="0 0 24 24">
@@ -373,7 +367,7 @@ export default function ParticipantDashboard({ activeWorkcode, participant }) {
                                 </div>
                                 
                                 {/* Right Decorative Icon Box */}
-                                <div className="hidden lg:flex shrink-0 w-40 h-40 bg-white/10 rounded-3xl items-center justify-center border border-white/20 backdrop-blur-md shadow-2xl">
+                                <div className="hidden lg:flex shrink-0 w-40 h-40 bg-white/10 rounded-xl items-center justify-center border border-white/20 backdrop-blur-md shadow-2xl">
                                     <div className="relative flex items-center justify-center">
                                         <div className="absolute inset-0 bg-white/20 rounded-2xl blur-lg"></div>
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 text-white/90 relative z-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -385,11 +379,11 @@ export default function ParticipantDashboard({ activeWorkcode, participant }) {
                         </div>
                     ) : (
                         <div 
-                            className="rounded-3xl bg-white border border-slate-200/80 p-8 sm:p-12 shadow-sm text-center flex flex-col items-center justify-center"
+                            className="rounded-xl bg-white border border-slate-200/80 p-8 sm:p-12 shadow-sm text-center flex flex-col items-center justify-center"
                             data-aos="fade-up"
                             data-aos-delay="100"
                         >
-                            <div className="h-20 w-20 rounded-3xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 mb-4 shadow-sm">
+                            <div className="h-20 w-20 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 mb-4 shadow-sm">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
@@ -408,20 +402,20 @@ export default function ParticipantDashboard({ activeWorkcode, participant }) {
                         data-aos-delay="200"
                     >
                         {/* Info 1: Face Recognition */}
-                        <div className="rounded-2xl bg-white border border-slate-200/80 p-5 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="rounded-xl bg-white border border-slate-100 p-5 shadow-soft hover:shadow-soft transition-shadow">
                             <div className="h-10 w-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 mb-3.5">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                                 </svg>
                             </div>
-                            <h4 className="font-extrabold text-slate-800 text-sm mb-1">Presensi via Wajah</h4>
+                            <h4 className="font-extrabold text-slate-800 text-sm mb-1">Cara Presensi</h4>
                             <p className="text-xs text-slate-500 leading-relaxed">
-                                Pastikan pencahayaan cukup dan wajah terlihat jelas. Sistem menerapkan verifikasi liveness acak (senyum, buka mulut, kedip mata, tengok, miringkan kepala) untuk mencegah foto palsu.
+                                Presensi wajah hanya bisa dilakukan lewat aplikasi Android. Selain itu, Anda bisa presensi dengan scan QR workcode yang disediakan panitia.
                             </p>
                         </div>
 
                         {/* Info 2: GPS Location */}
-                        <div className="rounded-2xl bg-white border border-slate-200/80 p-5 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="rounded-xl bg-white border border-slate-100 p-5 shadow-soft hover:shadow-soft transition-shadow">
                             <div className="h-10 w-10 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600 mb-3.5">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -435,8 +429,8 @@ export default function ParticipantDashboard({ activeWorkcode, participant }) {
                         </div>
 
                         {/* Info 3: Leave Request */}
-                        <div className="rounded-2xl bg-white border border-slate-200/80 p-5 shadow-sm hover:shadow-md transition-shadow">
-                            <div className="h-10 w-10 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-purple-600 mb-3.5">
+                        <div className="rounded-xl bg-white border border-slate-100 p-5 shadow-soft hover:shadow-soft transition-shadow">
+                            <div className="h-10 w-10 rounded-xl bg-brand-50 border border-brand-100 flex items-center justify-center text-brand-600 mb-3.5">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
@@ -465,18 +459,6 @@ export default function ParticipantDashboard({ activeWorkcode, participant }) {
                 <SelfFaceRegistrationModal
                     participant={participant}
                     onClose={() => setShowFaceRegistrationModal(false)}
-                />
-            )}
-
-            {showScannerModal && (
-                <FaceScannerModal
-                    activeWorkcode={activeWorkcode}
-                    participant={participant}
-                    onClose={() => setShowScannerModal(false)}
-                    onSuccess={() => {
-                        setShowScannerModal(false);
-                        window.location.reload();
-                    }}
                 />
             )}
 

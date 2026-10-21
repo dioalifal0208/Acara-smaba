@@ -48,29 +48,29 @@ export default function DeleteUserForm({ className = '' }) {
     return (
         <section className={`space-y-6 ${className}`}>
             <header>
-                <h2 className="text-xl font-extrabold text-red-600 tracking-tight">
+                <h2 className="text-base font-semibold text-rose-600">
                     Hapus Akun
                 </h2>
 
-                <p className="mt-1 text-sm text-slate-500 font-medium">
+                <p className="mt-0.5 text-sm text-neutral-500">
                     Setelah akun Anda dihapus, semua sumber daya dan datanya akan dihapus secara permanen. Sebelum menghapus akun Anda, harap unduh data atau informasi apa pun yang ingin Anda simpan.
                 </p>
             </header>
 
             <button 
                 onClick={confirmUserDeletion}
-                className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-red-500/20 transition-all hover:bg-red-700 hover:shadow-lg focus:outline-none"
+                className="mt-5 inline-flex min-h-9 items-center gap-2 rounded-md bg-gradient-to-b from-rose-400 to-rose-600 px-4 text-sm font-medium text-white shadow-dark-sm transition-shadow hover:shadow-dark-hover active:opacity-85"
             >
                 Hapus Akun
             </button>
 
             <Modal show={confirmingUserDeletion} onClose={closeModal}>
                 <form onSubmit={deleteUser} className="p-6">
-                    <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">
+                    <h2 className="text-base font-semibold text-neutral-800">
                         Apakah Anda yakin ingin menghapus akun?
                     </h2>
 
-                    <p className="mt-2 text-sm text-slate-500 font-medium">
+                    <p className="mt-1 text-sm text-neutral-500">
                         Setelah akun Anda dihapus, semua sumber daya dan datanya akan dihapus secara permanen. Silakan masukkan password Anda untuk mengonfirmasi bahwa Anda ingin menghapus akun Anda secara permanen.
                     </p>
 
@@ -101,17 +101,17 @@ export default function DeleteUserForm({ className = '' }) {
                         />
                     </div>
 
-                    <div className="mt-6 flex justify-end gap-3 pt-4 border-t border-slate-100">
+                    <div className="mt-6 flex justify-end gap-3">
                         <button
                             type="button"
                             onClick={closeModal}
-                            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+                            className="btn-soft"
                         >
                             Batal
                         </button>
 
                         <button 
-                            className="inline-flex items-center gap-2 rounded-xl bg-red-600 px-5 py-2 text-sm font-bold text-white shadow-md shadow-red-500/20 transition-all hover:bg-red-700 hover:shadow-lg focus:outline-none disabled:opacity-50" 
+                            className="inline-flex min-h-9 items-center gap-2 rounded-md bg-gradient-to-b from-rose-400 to-rose-600 px-4 text-sm font-medium text-white shadow-dark-sm transition-shadow hover:shadow-dark-hover active:opacity-85 disabled:opacity-50" 
                             disabled={processing}
                         >
                             {processing ? 'Menghapus...' : 'Hapus Akun'}

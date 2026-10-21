@@ -34,6 +34,8 @@ class UserResource extends JsonResource
                 'nis_nip' => $participant->nis_nip,
                 'nama' => $participant->nama,
                 'face_status' => $participant->face_status,
+                // Objek status wajah yang sama dengan GET /api/v1/me/state (tanpa descriptor).
+                'face' => $participant->faceState(),
             ];
 
             if ($participant->face_status === 'approved' && $participant->photo_path && Storage::disk('private')->exists($participant->photo_path)) {

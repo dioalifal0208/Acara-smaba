@@ -3,7 +3,10 @@
 use App\Http\Controllers\Api\V1\AttendanceController;
 use App\Http\Controllers\Api\V1\AttendanceDailyHistoryController;
 use App\Http\Controllers\Api\V1\AttendanceHistoryController;
+use App\Http\Controllers\Api\V1\AttendanceStateController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\DeviceChangeRequestController;
+use App\Http\Controllers\Api\V1\FaceEnrollmentController;
 use App\Http\Controllers\Api\V1\FcmTokenController;
 use App\Http\Controllers\Api\V1\LeaveRequestController;
 use App\Http\Controllers\Api\V1\PhotoController;
@@ -17,12 +20,25 @@ Route::prefix('v1')->group(function () {
         ->middleware('throttle:api-login')
         ->name('api.v1.login');
 
+    // Dari HP baru yang belum bisa login (akun terkunci ke HP lama): diverifikasi dengan password.
+    Route::post('/auth/device-change-requests', [DeviceChangeRequestController::class, 'store'])
+        ->middleware('throttle:api-login')
+        ->name('api.v1.device-change-requests.store');
+
     Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::post('/auth/logout', [AuthController::class, 'logout'])
             ->name('api.v1.logout');
 
         Route::get('/me', [ProfileController::class, 'me'])
             ->name('api.v1.me');
+
+        // Status gabungan untuk aplikasi Android (ETag/If-None-Match -> 304).
+        Route::get('/me/state', [AttendanceStateController::class, 'show'])
+            ->name('api.v1.me.state');
+
+        // Pendaftaran wajah dari Android (model face-api.js 128-d), menunggu persetujuan admin web.
+        Route::post('/me/face-enrollment', [FaceEnrollmentController::class, 'store'])
+            ->name('api.v1.me.face-enrollment');
 
         Route::get('/me/photo', [PhotoController::class, 'show'])
             ->name('api.v1.me.photo');
@@ -50,6 +66,9 @@ Route::prefix('v1')->group(function () {
 
         Route::post('/attendance', [AttendanceController::class, 'submit'])
             ->name('api.v1.attendance.submit');
+
+        Route::post('/attendance/precheck', [AttendanceController::class, 'precheck'])
+            ->name('api.v1.attendance.precheck');
 
         Route::post('/attendances/leave', [LeaveRequestController::class, 'submit'])
             ->name('api.v1.attendances.leave.submit');

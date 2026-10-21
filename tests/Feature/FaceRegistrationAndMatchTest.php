@@ -25,6 +25,20 @@ class FaceRegistrationAndMatchTest extends TestCase
         return [$this->vector($base), $this->vector($base, 0.002), $this->vector($base, 0.004)]; // 3 sampel wajah depan
     }
 
+    /** Vektor berbeda arah dari fixture default; tidak identik setelah normalisasi L2. */
+    private function otherVector(float $jitter = 0.0): array
+    {
+        $vector = array_fill(0, 128, $jitter);
+        $vector[0] = 1.0;
+
+        return $vector;
+    }
+
+    private function otherEnrollment(): array
+    {
+        return [$this->otherVector(), $this->otherVector(0.001), $this->otherVector(0.002)];
+    }
+
     private function participantUser(array $participantAttributes = []): array
     {
         $participant = Participant::create(array_merge([
@@ -90,7 +104,7 @@ class FaceRegistrationAndMatchTest extends TestCase
         ] as [$attributes, $status, $phrase]) {
             [, $user] = $this->participantUser($attributes);
 
-            $response = $this->actingAs($user)->postJson(route('face.match'), ['descriptor' => $this->vector(0.1)]);
+            $response = $this->mobileSubmit($user, $this->vector(0.1));
 
             $response->assertForbidden()->assertJsonPath('status', $status);
             $this->assertStringContainsString($phrase, $response->json('message'));
@@ -102,25 +116,35 @@ class FaceRegistrationAndMatchTest extends TestCase
     public function test_approved_participant_matches_only_own_face(): void
     {
         $workcode = $this->activateWorkcode();
-        Participant::create(['nama' => 'Orang Lain', 'nis_nip' => '111', 'face_descriptor' => $this->enrollment(0.3), 'face_status' => 'approved']);
+        Participant::create(['nama' => 'Orang Lain', 'nis_nip' => '111', 'face_descriptor' => $this->otherEnrollment(), 'face_status' => 'approved']);
         [$participant, $user] = $this->participantUser(['face_descriptor' => $this->enrollment(0.1), 'face_status' => 'approved']);
 
         // Wajah orang lain tidak boleh dicatat atas nama siapa pun.
-        $this->actingAs($user)
-            ->postJson(route('face.match'), ['descriptor' => $this->vector(0.3)])
-            ->assertNotFound()
-            ->assertJsonPath('status', 'not_recognized');
+        $this->mobileSubmit($user, $this->otherVector())
+            ->assertStatus(400)
+            ->assertJsonPath('status', 'face_mismatch');
         $this->assertSame(0, Attendance::count());
 
         // Setelah approved, wajah sendiri langsung bisa presensi.
-        $response = $this->actingAs($user)
-            ->postJson(route('face.match'), ['descriptor' => $this->vector(0.1, 0.003)])
-            ->assertOk()
-            ->assertJsonPath('status', 'success')
-            ->assertJsonPath('participant.id', $participant->id);
+        $this->mobileSubmit($user, $this->vector(0.1, 0.003))
+            ->assertCreated()
+            ->assertJsonPath('status', 'success');
 
-        $this->assertArrayNotHasKey('face_descriptor', $response->json('participant'));
         $this->assertSame(1, Attendance::where('workcode_id', $workcode->id)->where('participant_id', $participant->id)->count());
+    }
+
+    private function mobileSubmit(User $user, array $descriptor)
+    {
+        $this->app['auth']->forgetGuards();
+        $token = $user->createToken('android', ['role:participant'])->plainTextToken;
+
+        return $this->withHeaders([
+            'Authorization' => "Bearer {$token}",
+            'Idempotency-Key' => (string) Str::uuid(),
+        ])->postJson('/api/v1/attendance', [
+            'installation_id' => (string) Str::uuid(),
+            'face_descriptor' => $descriptor,
+        ]);
     }
 
     public function test_mobile_api_requires_approved_face_and_supports_multiple_samples(): void

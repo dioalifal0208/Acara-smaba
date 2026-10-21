@@ -61,13 +61,12 @@ Produksi: <https://smanegeri1babatlmg.sch.id/presensi>
 
 ## Cara kerja
 
-Ada empat jalur presensi, dan semuanya memakai aturan yang sama di `AttendanceValidationService`:
+Ada tiga jalur presensi, dan semuanya memakai aturan yang sama di `AttendanceValidationService`. Presensi wajah hanya tersedia di aplikasi Android; website tidak menyediakan presensi wajah.
 
 | Jalur | Siapa yang memulai | Identitas dari | Validasi tambahan |
 |---|---|---|---|
 | Scanner QR | Petugas/admin | QR pribadi peserta | Lokasi (bila scanner mengirim GPS) |
-| Self check-in | Peserta, tanpa login | Pilih nama + wajah | GPS, akurasi, radius, perangkat |
-| Scanner wajah | Petugas/admin (juga dipakai self check-in) | Wajah (face-api.js, dicocokkan di server) | Hanya wajah berstatus disetujui |
+| Self check-in (scan QR workcode) | Peserta, tanpa login | Pilih nama + tanda tangan | GPS, akurasi, radius, perangkat |
 | Aplikasi Android | Peserta, login token | Akun + wajah | GPS, mock location, jam perangkat, perangkat terkunci, idempotency |
 
 ```mermaid
@@ -224,7 +223,7 @@ Registrasi publik ditutup, dan akun baru otomatis ber-role `participant`. Admin 
 php artisan user:make-admin operator1 --name="Operator TU"
 ```
 
-> **Kamera** (scanner QR dan wajah) hanya berjalan di *secure context*, yaitu `localhost` atau HTTPS. Untuk uji coba di HP, jalankan lewat HTTPS (SSL Laragon atau tunnel).
+> **Kamera** (scanner QR dan pendaftaran wajah) hanya berjalan di *secure context*, yaitu `localhost` atau HTTPS. Untuk uji coba di HP, jalankan lewat HTTPS (SSL Laragon atau tunnel).
 
 ---
 

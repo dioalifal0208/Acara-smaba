@@ -1,3 +1,86 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/*
+ * Tema dashboard putih: kartu putih bergaris tipis, sudut sedang, warna utama hijau logo sekolah,
+ * tipografi Inter yang tenang.
+ */
+@layer base {
+    html {
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+        @apply bg-canvas text-slate-900;
+        font-feature-settings: 'cv11' on, 'ss01' on;
+    }
+
+    ::selection {
+        @apply bg-brand-100 text-brand-900;
+    }
+
+    /* Fokus keyboard selalu terlihat (aksesibilitas), tanpa mengganggu klik mouse. */
+    :focus-visible {
+        @apply outline-none ring-2 ring-brand-500 ring-offset-2;
+    }
+}
+
+@layer components {
+    /* Kartu putih lembut */
+    .card-soft {
+        @apply rounded-lg border border-neutral-200 bg-white shadow-soft;
+    }
+
+    /* Blok judul halaman bergradien (setara GradientHeader di Android) */
+    .page-hero {
+        @apply relative overflow-hidden rounded-xl bg-brand-gradient p-5 text-white shadow-soft-lg sm:p-6;
+    }
+
+    .page-hero::before,
+    .page-hero::after {
+        content: '';
+        @apply pointer-events-none absolute rounded-full bg-white;
+    }
+
+    .page-hero::before {
+        @apply -right-16 -top-20 h-60 w-60 opacity-[0.04];
+    }
+
+    .page-hero::after {
+        @apply -bottom-24 -left-16 h-52 w-52 opacity-[0.03];
+    }
+
+    /* Tombol kapsul */
+    .btn-brand {
+        @apply inline-flex min-h-9 items-center justify-center gap-2 rounded-md bg-brand-gradient px-4 text-sm font-medium text-white shadow-dark-sm transition-shadow duration-200 hover:shadow-dark-hover active:opacity-85 disabled:cursor-not-allowed disabled:opacity-60;
+    }
+
+    .btn-soft {
+        @apply inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-brand-600 bg-transparent px-4 text-sm font-medium text-brand-700 transition-colors duration-200 hover:bg-brand-600 hover:text-white active:opacity-85 disabled:cursor-not-allowed disabled:opacity-60;
+    }
+
+    /* Kolom isian lembut */
+    .input-soft {
+        @apply w-full rounded-lg border-slate-200 bg-white text-sm text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:ring-brand-500/20;
+    }
+
+    /* Garis pemisah memudar di kedua ujung (hr.horizontal.dark) */
+    .hr-fade {
+        @apply h-px border-0 bg-gradient-to-r from-transparent via-black/25 to-transparent;
+    }
+
+    /* Kapsul status */
+    .pill {
+        @apply inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-[11px] font-semibold;
+    }
+}
+
+/* Hormati preferensi "kurangi gerakan": animasi AOS & transisi dimatikan. */
+@media (prefers-reduced-motion: reduce) {
+    [data-aos] {
+        opacity: 1 !important;
+        transform: none !important;
+        transition: none !important;
+    }
+}

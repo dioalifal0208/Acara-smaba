@@ -10,6 +10,72 @@ Token dari `POST /api/v1/auth/login` **kedaluwarsa setelah 30 hari**. Setiap res
 
 ---
 
+## Login dan Kunci Perangkat (sejak Okt 2026)
+
+Akun **peserta** terkunci ke HP Android pertama yang dipakai login. Login dari HP lain ditolak sampai admin menyetujui pengajuan pindah perangkat (panel web → **Perangkat**). Akun admin tidak dikunci. Presensi lewat browser web tidak terkena kunci ini.
+
+**ID perangkat** = `Settings.Secure.ANDROID_ID` (tetap sama saat aplikasi diinstal ulang, berubah setelah reset pabrik). **Jangan memakai IMEI**: sejak Android 10 aplikasi biasa tidak bisa membacanya. Server hanya menyimpan HMAC-nya.
+
+### Login
+**URL**: `POST /api/v1/auth/login` (maks. 5 percobaan/menit per akun + IP)
+```json
+{
+  "login": "username atau email",
+  "password": "rahasia",
+  "device_name": "Android App",
+  "device_id": "a1b2c3d4e5f60718",
+  "device_model": "Samsung Galaxy A12"
+}
+```
+- `device_id`: ANDROID_ID, 8–128 karakter `[A-Za-z0-9._:-]`. `device_model`: opsional, untuk ditampilkan ke admin (`Build.MANUFACTURER + Build.MODEL`).
+- Login pertama dengan `device_id` mengunci akun ke HP itu dan mencabut semua token lama.
+
+| Status | `code` | Arti dan tindakan aplikasi |
+|---|---|---|
+| 200 | — | `data.token` seperti biasa |
+| 401 | — | Username/password salah (pesan generik, tanpa info perangkat) |
+| 403 | `device_not_registered` | Akun terkunci ke HP lain (`data.registered_device_model`). Tampilkan formulir pengajuan pindah perangkat. Bila `data.device_change_request.status = "rejected"`, tampilkan `rejection_reason`. |
+| 403 | `device_change_pending` | Pengajuan untuk HP ini sedang menunggu admin. Tampilkan status menunggu; coba login lagi nanti. |
+| 403 | `device_in_use` | HP ini sudah terkunci untuk akun peserta lain (satu HP satu akun; pemiliknya akun yang paling dulu terikat). Tidak ada pengajuan pindah perangkat; tampilkan `message`. Juga dikembalikan oleh `POST auth/device-change-requests`. |
+| 426 | `app_update_required` | Aplikasi tidak mengirim `device_id` dan server sudah mewajibkannya (`DEVICE_LOCK_REQUIRE_ID=true`). |
+
+Contoh 403:
+```json
+{
+  "status": "error",
+  "code": "device_change_pending",
+  "message": "Pengajuan pindah perangkat Anda sedang menunggu persetujuan admin.",
+  "data": {
+    "registered_device_model": "Samsung Galaxy A12",
+    "device_change_request": {
+      "id": 7, "status": "pending", "device_model": "Xiaomi Redmi 13", "reason": "HP lama rusak",
+      "rejection_reason": null, "created_at": "2026-10-16T08:00:00+07:00", "reviewed_at": null
+    }
+  }
+}
+```
+
+**Masa transisi:** selama `DEVICE_LOCK_REQUIRE_ID=false` (bawaan), aplikasi versi lama yang tidak mengirim `device_id` tetap bisa login tanpa dikunci. Setelah semua peserta memakai versi baru, admin server mengubahnya ke `true`.
+
+### Pengajuan Pindah Perangkat
+**URL**: `POST /api/v1/auth/device-change-requests` (tanpa token, diverifikasi dengan password; batas sama dengan login)
+```json
+{
+  "login": "username atau email",
+  "password": "rahasia",
+  "device_id": "ffee112233445566",
+  "device_model": "Xiaomi Redmi 13",
+  "reason": "HP lama rusak"
+}
+```
+- `reason` wajib, 5–500 karakter. Tidak ada batas jumlah pengajuan; pengajuan baru **menggantikan** yang masih menunggu.
+- **201** pengajuan baru dibuat / **200** pengajuan menunggu diperbarui → `data.device_change_request`.
+- **401** kredensial salah. **409** `device_already_allowed`: HP ini sudah bisa dipakai, langsung login. **422** `device_lock_not_applicable`: akun admin.
+
+Setelah admin **menyetujui**, HP lama langsung keluar (semua tokennya dicabut, respons berikutnya 401) dan login di HP baru berhasil. Admin juga bisa **reset kunci** (HP hilang): akun keluar dari semua perangkat dan HP berikutnya yang login otomatis terdaftar. HP lama menerima push FCM `{"type":"session_revoked","reason":"device_changed|device_reset","v":"1"}` (token FCM diambil sebelum kunci dipindah) sehingga aplikasi langsung keluar dengan pesan yang jelas. HP baru belum punya token FCM, jadi selama pengajuan menunggu aplikasi mencoba login ulang otomatis tiap 30 detik (kredensial hanya di memori selama layar login terbuka). Halaman admin **Perangkat** memuat ulang datanya tiap ±15 detik.
+
+---
+
 ## Header Idempotency-Key
 
 Header `Idempotency-Key` **wajib** dikirim pada setiap **request tulis (POST)** berikut:
@@ -66,12 +132,57 @@ Digunakan oleh aplikasi Mobile (Android) untuk mengecek Workcode mana yang saat 
     "presensi_hari_ini": {
        "waktu_hadir": "2026-10-02T08:00:00.000000Z",
        "waktu_pulang": null
+    },
+    "attendance_ui": {
+      "action": "arrival",
+      "action_label": "Absen Datang",
+      "reason": "arrival_open",
+      "message": null,
+      "is_late": false,
+      "late_minutes": 0,
+      "server_time": "2026-10-02T07:15:00+07:00",
+      "effective_schedule": {
+        "arrival":   { "start": "2026-10-02T07:00:00+07:00", "end": "2026-10-02T10:00:00+07:00", "closes_at": "2026-10-02T10:00:00+07:00", "display": "07:00–10:00" },
+        "departure": { "start": null, "end": null, "closes_at": null, "display": null }
+      }
     }
   }
 }
 ```
 
-**Response (200 OK) - Tidak ada workcode aktif**: `"data": null`
+**Response (200 OK) - Tidak ada workcode aktif / tidak ditugaskan**: `"data": null` (tidak berubah), ditambah `attendance_ui` di **level atas**:
+```json
+{
+  "status": "success",
+  "data": null,
+  "attendance_ui": {
+    "action": "none", "action_label": null, "reason": "no_active_workcode",
+    "message": "Belum ada workcode yang aktif.",
+    "server_time": "2026-10-02T07:15:00+07:00", "effective_schedule": null
+  }
+}
+```
+
+### `attendance_ui` (sejak Okt 2026, aditif)
+
+Status tombol presensi **diputuskan server** dari waktu server, assignment workcode, dan catatan presensi — aturannya sama dengan `POST /api/v1/attendance`. Android hanya menampilkan tombol sesuai `action`; tidak boleh menghitung jadwal atau memilih datang/pulang sendiri. `POST /attendance` tetap memvalidasi ulang semuanya (jadwal, GPS, perangkat, wajah, idempotensi), jadi tombol yang tampil bukan jaminan presensi diterima.
+
+Lokasi: `data.attendance_ui` bila ada workcode; `attendance_ui` level atas bila `data` null.
+
+| Field | Isi |
+|---|---|
+| `action` | `arrival` (belum datang & dalam jendela datang), `departure` (sudah datang, belum pulang & dalam jendela pulang, hanya workcode `harian`), `none` (selain itu) |
+| `action_label` | `Absen Datang` / `Absen Pulang` / `null` |
+| `reason` | Kode mesin: `arrival_open`, `departure_open`, `arrival_not_open`, `arrival_closed`, `departure_not_open`, `departure_closed`, `completed`, `no_active_workcode`, `not_assigned`. Klien wajib menganggap nilai tak dikenal sebagai `none`. |
+| `message` | Pesan siap tampil saat `action=none`; saat datang dalam masa toleransi berisi peringatan terlambat (mis. `Anda terlambat 25 menit. Presensi datang ditutup pukul 08:00 WIB.`); selain itu `null` |
+| `is_late` / `late_minutes` | `true` + menit keterlambatan bila tombol datang terbuka dalam masa toleransi terlambat; selain itu `false` / `0` |
+| `server_time` | Waktu server saat respons dibuat, ISO-8601 dengan offset zona aplikasi (`+07:00`) |
+| `effective_schedule.arrival/departure` | Jendela yang berlaku **hari ini** (sudah memperhitungkan `jadwal_per_hari`), `start`/`end` ISO-8601 + `display` `HH:mm–HH:mm`; semua `null` bila jendela tidak diatur (mis. departure workcode kegiatan). `end` = jam selesai resmi (batas terlambat); `closes_at` = kapan presensi benar-benar ditutup |
+
+**Toleransi terlambat (workcode `harian`, hanya presensi datang):** presensi datang tetap dibuka sampai `jam_datang_selesai` + `late_tolerance_minutes` (bawaan 60 menit, `ATTENDANCE_LATE_TOLERANCE_MINUTES`), paling lambat 23:59:59 hari itu. Presensi di antara `end` dan `closes_at` diterima dengan `reason=arrival_open` dan tercatat `hadir` tetapi terlambat. Presensi pulang dan workcode kegiatan tidak memiliki toleransi (`closes_at` = `end`).
+
+Catatan: `presensi_hari_ini.waktu_hadir/waktu_pulang` tetap format lama (UTC, `Z`); field baru memakai offset `+07:00`. Keduanya instan waktu yang sama — parse sebagai ISO-8601, jangan sebagai string lokal.
+
 **Response Error (401)**: Token invalid atau tidak ada.
 **Response Error (403)**: User bukan `participant`.
 
@@ -95,12 +206,18 @@ Digunakan oleh peserta untuk melakukan presensi dari aplikasi Android. Dikawal `
   "longitude": 106.1234,
   "accuracy": 10.5,
   "device_timestamp": "2026-10-02T08:00:00+07:00",
-  "installation_id": "uuid-device-123",
-  "face_descriptor": [0.12, 0.45, -0.99]
+  "installation_id": "7f0c2a52-9d1e-4a39-8c1e-2b8f6d3a9e10",
+  "face_descriptor": [0.0123, -0.0456, "... tepat 128 angka ..."],
+  "face_model": "faceapi-resnet34-128",
+  "face_capture": "data:image/jpeg;base64,/9j/4AAQ..."
 }
 ```
 
-> **`face_descriptor`** adalah **wajib**. Client lama yang tidak mengirim field ini akan menerima **426 Upgrade Required** dengan pesan wajib update.
+> **`face_capture`** (opsional, sejak Okt 2026, aditif): foto wajah hasil scan berupa data URL **JPEG** base64 (`data:image/jpeg;base64,...`, maks ±1,5 MB string; disarankan lebar ≤ 480 px, kualitas 0,8). Disimpan di disk privat sebagai bukti presensi **datang** maupun **pulang** dan ditampilkan admin di Laporan → Detail → Log. Hanya disimpan bila presensi berhasil. Format selain JPEG → 422. Aplikasi lama tanpa field ini tetap diterima. Field ini ikut masuk hash idempotensi, jadi retry jaringan harus mengirim foto yang sama persis.
+
+> **`face_descriptor`** wajib: **tepat 128 angka** dari model `faceapi-resnet34-128` (face-api.js web / TFLite Android, lihat `docs/api/FACE_DESCRIPTOR_COMPATIBILITY.md`). Kirim nilai mentah tanpa pembulatan (≥ 6 desimal); normalisasi L2 dilakukan server. `installation_id` harus UUID. `face_model` opsional, tetapi bila dikirim harus `faceapi-resnet34-128`.
+>
+> **Idempotency**: buat UUID `Idempotency-Key` **baru untuk setiap pengambilan wajah**; pakai ulang hanya untuk retry jaringan dengan body identik. Hash permintaan memuat sidik `face_descriptor`, jadi key sama + tangkapan berbeda = 409. Hanya hasil final yang diputar ulang (201/200 dan blocker 403 `face_*`); kegagalan sementara (jendela waktu, GPS, `face_mismatch`, `face_locked`, workcode) **tidak** disimpan, sehingga retry dievaluasi ulang.
 
 **Response Success (201 Created) - Datang**:
 ```json
@@ -112,6 +229,8 @@ Digunakan oleh peserta untuk melakukan presensi dari aplikasi Android. Dikawal `
       "id": 100,
       "status": "hadir",
       "checked_in_at": "2026-10-02T08:00:00+07:00",
+      "is_late": false,
+      "late_minutes": 0,
       "workcode": {
          "id": 1,
          "nama_workcode": "Acara Pagi"
@@ -120,6 +239,7 @@ Digunakan oleh peserta untuk melakukan presensi dari aplikasi Android. Dikawal `
   }
 }
 ```
+Bila datang dalam masa toleransi: `is_late: true`, `late_minutes` > 0, dan `message` menjadi `Presensi datang berhasil dicatat, tetapi terlambat 25 menit.`
 
 **Response Success (200 OK) - Pulang**:
 ```json
@@ -158,6 +278,7 @@ Presensi wajah hanya untuk peserta yang data wajahnya **sudah disetujui admin**.
 | `face_not_registered` | Belum pernah mendaftarkan wajah |
 | `face_pending` | Sudah mendaftar, menunggu persetujuan admin |
 | `face_rejected` | Pendaftaran ditolak admin, harus daftar ulang |
+| `face_reenroll_required` | Data wajah tersimpan dari model lama (mis. 512-d FaceNet Android lama), tidak kompatibel; harus daftar ulang |
 
 ```json
 {
@@ -166,14 +287,134 @@ Presensi wajah hanya untuk peserta yang data wajahnya **sudah disetujui admin**.
 }
 ```
 
-> Data wajah tersimpan bisa berupa beberapa vector (beberapa sampel wajah depan dari pendaftaran web). Server mencocokkan `face_descriptor` dengan vector terdekat setelah normalisasi L2, jadi aplikasi cukup mengirim **satu** vector seperti biasa. Jarak kemiripan tidak lagi dikirim dalam pesan error.
+> Data wajah tersimpan bisa berupa beberapa vector (beberapa sampel wajah depan). Server memakai **satu aturan pencocokan** (presensi wajah hanya lewat aplikasi Android): normalisasi L2 kedua sisi, jarak Euclidean ke sampel 128-d terdekat, cocok bila jarak ≤ `FACE_THRESHOLD` (default 0.45). Aplikasi cukup mengirim **satu** vector. Jarak kemiripan tidak pernah dikirim ke klien.
 
-**Responses Error**:
-- **400 Bad Request**: `Idempotency-Key` hilang/bukan UUID, mock location terdeteksi, akurasi GPS terlalu rendah, clock skew, wajah tidak cocok, dimensi `face_descriptor` berbeda dengan data terdaftar.
-- **403 Forbidden**: Di luar radius GPS, perangkat terkunci untuk user lain, di luar jam buka/tutup, wajah belum terdaftar/disetujui (lihat tabel di atas).
-- **409 Conflict**: `Idempotency-Key` sama dengan payload berbeda.
-- **422 Unprocessable Entity**: Validasi gagal (field wajib hilang, format salah).
-- **426 Upgrade Required**: `face_descriptor` tidak dikirim (versi app lama).
+**Katalog status & aksi Android**:
+
+| `status` | HTTP | Arti | Aksi Android |
+|---|---|---|---|
+| `success` | 201 / 200 | Presensi datang (201) / pulang (200) tercatat | Tampilkan `message` (level atas), muat ulang `/me/state` |
+| `already` | 200 | Sudah presensi | Info, **bukan** sukses; muat ulang `/me/state` |
+| `face_mismatch` | 400 | Wajah tidak cocok (dihitung ke kunci gagal) | "Coba lagi" dengan tangkapan & key baru |
+| `face_locked` | 429 | Terkunci setelah 5 gagal dalam 10 menit (berlaku juga untuk web) | Hitung mundur `retry_after_seconds` |
+| `face_not_registered` / `face_rejected` / `face_reenroll_required` | 403 | Lihat tabel di atas | Buka pendaftaran wajah (`POST /me/face-enrollment`) |
+| `face_pending` | 403 | Menunggu persetujuan admin | Info menunggu; push FCM `reason=face` datang saat disetujui |
+| `face_model_mismatch` | 426 | `face_descriptor` bukan 128-d atau `face_model` lain | Minta update aplikasi |
+| `app_update_required` | 426 | `face_descriptor` tidak dikirim (aplikasi lama) | Minta update aplikasi |
+| `error` | 400 / 403 / 422 | Jendela waktu, GPS (mock/akurasi/clock skew/radius), workcode, validasi | Tampilkan `message`, muat ulang `/me/state` |
+| `error` | 409 | `Idempotency-Key` sama dengan payload berbeda | Buat key baru |
+| (tanpa `status`) | 401 | Token tidak valid/kedaluwarsa | Hapus token, ke login |
+| (tanpa `status`) | 429 | Throttle API | Hormati `Retry-After` |
+
+```json
+{
+    "status": "face_locked",
+    "message": "Terlalu banyak percobaan wajah yang gagal. Coba lagi dalam 15 menit atau hubungi admin.",
+    "retry_after_seconds": 897
+}
+```
+
+> Transisi rilis: `FACE_ENFORCE_DIMENSIONS=false` menonaktifkan sementara penolakan 426 `face_model_mismatch` (mis. sampai APK baru tersebar). Vector non-128-d tetap tidak pernah cocok dengan data tersimpan.
+
+---
+
+## 2a. Status Gabungan Peserta (Android)
+
+Satu sumber kebenaran untuk dashboard aplikasi. Dimuat ulang saat aplikasi dibuka/kembali ke depan, setiap menerima pesan FCM, dan setelah submit presensi.
+
+**URL**: `GET /api/v1/me/state` (token peserta). Header opsional `If-None-Match: "<state_version>"` → **304** tanpa body bila tidak ada perubahan. Header opsional `X-Installation-Id: <installation_id>` (nilai yang sama dengan `installation_id` saat presensi): bila HP ini sudah dipakai presensi akun lain pada workcode aktif hari ini, `attendance_ui` menjadi `action: "none"`, `reason: "device_used"` dengan `message` penjelasan, sehingga tombol Absen Datang tidak tampil.
+
+```json
+{
+  "status": "success",
+  "data": {
+    "server_time": "2026-10-19T07:00:00+07:00",
+    "state_version": "3f2b…",
+    "workcode_aktif": { "id": 16, "nama_workcode": "…", "kategori": "harian" },
+    "presensi_hari_ini": { "waktu_hadir": "2026-10-19T06:31:00+07:00", "waktu_pulang": null },
+    "attendance_ui": { "action": "departure", "action_label": "Absen Pulang", "reason": "departure_open", "message": null, "server_time": "…", "effective_schedule": { } },
+    "face": {
+      "status": "approved",
+      "ready": true,
+      "blocker": null,
+      "model": "faceapi-resnet34-128",
+      "sample_count": 3,
+      "can_enroll": false,
+      "locked": false,
+      "retry_after_seconds": null
+    }
+  }
+}
+```
+
+- Header respons `ETag: "<state_version>"`. `state_version` tidak memuat nilai yang berubah tiap detik (`server_time`, `retry_after_seconds`), jadi hanya berubah bila tampilan perlu berubah.
+- `workcode_aktif` / `presensi_hari_ini` bisa `null`. `attendance_ui` sama persis dengan `GET /workcodes/active`.
+- `face.ready = true` ⇔ presensi wajah boleh dilakukan. Bila `false`, tampilkan `face.blocker.message`; bila `face.can_enroll`, tampilkan tombol daftar wajah.
+- Bentuk `face` yang sama juga ada di `GET /api/v1/me` → `participant.face`.
+
+## 2b. Pendaftaran Wajah dari Android
+
+**URL**: `POST /api/v1/me/face-enrollment` (token peserta, JSON)
+
+```json
+{
+  "model": "faceapi-resnet34-128",
+  "descriptors": [[128 angka], [128 angka], [128 angka]],
+  "photo": "data:image/jpeg;base64,/9j/4AAQ…"
+}
+```
+
+- `descriptors`: 3–10 sampel wajah depan, masing-masing 128 angka mentah, konsisten (jarak tiap sampel ke rata-ratanya ≤ 0.55). Aturan sama dengan pendaftaran mandiri web.
+- `photo` opsional, JPEG/PNG base64 maks ±1,5 MB.
+- Status menjadi `pending`; admin menyetujui di web (Peserta → Wajah). Setelah disetujui, aplikasi menerima FCM `reason=face`.
+
+| Kondisi | HTTP | `status` |
+|---|---|---|
+| Berhasil | 201 | `success` + `data.face` |
+| `model` bukan `faceapi-resnet34-128` | 426 | `face_model_mismatch` |
+| Wajah sudah disetujui & siap (ganti lewat pengajuan foto) | 409 | `face_already_registered` |
+| Data/foto tidak valid atau sampel tidak konsisten | 422 | `invalid_face_data` |
+
+## 2c. Anti Fake GPS (Android)
+
+Aplikasi mengumpulkan sinyal integritas lokasi dan mengirimnya sebagai `location_integrity`; **server yang memutuskan** dan mencatat setiap percobaan (tabel `location_integrity_violations`, terlihat admin di halaman **Perangkat** → "Percobaan Fake GPS").
+
+```json
+"location_integrity": {
+  "is_mock": false,
+  "mock_app_active": false,
+  "fake_apps": ["GPS Emulator"],
+  "rooted": false,
+  "hooking": false,
+  "developer_options": true
+}
+```
+
+| Field | Arti | Ditolak bila |
+|---|---|---|
+| `is_mock` | Titik lokasi (atau lokasi terakhir) berasal dari penyedia mock | `true` (selalu) |
+| `mock_app_active` | Aplikasi dipilih di Opsi Pengembang → "Pilih aplikasi lokasi palsu" (AppOps `mock_location`) | `true` (selalu) |
+| `fake_apps` | Nama aplikasi fake GPS populer yang terpasang | tidak kosong (`ANTI_FAKE_GPS_BLOCK_FAKE_APPS`, default `true`) |
+| `rooted` | Biner `su`, Magisk/KernelSU/SuperSU, build `test-keys` | `true` (`ANTI_FAKE_GPS_BLOCK_ROOT`, default `true`) |
+| `hooking` | Xposed/LSPosed/EdXposed, jejak Riru/Zygisk/Frida di proses | `true` (`ANTI_FAKE_GPS_BLOCK_HOOKING`, default `true`) |
+| `developer_options` | Opsi Pengembang aktif | tidak pernah (hanya dicatat) |
+
+Akurasi `0` selalu dianggap `is_mock`, walau sinyal tidak dikirim. Bila `ANTI_FAKE_GPS_REQUIRE_SIGNALS=true`, permintaan tanpa `location_integrity` ditolak **426** `app_update_required` (aktifkan setelah APK baru tersebar).
+
+- **`POST /api/v1/attendance/precheck`** (token peserta, tanpa Idempotency-Key): `{"accuracy": 8.5, "location_integrity": {…}}` → **200** `{"status":"ok"}` atau **403**. Dipanggil sebelum kamera wajah dibuka agar peserta tidak memindai wajah sia-sia.
+- **`POST /api/v1/attendance`**: field yang sama diperiksa ulang sebelum idempotensi (penolakan tidak di-cache per key).
+
+Respons penolakan (keduanya):
+```json
+{
+  "status": "fake_gps_detected",
+  "message": "Presensi diblokir. Aplikasi Fake GPS terpasang di HP ini. Hapus aplikasi tersebut untuk dapat melakukan presensi. Terdeteksi: GPS Emulator.",
+  "reasons": ["fake_app_installed"]
+}
+```
+`reasons` ⊆ `mock_location`, `mock_app_active`, `fake_app_installed`, `hooking_framework`, `rooted`.
+
+> Sinyal dari HP bisa dipalsukan oleh APK yang dimodifikasi; lapisan ini mencegah kecurangan umum (aplikasi fake GPS, mock location, root/hooking), bukan bukti mutlak. Penguatan berikutnya yang disarankan: Google Play Integrity API (verifikasi APK asli & integritas perangkat di server).
 
 ---
 
@@ -279,24 +520,58 @@ dokumen:            file (jpg/png/pdf, opsional)
 
 **Request Body** (multipart/form-data):
 ```
-photo:              file (jpg/png, wajib)
-face_descriptor:    [0.9, 0.8, ...] (array float, wajib)
+photo:              file (jpg/jpeg/png/webp, maks 5 MB, wajib)
+face_descriptor[]:  0.9, 0.8, ... (opsional; bila dikirim harus tepat 128 angka model faceapi-resnet34-128, selain itu 422)
 ```
+
+> Saat disetujui admin, descriptor hanya menggantikan data wajah bila kompatibel (128-d), dan `face_status` menjadi `approved` hanya bila peserta akhirnya memiliki minimal satu sampel 128-d. Pengajuan tanpa descriptor hanya mengganti foto.
 
 **Response Success (201 Created)**:
 ```json
 {
   "status": "success",
+  "message": "Foto berhasil diajukan dan menunggu verifikasi admin.",
   "data": {
     "photo_change_request": {
       "id": 1,
-      "status": "pending"
-    }
+      "status": "pending",
+      "photo_url": "https://<host>/files/photo-change-request/1?expires=...&signature=...",
+      "created_at": "2026-10-20T14:30:00+07:00",
+      "submitted_at": "2026-10-20T14:30:00+07:00",
+      "reviewed_at": null,
+      "rejection_reason": null
+    },
+    "has_pending_photo_change": true
   }
 }
 ```
 
 **Response Error (409)**: Sudah ada pending request yang belum diproses.
+
+Foto & descriptor aktif peserta **tidak berubah** sampai admin menyetujui pengajuan.
+
+### Status foto — `GET /api/v1/me/photo`
+
+```json
+{
+  "status": "success",
+  "data": {
+    "photo_url": "https://<host>/files/participant-photo/1?expires=...&signature=...",
+    "face_status": "approved",
+    "active_photo": { "photo_url": "https://<host>/files/participant-photo/1?...", "status": "approved" },
+    "photo_change_request": {
+      "id": 1, "status": "pending", "photo_url": "https://<host>/files/photo-change-request/1?...",
+      "created_at": "2026-10-20T14:30:00+07:00", "submitted_at": "2026-10-20T14:30:00+07:00",
+      "reviewed_at": null, "rejection_reason": null
+    },
+    "has_pending_photo_change": true
+  }
+}
+```
+
+- `face_status` / `active_photo.status` = status foto/wajah **aktif** (`approved`, `pending`, `rejected`, atau `null`).
+- `photo_change_request` = pengajuan perubahan foto **terbaru apa pun statusnya** (`pending`, `approved`, `rejected`), `null` bila belum pernah mengajukan. **Berubah sejak Okt 2026:** sebelumnya hanya berisi pengajuan `pending`; klien yang menganggap "tidak null = sedang menunggu" harus beralih ke `has_pending_photo_change`.
+- `has_pending_photo_change` = `true` bila masih ada pengajuan menunggu verifikasi admin.
 
 ---
 
@@ -314,3 +589,20 @@ face_descriptor:    [0.9, 0.8, ...] (array float, wajib)
 **Response**: `{ "status": "success", "message": "FCM token berhasil dihapus." }`
 
 > Kedua endpoint ini **tidak** memerlukan `Idempotency-Key`.
+
+Daftarkan token setelah login dan di `onNewToken`; hapus saat logout. Server melepas token yang ditolak Firebase (tidak terdaftar/tidak valid).
+
+## 7. Sinkronisasi Real-time (FCM)
+
+FCM hanya **pemicu**: payload tidak berisi data pribadi maupun state. Aplikasi selalu memuat ulang `GET /api/v1/me/state` (dengan `If-None-Match`), sehingga pesan yang hilang/terlambat tidak merusak tampilan.
+
+| Pesan | Tujuan | Data | Dikirim saat |
+|---|---|---|---|
+| Per pengguna | token `users.fcm_token` | `{"type":"state_changed","reason":"face\|attendance\|photo\|leave\|workcode","v":"1"}` | Setelah commit DB: wajah didaftarkan/disetujui/ditolak/dihapus (`face`), presensi dicatat/diubah di luar aplikasi — scanner web, self check-in, input manual admin (`attendance`), pengajuan foto diputuskan (`photo`, plus `face` bila data wajah berubah), izin diputuskan (`leave`) |
+| Topic `workcode-updates` | semua perangkat | `{"type":"workcode_sync","action":…,"workcode_id":…}` | Workcode dibuat/diubah/diaktifkan/dinonaktifkan/dihapus |
+| Topic `workcode-updates` | semua perangkat | `{"type":"workcode_sync","action":"full_sync","v":"1","timestamp":…}` | Admin menekan tombol **Sync** (petir) di web (`POST /sync`, jeda 30 detik). Aplikasi memuat ulang seluruh datanya dari API; tanpa `workcode_id`. Aplikasi lama sudah menanganinya sebagai `workcode_sync` biasa (muat ulang `/me/state`) |
+
+- Android priority `high`, TTL 600 detik. Push `state_changed` per pengguna+alasan dibatasi agar satu aksi (mis. izin multi-hari) cukup satu pesan.
+- Perhitungan alpha otomatis (cron) tidak mengirim push.
+- Untuk pesan topic, aplikasi menunda acak 0–15 detik sebelum memuat ulang agar satu sekolah tidak memuat ulang bersamaan.
+- Cadangan bila push gagal: muat ulang saat aplikasi ke depan, polling adaptif di dashboard (15 detik saat jendela presensi buka/wajah `pending`, selain itu 60 detik), dan pemuatan ulang pada jam buka/tutup `effective_schedule`.

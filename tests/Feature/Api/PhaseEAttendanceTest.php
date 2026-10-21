@@ -46,7 +46,7 @@ class PhaseEAttendanceTest extends TestCase
 
         $response = $this->postJson('/api/v1/attendance', [
             'installation_id' => Str::uuid()->toString(),
-            'face_descriptor' => [1.0],
+            'face_descriptor' => $this->descriptor(),
         ]);
 
         $response->assertStatus(400)
@@ -56,7 +56,7 @@ class PhaseEAttendanceTest extends TestCase
     public function test_attendance_submission_success()
     {
         $user = User::factory()->create(['role' => 'participant']);
-        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode([1.0]), 'face_status' => 'approved']);
+        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode($this->descriptor()), 'face_status' => 'approved']);
         $user->participant_id = $participant->id;
         $user->save();
         Sanctum::actingAs($user, ['role:participant']);
@@ -79,7 +79,7 @@ class PhaseEAttendanceTest extends TestCase
             'accuracy' => 10,
             'device_timestamp' => now()->toIso8601String(),
             'installation_id' => $installationId,
-            'face_descriptor' => [1.0],
+            'face_descriptor' => $this->descriptor(),
         ];
 
         $response = $this->postJson('/api/v1/attendance', $payload, [
@@ -127,7 +127,7 @@ class PhaseEAttendanceTest extends TestCase
     public function test_attendance_submission_idempotency_replay_success()
     {
         $user = User::factory()->create(['role' => 'participant']);
-        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode([1.0]), 'face_status' => 'approved']);
+        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode($this->descriptor()), 'face_status' => 'approved']);
         $user->participant_id = $participant->id;
         $user->save();
         Sanctum::actingAs($user, ['role:participant']);
@@ -150,7 +150,7 @@ class PhaseEAttendanceTest extends TestCase
             'accuracy' => 10,
             'device_timestamp' => now()->toIso8601String(),
             'installation_id' => $installationId,
-            'face_descriptor' => [1.0],
+            'face_descriptor' => $this->descriptor(),
         ];
 
         // 1. Initial request
@@ -175,7 +175,7 @@ class PhaseEAttendanceTest extends TestCase
     public function test_attendance_submission_idempotency_conflict_when_payload_changes()
     {
         $user = User::factory()->create(['role' => 'participant']);
-        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode([1.0]), 'face_status' => 'approved']);
+        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode($this->descriptor()), 'face_status' => 'approved']);
         $user->participant_id = $participant->id;
         $user->save();
         Sanctum::actingAs($user, ['role:participant']);
@@ -198,7 +198,7 @@ class PhaseEAttendanceTest extends TestCase
             'accuracy' => 10,
             'device_timestamp' => now()->toIso8601String(),
             'installation_id' => $installationId,
-            'face_descriptor' => [1.0],
+            'face_descriptor' => $this->descriptor(),
         ];
 
         // 1. Initial request
@@ -206,7 +206,7 @@ class PhaseEAttendanceTest extends TestCase
 
         // 2. Change payload but use SAME idempotency key
         $payload2 = $payload1;
-        $payload2['accuracy'] = 20;
+        $payload2['face_descriptor'][0] = 0.9;
 
         $response2 = $this->postJson('/api/v1/attendance', $payload2, ['Idempotency-Key' => $idempotencyKey]);
         $response2->assertStatus(409)
@@ -222,7 +222,7 @@ class PhaseEAttendanceTest extends TestCase
     public function test_mock_location_is_rejected_by_service()
     {
         $user = User::factory()->create(['role' => 'participant']);
-        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode([1.0]), 'face_status' => 'approved']);
+        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode($this->descriptor()), 'face_status' => 'approved']);
         $user->participant_id = $participant->id;
         $user->save();
         Sanctum::actingAs($user, ['role:participant']);
@@ -238,22 +238,28 @@ class PhaseEAttendanceTest extends TestCase
             'longitude' => 106.1234,
             'accuracy' => 0, // Mock location trigger in service
             'installation_id' => Str::uuid()->toString(),
-            'face_descriptor' => [1.0],
+            'face_descriptor' => $this->descriptor(),
         ];
 
-        $response = $this->postJson('/api/v1/attendance', $payload, ['Idempotency-Key' => Str::uuid()->toString()]);
+        $idempotencyKey = Str::uuid()->toString();
+        $response = $this->postJson('/api/v1/attendance', $payload, ['Idempotency-Key' => $idempotencyKey]);
 
+        // Akurasi 0 (khas injektor mock) dicegat anti fake GPS sebelum validasi lain, dan dicatat untuk admin.
         $response->assertStatus(403)
-            ->assertJson([
-                'status' => 'error',
-                'message' => 'Peringatan Keamanan: Terdeteksi manipulasi lokasi (Mock Location). Matikan aplikasi Fake GPS pada perangkat Anda.',
-            ]);
+            ->assertJsonPath('status', 'fake_gps_detected')
+            ->assertJsonPath('reasons', ['mock_location']);
+        $this->assertDatabaseHas('location_integrity_violations', ['user_id' => $user->id]);
+
+        $this->assertDatabaseMissing('api_idempotency_logs', [
+            'participant_id' => $participant->id,
+            'idempotency_key' => $idempotencyKey,
+        ]);
     }
 
     public function test_out_of_radius_error_message_is_consistent_and_has_no_distance_leak()
     {
         $user = User::factory()->create(['role' => 'participant']);
-        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode([1.0]), 'face_status' => 'approved']);
+        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode($this->descriptor()), 'face_status' => 'approved']);
         $user->participant_id = $participant->id;
         $user->save();
         Sanctum::actingAs($user, ['role:participant']);
@@ -272,7 +278,7 @@ class PhaseEAttendanceTest extends TestCase
             'longitude' => 106.1000,
             'accuracy' => 10,
             'installation_id' => Str::uuid()->toString(),
-            'face_descriptor' => [1.0],
+            'face_descriptor' => $this->descriptor(),
         ];
 
         $response = $this->postJson('/api/v1/attendance', $payload, ['Idempotency-Key' => Str::uuid()->toString()]);
@@ -290,12 +296,12 @@ class PhaseEAttendanceTest extends TestCase
     public function test_device_locked_error_does_not_leak_participant_data()
     {
         $user1 = User::factory()->create(['role' => 'participant']);
-        $participant1 = Participant::create(['nama' => 'Test1', 'nis_nip' => '111', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode([1.0]), 'face_status' => 'approved']);
+        $participant1 = Participant::create(['nama' => 'Test1', 'nis_nip' => '111', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode($this->descriptor()), 'face_status' => 'approved']);
         $user1->participant_id = $participant1->id;
         $user1->save();
 
         $user2 = User::factory()->create(['role' => 'participant']);
-        $participant2 = Participant::create(['nama' => 'Test2', 'nis_nip' => '222', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode([1.0]), 'face_status' => 'approved']);
+        $participant2 = Participant::create(['nama' => 'Test2', 'nis_nip' => '222', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode($this->descriptor()), 'face_status' => 'approved']);
         $user2->participant_id = $participant2->id;
         $user2->save();
 
@@ -318,7 +324,7 @@ class PhaseEAttendanceTest extends TestCase
             'accuracy' => 10,
             'device_timestamp' => now()->toIso8601String(),
             'installation_id' => $installationId,
-            'face_descriptor' => [1.0],
+            'face_descriptor' => $this->descriptor(),
         ];
         $this->postJson('/api/v1/attendance', $payload, ['Idempotency-Key' => Str::uuid()->toString()])->assertStatus(201);
 
@@ -342,7 +348,7 @@ class PhaseEAttendanceTest extends TestCase
     public function test_attendance_submission_success_for_harian_mobile_api()
     {
         $user = User::factory()->create(['role' => 'participant']);
-        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode([1.0]), 'face_status' => 'approved']);
+        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode($this->descriptor()), 'face_status' => 'approved']);
         $user->participant_id = $participant->id;
         $user->save();
         Sanctum::actingAs($user, ['role:participant']);
@@ -365,7 +371,7 @@ class PhaseEAttendanceTest extends TestCase
             'accuracy' => 10,
             'device_timestamp' => now()->toIso8601String(),
             'installation_id' => Str::uuid()->toString(),
-            'face_descriptor' => [1.0],
+            'face_descriptor' => $this->descriptor(),
         ];
 
         $response = $this->postJson('/api/v1/attendance', $payload, [
@@ -378,7 +384,7 @@ class PhaseEAttendanceTest extends TestCase
     public function test_attendance_submission_rejected_for_harian_if_no_active_workcode()
     {
         $user = User::factory()->create(['role' => 'participant']);
-        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode([1.0]), 'face_status' => 'approved']);
+        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '123', 'qr_token' => Str::uuid(), 'face_descriptor' => json_encode($this->descriptor()), 'face_status' => 'approved']);
         $user->participant_id = $participant->id;
         $user->save();
         Sanctum::actingAs($user, ['role:participant']);
@@ -392,7 +398,7 @@ class PhaseEAttendanceTest extends TestCase
             'accuracy' => 10,
             'device_timestamp' => now()->toIso8601String(),
             'installation_id' => Str::uuid()->toString(),
-            'face_descriptor' => [1.0],
+            'face_descriptor' => $this->descriptor(),
         ];
 
         $response = $this->postJson('/api/v1/attendance', $payload, [
@@ -438,6 +444,47 @@ class PhaseEAttendanceTest extends TestCase
             ->assertJson(['status' => 'success']);
     }
 
+    public function test_attendance_rejects_non_128_dimensional_input_as_model_mismatch(): void
+    {
+        $user = User::factory()->create(['role' => 'participant']);
+        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => '128-input', 'qr_token' => Str::uuid(), 'face_descriptor' => $this->descriptor(), 'face_status' => 'approved']);
+        $user->participant_id = $participant->id;
+        $user->save();
+        Sanctum::actingAs($user, ['role:participant']);
+
+        $response = $this->postJson('/api/v1/attendance', [
+            'installation_id' => Str::uuid()->toString(),
+            'face_descriptor' => array_fill(0, 512, 0.1),
+        ], ['Idempotency-Key' => Str::uuid()->toString()]);
+
+        $response->assertStatus(426)->assertJsonPath('status', 'face_model_mismatch');
+        $this->assertDatabaseCount('api_idempotency_logs', 0);
+    }
+
+    public function test_attendance_requires_reenrollment_for_legacy_stored_descriptor(): void
+    {
+        $user = User::factory()->create(['role' => 'participant']);
+        $participant = Participant::create(['nama' => 'Test', 'nis_nip' => 'legacy-stored', 'qr_token' => Str::uuid(), 'face_descriptor' => array_fill(0, 512, 0.1), 'face_status' => 'approved']);
+        $user->participant_id = $participant->id;
+        $user->save();
+        Sanctum::actingAs($user, ['role:participant']);
+        Workcode::create(['nama_workcode' => 'Acara', 'kategori' => 'workcode', 'is_active' => true]);
+        $idempotencyKey = Str::uuid()->toString();
+
+        $this->postJson('/api/v1/attendance', [
+            'installation_id' => Str::uuid()->toString(),
+            'face_descriptor' => $this->descriptor(),
+        ], ['Idempotency-Key' => $idempotencyKey])
+            ->assertForbidden()
+            ->assertJsonPath('status', 'face_reenroll_required');
+
+        $this->assertDatabaseHas('api_idempotency_logs', [
+            'participant_id' => $participant->id,
+            'idempotency_key' => $idempotencyKey,
+            'response_code' => 403,
+        ]);
+    }
+
     public function test_attendance_missing_face_descriptor_returns_426()
     {
         $user = User::factory()->create(['role' => 'participant']);
@@ -458,6 +505,12 @@ class PhaseEAttendanceTest extends TestCase
         ]);
 
         $response->assertStatus(426)
-            ->assertJson(['status' => 'error', 'message' => 'Versi aplikasi Anda sudah usang. Wajib update ke versi terbaru di Play Store untuk mendukung sistem presensi Face Recognition.']);
+            ->assertJson(['status' => 'app_update_required', 'message' => 'Versi aplikasi Anda sudah usang. Wajib update ke versi terbaru di Play Store untuk mendukung sistem presensi Face Recognition.']);
     }
+    /** @return list<float> */
+    private function descriptor(): array
+    {
+        return array_fill(0, 128, 1.0);
+    }
+
 }

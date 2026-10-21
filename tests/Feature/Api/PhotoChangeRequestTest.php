@@ -53,7 +53,7 @@ class PhotoChangeRequestTest extends TestCase
         $participant->update([
             'face_status' => 'approved',
             'photo_path' => 'faces/approved.jpg',
-            'face_descriptor' => [0.1, 0.2],
+            'face_descriptor' => array_fill(0, 128, 0.1),
         ]);
         Storage::disk('private')->put('faces/approved.jpg', 'approved-photo');
 
@@ -63,7 +63,7 @@ class PhotoChangeRequestTest extends TestCase
         $response = $this->withHeaders(['Idempotency-Key' => $key])
             ->post('/api/v1/me/photo-change-requests', [
                 'photo' => UploadedFile::fake()->image('wajah-baru.jpg', 320, 320),
-                'face_descriptor' => [0.9, 0.8],
+                'face_descriptor' => array_fill(0, 128, 0.9),
             ]);
 
         $response->assertCreated()
@@ -74,13 +74,13 @@ class PhotoChangeRequestTest extends TestCase
         $participant->refresh();
         $this->assertSame('faces/approved.jpg', $participant->photo_path);
         $this->assertSame('approved', $participant->face_status);
-        $this->assertSame([0.1, 0.2], $participant->face_descriptor);
+        $this->assertSame(array_fill(0, 128, 0.1), $participant->face_descriptor);
         Storage::disk('private')->assertExists($changeRequest->photo_path);
 
         $this->withHeaders(['Idempotency-Key' => $key])
             ->post('/api/v1/me/photo-change-requests', [
                 'photo' => UploadedFile::fake()->image('wajah-baru.jpg', 320, 320),
-                'face_descriptor' => [0.9, 0.8],
+                'face_descriptor' => array_fill(0, 128, 0.9),
             ])
             ->assertCreated();
 
@@ -89,7 +89,7 @@ class PhotoChangeRequestTest extends TestCase
         $this->withHeaders(['Idempotency-Key' => 'b40b6bf7-2a21-45ae-ae91-7d5c76be1dc6']) // gitleaks:allow (UUID contoh)
             ->post('/api/v1/me/photo-change-requests', [
                 'photo' => UploadedFile::fake()->image('wajah-lain.jpg', 320, 320),
-                'face_descriptor' => [0.7, 0.6],
+                'face_descriptor' => array_fill(0, 128, 0.7),
             ])
             ->assertStatus(409);
     }
@@ -101,14 +101,14 @@ class PhotoChangeRequestTest extends TestCase
         $participant->update([
             'face_status' => 'approved',
             'photo_path' => 'faces/previous.jpg',
-            'face_descriptor' => [0.1, 0.2],
+            'face_descriptor' => array_fill(0, 128, 0.1),
         ]);
         Storage::disk('private')->put('faces/previous.jpg', 'previous-photo');
 
         $changeRequest = PhotoChangeRequest::create([
             'participant_id' => $participant->id,
             'photo_path' => 'photo-change-requests/candidate.jpg',
-            'face_descriptor' => [0.8, 0.7],
+            'face_descriptor' => array_fill(0, 128, 0.8),
             'status' => 'pending',
         ]);
         Storage::disk('private')->put($changeRequest->photo_path, 'candidate-photo');
@@ -124,7 +124,7 @@ class PhotoChangeRequestTest extends TestCase
         $changeRequest->refresh();
         $this->assertSame('approved', $participant->face_status);
         $this->assertSame('photo-change-requests/candidate.jpg', $participant->photo_path);
-        $this->assertSame([0.8, 0.7], $participant->face_descriptor);
+        $this->assertSame(array_fill(0, 128, 0.8), $participant->face_descriptor);
         $this->assertSame('approved', $changeRequest->status);
         $this->assertSame($admin->id, $changeRequest->reviewed_by);
         Storage::disk('private')->assertMissing('faces/previous.jpg');
@@ -164,6 +164,85 @@ class PhotoChangeRequestTest extends TestCase
         $this->assertSame('Wajah tidak terlihat jelas.', $changeRequest->rejection_reason);
         Storage::disk('private')->assertExists('faces/approved.jpg');
         Storage::disk('private')->assertMissing('photo-change-requests/rejected.jpg');
+    }
+
+    public function test_photo_status_separates_active_photo_from_latest_change_request_through_review(): void
+    {
+        Storage::fake('private');
+        [$user, $participant] = $this->participantUser();
+        $participant->update([
+            'face_status' => 'approved',
+            'photo_path' => 'faces/approved.jpg',
+            'face_descriptor' => array_fill(0, 128, 0.1),
+        ]);
+        Storage::disk('private')->put('faces/approved.jpg', 'approved-photo');
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        Sanctum::actingAs($user, ['role:participant']);
+        $this->getJson('/api/v1/me/photo')
+            ->assertOk()
+            ->assertJsonPath('data.photo_change_request', null)
+            ->assertJsonPath('data.has_pending_photo_change', false);
+
+        // Pengajuan pertama: pending, foto aktif tetap approved.
+        $created = $this->withHeaders(['Idempotency-Key' => Str::uuid()->toString()])
+            ->post('/api/v1/me/photo-change-requests', [
+                'photo' => UploadedFile::fake()->image('baru.jpg', 320, 320),
+                'face_descriptor' => array_fill(0, 128, 0.9),
+            ])
+            ->assertCreated()
+            ->assertJsonPath('data.photo_change_request.status', 'pending')
+            ->assertJsonPath('data.photo_change_request.reviewed_at', null)
+            ->assertJsonPath('data.has_pending_photo_change', true);
+        $requestId = $created->json('data.photo_change_request.id');
+        $this->assertNotNull($created->json('data.photo_change_request.submitted_at'));
+        $this->assertStringNotContainsString('face_descriptor', $created->getContent());
+
+        $this->getJson('/api/v1/me/photo')
+            ->assertOk()
+            ->assertJsonPath('data.face_status', 'approved')
+            ->assertJsonPath('data.active_photo.status', 'approved')
+            ->assertJsonPath('data.photo_change_request.id', $requestId)
+            ->assertJsonPath('data.photo_change_request.status', 'pending')
+            ->assertJsonPath('data.has_pending_photo_change', true);
+        $this->assertSame(array_fill(0, 128, 0.1), $participant->fresh()->face_descriptor);
+
+        // Admin menolak: pengajuan terbaru rejected, foto aktif tidak berubah.
+        Sanctum::actingAs($admin, ['role:admin']);
+        $this->patchJson("/api/v1/admin/photo-change-requests/{$requestId}/reject")->assertOk();
+
+        Sanctum::actingAs($user, ['role:participant']);
+        $rejected = $this->getJson('/api/v1/me/photo')
+            ->assertOk()
+            ->assertJsonPath('data.active_photo.status', 'approved')
+            ->assertJsonPath('data.photo_change_request.id', $requestId)
+            ->assertJsonPath('data.photo_change_request.status', 'rejected')
+            ->assertJsonPath('data.has_pending_photo_change', false);
+        $this->assertNotNull($rejected->json('data.photo_change_request.reviewed_at'));
+        $this->assertSame(array_fill(0, 128, 0.1), $participant->fresh()->face_descriptor);
+
+        // Pengajuan kedua disetujui admin web: status pengajuan terbaru approved dan descriptor baru aktif.
+        $second = $this->withHeaders(['Idempotency-Key' => Str::uuid()->toString()])
+            ->post('/api/v1/me/photo-change-requests', [
+                'photo' => UploadedFile::fake()->image('baru-lagi.jpg', 320, 320),
+                'face_descriptor' => array_fill(0, 128, 0.7),
+            ])
+            ->assertCreated()
+            ->json('data.photo_change_request.id');
+        $this->assertNotSame($requestId, $second);
+
+        $this->actingAs($admin)
+            ->post(route('photo-change-requests.approve', $second))
+            ->assertRedirect();
+
+        Sanctum::actingAs($user, ['role:participant']);
+        $this->getJson('/api/v1/me/photo')
+            ->assertOk()
+            ->assertJsonPath('data.active_photo.status', 'approved')
+            ->assertJsonPath('data.photo_change_request.id', $second)
+            ->assertJsonPath('data.photo_change_request.status', 'approved')
+            ->assertJsonPath('data.has_pending_photo_change', false);
+        $this->assertSame(array_fill(0, 128, 0.7), $participant->fresh()->face_descriptor);
     }
 
     public function test_non_participants_and_non_admins_cannot_use_other_roles_endpoints(): void

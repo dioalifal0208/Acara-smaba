@@ -34,12 +34,40 @@ class AttendanceValidationService
     public function todayWindow(Workcode $workcode, bool $isPulang): array
     {
         $prefix = $isPulang ? 'jam_pulang' : 'jam_datang';
-        $schedule = $workcode->jadwal_per_hari[now()->dayOfWeekIso] ?? null;
+        $schedule = $workcode->scheduleFor(now());
 
-        return [
-            $schedule["{$prefix}_mulai"] ?? $workcode->{"{$prefix}_mulai"},
-            $schedule["{$prefix}_selesai"] ?? $workcode->{"{$prefix}_selesai"},
-        ];
+        return [$schedule["{$prefix}_mulai"], $schedule["{$prefix}_selesai"]];
+    }
+
+    /**
+     * Jendela presensi datang/pulang hari ini sebagai waktu nyata (zona waktu aplikasi).
+     * Null bila jam buka/tutup tidak diatur (presensi tidak dibatasi jam). Jam tutup yang lebih
+     * awal dari jam buka dianggap melewati tengah malam. end = jam selesai resmi (batas terlambat);
+     * closes_at = kapan presensi benar-benar ditutup: untuk datang harian end + toleransi terlambat.
+     *
+     * @return array{start: Carbon, end: Carbon, closes_at: Carbon, start_time: string, end_time: string}|null
+     */
+    public function windowBounds(Workcode $workcode, bool $isPulang, ?Carbon $now = null): ?array
+    {
+        [$start, $end] = $this->todayWindow($workcode, $isPulang);
+
+        if (! $start || ! $end) {
+            return null;
+        }
+
+        $now ??= now();
+        $startCarbon = Carbon::createFromTimeString($start)->setDate($now->year, $now->month, $now->day);
+        $endCarbon = Carbon::createFromTimeString($end)->setDate($now->year, $now->month, $now->day);
+
+        if ($endCarbon->lt($startCarbon)) {
+            $endCarbon->addDay();
+        }
+
+        $closesAt = ! $isPulang && $workcode->kategori === 'harian'
+            ? Workcode::withLateTolerance($endCarbon)
+            : $endCarbon->copy();
+
+        return ['start' => $startCarbon, 'end' => $endCarbon, 'closes_at' => $closesAt, 'start_time' => $start, 'end_time' => $end];
     }
 
     public function validateTimeWindow(Workcode $workcode, bool $isPulang): void
@@ -48,25 +76,24 @@ class AttendanceValidationService
             return;
         }
 
-        [$start, $end] = $this->todayWindow($workcode, $isPulang);
+        $now = now();
+        $window = $this->windowBounds($workcode, $isPulang, $now);
         $label = $isPulang ? 'pulang' : 'datang';
 
-        if (! $start || ! $end) {
+        if (! $window) {
             return;
         }
 
-        $now = now();
-        $startCarbon = Carbon::createFromTimeString($start)->setDate($now->year, $now->month, $now->day);
-        $endCarbon = Carbon::createFromTimeString($end)->setDate($now->year, $now->month, $now->day);
+        ['start_time' => $start, 'end_time' => $end] = $window;
 
-        if ($endCarbon->lt($startCarbon)) {
-            $endCarbon->addDay();
-        }
+        if (! $now->between($window['start'], $window['closes_at'])) {
+            $tolerance = $window['closes_at']->gt($window['end'])
+                ? ', toleransi terlambat sampai '.$window['closes_at']->format('H:i').' WIB'
+                : '';
 
-        if (! $now->between($startCarbon, $endCarbon)) {
             throw new \Exception(json_encode([
                 'status' => 'error',
-                'message' => "Waktu absen {$label} sudah ditutup atau belum dibuka ({$start} – {$end} WIB).",
+                'message' => "Waktu absen {$label} sudah ditutup atau belum dibuka ({$start} – {$end} WIB{$tolerance}).",
             ]), 400);
         }
     }
@@ -76,15 +103,23 @@ class AttendanceValidationService
         return hash('sha256', ($deviceId ?? '').'|'.($userAgent ?? ''));
     }
 
-    public function validateDeviceLock(Workcode $workcode, string $deviceHash)
+    /**
+     * HP (hash perangkat) sudah dipakai presensi pada workcode ini hari ini oleh peserta lain.
+     * Tanpa $participantId (self check-in web, peserta belum diketahui) semua presensi dihitung.
+     */
+    public function deviceUsedByOther(Workcode $workcode, string $deviceHash, ?int $participantId = null): bool
     {
-        $deviceAttendance = Attendance::where('workcode_id', $workcode->id)
+        return Attendance::where('workcode_id', $workcode->id)
             ->where('device_hash', $deviceHash)
+            ->when($participantId !== null, fn ($query) => $query->where('participant_id', '!=', $participantId))
             ->whereDate('created_at', now()->toDateString())
-            ->with('participant')
-            ->first();
+            ->whereHas('participant')
+            ->exists();
+    }
 
-        if ($deviceAttendance && $deviceAttendance->participant) {
+    public function validateDeviceLock(Workcode $workcode, string $deviceHash, ?int $participantId = null)
+    {
+        if ($this->deviceUsedByOther($workcode, $deviceHash, $participantId)) {
             throw new \Exception(json_encode([
                 'status' => 'device_locked',
                 'message' => 'Perangkat ini sudah digunakan untuk presensi pada workcode ini.',
@@ -174,5 +209,134 @@ class AttendanceValidationService
             );
 
         return $attendanceQuery->exists();
+    }
+
+    /**
+     * Status tombol presensi untuk aplikasi Android, diputuskan dari waktu server dan catatan presensi
+     * dengan aturan yang sama seperti POST /api/v1/attendance. Hanya untuk tampilan: POST tetap
+     * memvalidasi ulang semuanya (jadwal, GPS, perangkat, wajah, idempotensi).
+     *
+     * @param  ?Attendance  $attendance  catatan presensi peserta untuk workcode ini (harian: hari ini)
+     * @param  bool  $hasOtherActiveWorkcode  ada workcode aktif, tetapi tidak tersedia untuk peserta
+     */
+    public function attendanceUi(?Workcode $workcode, ?Attendance $attendance, bool $hasOtherActiveWorkcode = false): array
+    {
+        $now = now();
+
+        if (! $workcode || ! $workcode->isEffectivelyActive($now)) {
+            return $this->uiState($now, 'none', $hasOtherActiveWorkcode ? 'not_assigned' : 'no_active_workcode',
+                $hasOtherActiveWorkcode ? 'Workcode aktif tidak tersedia untuk akun Anda.' : 'Belum ada workcode yang aktif.');
+        }
+
+        $schedule = $this->effectiveSchedule($workcode, $now);
+
+        // Workcode kegiatan: satu kali presensi, tanpa presensi pulang dan tanpa batas jam datang/pulang.
+        if ($workcode->kategori !== 'harian') {
+            return $attendance
+                ? $this->uiState($now, 'none', 'completed', 'Anda sudah melakukan presensi untuk workcode "'.$workcode->nama_workcode.'".', $schedule)
+                : $this->uiState($now, 'arrival', 'arrival_open', null, $schedule);
+        }
+
+        if ($attendance && $attendance->waktu_pulang !== null) {
+            return $this->uiState($now, 'none', 'completed', 'Presensi datang dan pulang hari ini sudah tercatat.', $schedule);
+        }
+
+        $isPulang = $attendance !== null;
+        $window = $this->windowBounds($workcode, $isPulang, $now);
+        $action = $isPulang ? 'departure' : 'arrival';
+
+        // Record tanpa jam datang (mis. lupa_absen dari attendance:calculate-alpha setelah toleransi habis):
+        // peserta tetap bisa presensi pulang, tetapi pesannya tidak boleh menyebut presensi datang tercatat.
+        $missedArrival = $isPulang && $attendance->waktu_hadir === null
+            ? 'Anda tidak melakukan presensi datang hari ini'.($attendance->status === 'lupa_absen' ? ' (tercatat lupa absen)' : '').'.'
+            : null;
+
+        if (! $window || $now->between($window['start'], $window['end'])) {
+            return $this->uiState($now, $action, "{$action}_open", $missedArrival, $schedule);
+        }
+
+        // Masa toleransi datang: tombol tetap dibuka (reason sama agar APK lama tetap jalan), ditandai terlambat.
+        if ($now->gt($window['end']) && $now->lte($window['closes_at'])) {
+            $lateMinutes = $workcode->lateMinutes($now);
+
+            return $this->uiState($now, $action, "{$action}_open",
+                'Anda terlambat '.Workcode::formatLateDuration($lateMinutes).'. Presensi datang ditutup pukul '.$window['closes_at']->format('H:i').' WIB.',
+                $schedule, $lateMinutes);
+        }
+
+        $range = $window['start']->format('H:i').' – '.$window['end']->format('H:i');
+
+        if ($now->lt($window['start'])) {
+            return $this->uiState($now, 'none', "{$action}_not_open", $isPulang
+                ? ($missedArrival ?? 'Presensi datang sudah tercatat.').' Presensi pulang baru dibuka pukul '.$window['start']->format('H:i').' WIB.'
+                : 'Presensi datang baru dibuka pukul '.$window['start']->format('H:i').' WIB.', $schedule);
+        }
+
+        return $this->uiState($now, 'none', "{$action}_closed", $isPulang
+            ? ($missedArrival ? "{$missedArrival} " : '')."Waktu presensi pulang sudah ditutup ({$range} WIB)."
+            : "Waktu presensi datang sudah ditutup pukul {$window['closes_at']->format('H:i')} WIB (jadwal {$range} WIB + toleransi terlambat).", $schedule);
+    }
+
+    /**
+     * Jadwal presensi yang berlaku hari ini, dari logika jadwal yang sama dengan validasi presensi.
+     *
+     * @return array{arrival: array, departure: array}
+     */
+    public function effectiveSchedule(Workcode $workcode, ?Carbon $now = null): array
+    {
+        $now ??= now();
+
+        if ($workcode->kategori !== 'harian') {
+            // Kegiatan dibuka sepanjang jam aktifnya; tidak ada presensi pulang.
+            $arrival = $workcode->hasScheduledActiveWindow()
+                ? [
+                    'start' => $workcode->activeWindowStartsAt(),
+                    'end' => $workcode->activeWindowEndsAt(),
+                    'closes_at' => $workcode->activeWindowEndsAt(),
+                ]
+                : null;
+
+            return ['arrival' => $this->scheduleEntry($arrival), 'departure' => $this->scheduleEntry(null)];
+        }
+
+        return [
+            'arrival' => $this->scheduleEntry($this->windowBounds($workcode, false, $now)),
+            'departure' => $this->scheduleEntry($this->windowBounds($workcode, true, $now)),
+        ];
+    }
+
+    private function scheduleEntry(?array $window): array
+    {
+        return [
+            'start' => $window ? $window['start']->toIso8601String() : null,
+            'end' => $window ? $window['end']->toIso8601String() : null,
+            'closes_at' => $window ? $window['closes_at']->toIso8601String() : null,
+            'display' => $window ? $window['start']->format('H:i').'–'.$window['end']->format('H:i') : null,
+        ];
+    }
+
+    /** Tombol presensi ditutup karena HP ini sudah dipakai presensi akun lain (lihat deviceUsedByOther). */
+    public function deviceUsedUi(Workcode $workcode): array
+    {
+        return $this->uiState(now(), 'none', 'device_used',
+            'Perangkat ini sudah digunakan untuk presensi pada workcode ini.', $this->effectiveSchedule($workcode));
+    }
+
+    private function uiState(Carbon $now, string $action, string $reason, ?string $message, ?array $schedule = null, int $lateMinutes = 0): array
+    {
+        return [
+            'action' => $action,
+            'action_label' => match ($action) {
+                'arrival' => 'Absen Datang',
+                'departure' => 'Absen Pulang',
+                default => null,
+            },
+            'reason' => $reason,
+            'message' => $message,
+            'is_late' => $lateMinutes > 0,
+            'late_minutes' => $lateMinutes,
+            'server_time' => $now->toIso8601String(),
+            'effective_schedule' => $schedule,
+        ];
     }
 }

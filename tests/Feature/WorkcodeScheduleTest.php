@@ -125,4 +125,45 @@ class WorkcodeScheduleTest extends TestCase
         $this->assertFalse($workcode->fresh()->is_active);
         $this->assertNull(Workcode::getActive());
     }
+
+    public function test_daily_departure_cannot_open_before_late_tolerance_ends(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $schedule = fn (string $pulangMulai) => [
+            'jam_datang_mulai' => '06:00', 'jam_datang_selesai' => '07:00',
+            'jam_pulang_mulai' => $pulangMulai, 'jam_pulang_selesai' => '22:00',
+        ];
+
+        $this->actingAs($admin)
+            ->from(route('workcodes.index'))
+            ->post(route('workcodes.store'), [
+                'nama_workcode' => 'Harian Bentrok',
+                'kategori' => 'harian',
+                'hari_aktif' => [1, 5],
+                'jam_datang_mulai' => '06:00',
+                'jam_datang_selesai' => '07:00',
+                'jam_pulang_mulai' => '15:30',
+                'jam_pulang_selesai' => '22:00',
+                // Jumat: pulang mulai 08:00 = batas toleransi datang (07:00 + 60 menit).
+                'jadwal_per_hari' => [1 => $schedule('15:30'), 5 => $schedule('08:00')],
+            ])
+            ->assertRedirect(route('workcodes.index'))
+            ->assertSessionHasErrors('jadwal_per_hari.5.jam_pulang_mulai')
+            ->assertSessionDoesntHaveErrors('jadwal_per_hari.1.jam_pulang_mulai');
+
+        $this->assertDatabaseMissing('workcodes', ['nama_workcode' => 'Harian Bentrok']);
+
+        $this->mock(FcmService::class)->shouldReceive('sendWorkcodeUpdate')->once();
+        $this->actingAs($admin)
+            ->from(route('workcodes.index'))
+            ->post(route('workcodes.store'), [
+                'nama_workcode' => 'Harian Valid',
+                'kategori' => 'harian',
+                'hari_aktif' => [5],
+                'jam_datang_selesai' => '07:00',
+                'jam_pulang_mulai' => '15:30',
+                'jadwal_per_hari' => [5 => $schedule('08:01')],
+            ])
+            ->assertSessionHasNoErrors();
+    }
 }

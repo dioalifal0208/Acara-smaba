@@ -5,8 +5,8 @@ namespace Tests\Feature;
 use App\Models\Attendance;
 use App\Models\Participant;
 use App\Models\Workcode;
+use App\Services\SelfCheckInTokenService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -15,25 +15,28 @@ class SelfCheckInWebTest extends TestCase
 {
     use RefreshDatabase;
 
-    private $token;
-
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->token = Str::random(16);
-        Cache::put('active_workcode_token', $this->token, now()->endOfDay());
         Storage::fake('private');
     }
 
     public function test_fails_if_no_active_workcode()
     {
-        $response = $this->postJson("/self-checkin/{$this->token}", [
+        Workcode::create([
+            'nama_workcode' => 'Sudah Ditutup',
+            'kategori' => 'workcode',
+            'is_active' => false,
+        ]);
+
+        $response = $this->postJson("/self-checkin/{$this->token()}", [
             'nis_nip' => '12345',
         ]);
 
-        $response->assertStatus(400)
-            ->assertJson(['message' => 'Belum ada Workcode yang aktif. Presensi mandiri saat ini ditutup.']);
+        // Token workcode yang tidak aktif dinonaktifkan sementara.
+        $response->assertStatus(410)
+            ->assertJson(['status' => 'closed', 'reason' => 'inactive']);
     }
 
     public function test_fails_if_workcode_is_harian()
@@ -44,7 +47,7 @@ class SelfCheckInWebTest extends TestCase
             'is_active' => true,
         ]);
 
-        $response = $this->postJson("/self-checkin/{$this->token}", [
+        $response = $this->postJson("/self-checkin/{$this->token()}", [
             'nis_nip' => '12345',
         ]);
 
@@ -66,7 +69,7 @@ class SelfCheckInWebTest extends TestCase
             'qr_token' => Str::uuid(),
         ]);
 
-        $response = $this->postJson("/self-checkin/{$this->token}", [
+        $response = $this->postJson("/self-checkin/{$this->token()}", [
             'nis_nip' => '12345',
             'device_id' => 'dev1',
             'device_timestamp' => now()->timestamp * 1000,
@@ -96,7 +99,7 @@ class SelfCheckInWebTest extends TestCase
             'status' => 'GTT',
         ]);
 
-        $this->getJson(route('self-checkin.participants', ['token' => $this->token, 'query' => 'Guru Tidak']))
+        $this->getJson(route('self-checkin.participants', ['token' => $this->token(), 'query' => 'Guru Tidak']))
             ->assertOk()
             ->assertJsonFragment([
                 'id' => $participant->id,
@@ -105,7 +108,7 @@ class SelfCheckInWebTest extends TestCase
                 'status' => 'GTT',
             ]);
 
-        $response = $this->postJson("/self-checkin/{$this->token}", [
+        $response = $this->postJson("/self-checkin/{$this->token()}", [
             'participant_id' => $participant->id,
             'device_id' => 'gtt-device',
             'device_timestamp' => now()->timestamp * 1000,
@@ -152,7 +155,7 @@ class SelfCheckInWebTest extends TestCase
             'ip_address' => '127.0.0.1',
         ]);
 
-        $response = $this->postJson("/self-checkin/{$this->token}", [
+        $response = $this->postJson("/self-checkin/{$this->token()}", [
             'nis_nip' => '12345',
             'device_id' => 'dev2', // different device to bypass device lock
             'device_timestamp' => now()->timestamp * 1000,
@@ -183,7 +186,7 @@ class SelfCheckInWebTest extends TestCase
             'ip_address' => '127.0.0.1',
         ]);
 
-        $response = $this->postJson("/self-checkin/{$this->token}", [
+        $response = $this->postJson("/self-checkin/{$this->token()}", [
             'nis_nip' => '222',
             'device_id' => 'dev1',
             'device_timestamp' => now()->timestamp * 1000,
@@ -202,7 +205,7 @@ class SelfCheckInWebTest extends TestCase
             'is_active' => true,
         ]);
 
-        $response = $this->postJson("/self-checkin/{$this->token}", [
+        $response = $this->postJson("/self-checkin/{$this->token()}", [
             'nis_nip' => '12345',
             'accuracy' => 0,
             'signature' => $this->signatureDataUrl(),
@@ -220,7 +223,7 @@ class SelfCheckInWebTest extends TestCase
             'is_active' => true,
         ]);
 
-        $response = $this->postJson("/self-checkin/{$this->token}", [
+        $response = $this->postJson("/self-checkin/{$this->token()}", [
             'nis_nip' => '12345',
             'accuracy' => 121,
             'signature' => $this->signatureDataUrl(),
@@ -238,7 +241,7 @@ class SelfCheckInWebTest extends TestCase
             'is_active' => true,
         ]);
 
-        $response = $this->postJson("/self-checkin/{$this->token}", [
+        $response = $this->postJson("/self-checkin/{$this->token()}", [
             'nis_nip' => '12345',
             'device_timestamp' => (now()->timestamp - 130) * 1000,
             'signature' => $this->signatureDataUrl(),
@@ -260,7 +263,7 @@ class SelfCheckInWebTest extends TestCase
         ]);
 
         // Far away coordinate
-        $response = $this->postJson("/self-checkin/{$this->token}", [
+        $response = $this->postJson("/self-checkin/{$this->token()}", [
             'nis_nip' => '12345',
             'latitude' => -6.250000,
             'longitude' => 106.850000,
@@ -285,7 +288,7 @@ class SelfCheckInWebTest extends TestCase
             'nis_nip' => '12345',
         ]);
 
-        $this->postJson("/self-checkin/{$this->token}", [
+        $this->postJson("/self-checkin/{$this->token()}", [
             'nis_nip' => '12345',
             'device_id' => 'unsigned-device',
         ])->assertUnprocessable()
@@ -317,12 +320,18 @@ class SelfCheckInWebTest extends TestCase
         ]);
 
         $response = $this->getJson(route('self-checkin.participants', [
-            'token' => $this->token,
+            'token' => $this->token(),
             'query' => 'Peserta',
         ]))->assertOk();
 
         $response->assertJsonMissing(['id' => $attendedParticipant->id]);
         $response->assertJsonFragment(['id' => $availableParticipant->id]);
+    }
+
+    /** Token QR milik workcode yang terakhir dibuat pada tes. */
+    private function token(): string
+    {
+        return app(SelfCheckInTokenService::class)->tokenFor(Workcode::latest('id')->firstOrFail());
     }
 
     private function signatureDataUrl(): string

@@ -7,6 +7,7 @@ use App\Models\Workcode;
 use App\Services\FcmService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class WorkcodeController extends Controller
@@ -29,6 +30,7 @@ class WorkcodeController extends Controller
         return Inertia::render('Workcodes/Index', [
             'workcodes' => $workcodes,
             'participants' => Participant::orderBy('nama')->get(['id', 'nama', 'nis_nip', 'status']),
+            'lateToleranceMinutes' => config('attendance.late_tolerance_minutes', 60),
         ]);
     }
 
@@ -64,6 +66,10 @@ class WorkcodeController extends Controller
             : ($request->boolean('set_active') || Workcode::count() === 0);
 
         $isDaily = $validated['kategori'] === 'harian';
+
+        if ($isDaily) {
+            $this->ensureDailyScheduleDoesNotOverlap($validated);
+        }
 
         $workcode = Workcode::create([
             'nama_workcode' => $validated['nama_workcode'],
@@ -174,6 +180,10 @@ class WorkcodeController extends Controller
         $isDaily = $validated['kategori'] === 'harian';
         $shouldActivate = $isActivity && $this->scheduledWindowIsOpen($validated);
 
+        if ($isDaily) {
+            $this->ensureDailyScheduleDoesNotOverlap($validated);
+        }
+
         $updates = [
             'nama_workcode' => $validated['nama_workcode'],
             'deskripsi' => $validated['deskripsi'] ?? null,
@@ -245,5 +255,40 @@ class WorkcodeController extends Controller
         $endsAt = Carbon::parse($data['tanggal'].' '.$data['jam_aktif_selesai']);
 
         return now()->greaterThanOrEqualTo($startsAt) && now()->lessThan($endsAt);
+    }
+
+    /**
+     * Tolak jadwal presensi harian yang bentrok: presensi pulang tidak boleh dibuka sebelum presensi
+     * datang ditutup (jam datang selesai + toleransi terlambat). Diperiksa per hari aktif memakai
+     * jadwal hari itu (jadwal_per_hari), lalu jam bawaan workcode, sama seperti Workcode::scheduleFor.
+     */
+    private function ensureDailyScheduleDoesNotOverlap(array $data): void
+    {
+        $dayNames = [1 => 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+        $tolerance = config('attendance.late_tolerance_minutes', 60);
+        $errors = [];
+
+        foreach (($data['hari_aktif'] ?? null) ?: array_keys($dayNames) as $day) {
+            $daySchedule = $data['jadwal_per_hari'][$day] ?? [];
+            $time = fn (string $key) => filled($daySchedule[$key] ?? null) ? $daySchedule[$key] : ($data[$key] ?? null);
+            $datangSelesai = $time('jam_datang_selesai');
+            $pulangMulai = $time('jam_pulang_mulai');
+
+            if (! $datangSelesai || ! $pulangMulai) {
+                continue;
+            }
+
+            $arrivalClosesAt = Workcode::withLateTolerance(Carbon::today()->setTimeFromTimeString($datangSelesai));
+
+            if (Carbon::today()->setTimeFromTimeString($pulangMulai)->lessThanOrEqualTo($arrivalClosesAt)) {
+                $key = filled($daySchedule['jam_pulang_mulai'] ?? null) ? "jadwal_per_hari.{$day}.jam_pulang_mulai" : 'jam_pulang_mulai';
+                $errors[$key] = 'Jadwal '.($dayNames[(int) $day] ?? $day).' bentrok: jam pulang mulai harus setelah pukul '
+                    .$arrivalClosesAt->format('H:i')." (jam datang selesai + toleransi terlambat {$tolerance} menit).";
+            }
+        }
+
+        if ($errors) {
+            throw ValidationException::withMessages($errors);
+        }
     }
 }

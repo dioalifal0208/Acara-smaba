@@ -48,13 +48,13 @@ class PhotoChangeRequestManagementTest extends TestCase
             'nis_nip' => '198001012000011002',
             'photo_path' => 'faces/old.jpg',
             'face_status' => 'approved',
-            'face_descriptor' => [0.1, 0.2],
+            'face_descriptor' => array_fill(0, 128, 0.1),
         ]);
         Storage::disk('private')->put('faces/old.jpg', 'old-photo');
         $request = PhotoChangeRequest::create([
             'participant_id' => $participant->id,
             'photo_path' => 'photo-change-requests/new.jpg',
-            'face_descriptor' => [0.8, 0.7],
+            'face_descriptor' => array_fill(0, 128, 0.8),
             'status' => 'pending',
         ]);
         Storage::disk('private')->put($request->photo_path, 'candidate-photo');
@@ -68,7 +68,7 @@ class PhotoChangeRequestManagementTest extends TestCase
         $this->assertSame('approved', $request->status);
         $this->assertSame($admin->id, $request->reviewed_by);
         $this->assertSame('photo-change-requests/new.jpg', $participant->photo_path);
-        $this->assertSame([0.8, 0.7], $participant->face_descriptor);
+        $this->assertSame(array_fill(0, 128, 0.8), $participant->face_descriptor);
         Storage::disk('private')->assertMissing('faces/old.jpg');
     }
 }

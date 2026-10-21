@@ -72,7 +72,7 @@ const themeConfig = {
         title: 'Peringatan',
     },
     info: {
-        gradient: 'from-blue-500 to-indigo-600',
+        gradient: 'from-brand-500 to-brand-600',
         iconBg: 'bg-blue-500',
         iconRing: 'ring-blue-400/30',
         progressBar: 'bg-blue-400',

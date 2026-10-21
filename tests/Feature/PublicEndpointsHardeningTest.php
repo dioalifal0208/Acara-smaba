@@ -5,11 +5,12 @@ namespace Tests\Feature;
 use App\Models\Participant;
 use App\Models\User;
 use App\Models\Workcode;
+use App\Services\SelfCheckInTokenService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
@@ -37,55 +38,17 @@ class PublicEndpointsHardeningTest extends TestCase
         return [$participant, $user];
     }
 
-    // ── 2.1 Face match ──────────────────────────────────────────────
+    // ── 2.1 Presensi wajah web dihapus ──────────────────────────────
 
-    public function test_face_match_requires_login(): void
+    public function test_web_face_attendance_endpoint_is_removed(): void
     {
         Workcode::create(['nama_workcode' => 'Rapat', 'kategori' => 'workcode', 'is_active' => true]);
         Participant::create(['nama' => 'A', 'nis_nip' => '1', 'face_descriptor' => $this->vector(0.1), 'face_status' => 'approved']);
-
-        $this->postJson(route('face.match'), ['descriptor' => $this->vector(0.1)])->assertUnauthorized();
-    }
-
-    public function test_non_admin_account_without_participant_never_gets_one_to_many_search(): void
-    {
-        Workcode::create(['nama_workcode' => 'Rapat', 'kategori' => 'workcode', 'is_active' => true]);
-        Participant::create(['nama' => 'A', 'nis_nip' => '1', 'face_descriptor' => $this->vector(0.1), 'face_status' => 'approved']);
-        $user = User::factory()->create(['role' => 'participant', 'participant_id' => null]);
-
-        $this->actingAs($user)->postJson(route('face.match'), ['descriptor' => $this->vector(0.1)])
-            ->assertForbidden()
-            ->assertJsonPath('status', 'face_not_registered');
-    }
-
-    public function test_repeated_face_failures_lock_participant_temporarily(): void
-    {
-        Workcode::create(['nama_workcode' => 'Rapat', 'kategori' => 'workcode', 'is_active' => true]);
-        [, $user] = $this->participantUser(['face_descriptor' => $this->vector(0.1), 'face_status' => 'approved']);
-
-        for ($i = 0; $i < config('attendance.face.max_failures'); $i++) {
-            $this->actingAs($user)->postJson(route('face.match'), ['descriptor' => $this->vector(0.4)])->assertNotFound();
-        }
-
-        // Terkunci: wajah benar pun ditolak sementara, tanpa membocorkan jarak.
-        $locked = $this->actingAs($user)->postJson(route('face.match'), ['descriptor' => $this->vector(0.1)]);
-        $locked->assertStatus(429)->assertJsonPath('status', 'locked');
-        $this->assertArrayNotHasKey('distance', $locked->json());
-
-        Carbon::setTestNow(now()->addMinutes(config('attendance.face.lockout_minutes') + 1));
-        $this->actingAs($user)->postJson(route('face.match'), ['descriptor' => $this->vector(0.1)])
-            ->assertOk()
-            ->assertJsonPath('status', 'success');
-    }
-
-    public function test_face_match_is_rate_limited_per_user(): void
-    {
-        config(['attendance.face.rate_per_minute' => 2]);
         $admin = User::factory()->create(['role' => 'admin']);
 
-        $this->actingAs($admin)->postJson(route('face.match'), ['descriptor' => $this->vector(0.1)]);
-        $this->actingAs($admin)->postJson(route('face.match'), ['descriptor' => $this->vector(0.1)]);
-        $this->actingAs($admin)->postJson(route('face.match'), ['descriptor' => $this->vector(0.1)])->assertStatus(429);
+        $this->assertFalse(Route::has('face.match'));
+        $this->actingAs($admin)->postJson('/api/face/match', ['descriptor' => $this->vector(0.1)])->assertNotFound();
+        $this->assertDatabaseCount('attendances', 0);
     }
 
     // ── 2.2 Lookup, search, QR ──────────────────────────────────────
@@ -136,9 +99,8 @@ class PublicEndpointsHardeningTest extends TestCase
 
     public function test_self_checkin_search_returns_minimal_masked_data(): void
     {
-        $token = 'token-master-qr';
-        Cache::put('active_workcode_token', $token, now()->endOfDay());
-        Workcode::create(['nama_workcode' => 'Rapat', 'kategori' => 'workcode', 'is_active' => true]);
+        $workcode = Workcode::create(['nama_workcode' => 'Rapat', 'kategori' => 'workcode', 'is_active' => true]);
+        $token = app(SelfCheckInTokenService::class)->tokenFor($workcode);
         $this->participantUser(['nama' => 'Budi Santoso', 'nis_nip' => '198001012006041001']);
         $search = fn (string $q) => $this->getJson(route('self-checkin.participants', ['token' => $token, 'query' => $q]));
 
@@ -158,9 +120,8 @@ class PublicEndpointsHardeningTest extends TestCase
     public function test_self_checkin_response_does_not_leak_participant_secrets(): void
     {
         Storage::fake('private');
-        $token = 'token-master-qr';
-        Cache::put('active_workcode_token', $token, now()->endOfDay());
-        Workcode::create(['nama_workcode' => 'Rapat', 'kategori' => 'workcode', 'is_active' => true]);
+        $workcode = Workcode::create(['nama_workcode' => 'Rapat', 'kategori' => 'workcode', 'is_active' => true]);
+        $token = app(SelfCheckInTokenService::class)->tokenFor($workcode);
         [$participant] = $this->participantUser();
 
         $response = $this->postJson("/self-checkin/{$token}", [

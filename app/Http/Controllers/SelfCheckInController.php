@@ -7,8 +7,10 @@ use App\Models\Participant;
 use App\Models\Workcode;
 use App\Services\AttendanceValidationService;
 use App\Services\QrCodeService;
+use App\Services\SelfCheckInTokenService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -16,128 +18,133 @@ use Inertia\Inertia;
 
 class SelfCheckInController extends Controller
 {
-    /**
-     * Dapatkan atau generate token workcode hari ini.
-     */
-    private function getWorkcodeToken()
-    {
-        return Cache::remember('active_workcode_token', now()->endOfDay(), function () {
-            return Str::random(32); // berganti otomatis tiap hari (cache s.d. akhir hari)
-        });
-    }
+    /** Penjelasan untuk tiap alasan QR/tautan presensi tidak dapat dipakai. */
+    private const CLOSED_MESSAGES = [
+        'invalid' => 'Tautan presensi tidak valid atau telah kadaluarsa.',
+        'ended' => 'Sesi presensi workcode ini telah berakhir.',
+        'not_started' => 'Sesi presensi workcode ini belum dimulai.',
+        'inactive' => 'Presensi workcode ini sedang dinonaktifkan sementara oleh panitia.',
+        'closed_by_selection' => 'Presensi workcode ini ditutup karena ada workcode aktif lain yang pesertanya sudah dipilih.',
+        'harian' => 'Presensi harian hanya dapat dilakukan melalui scan QR Code Pribadi oleh petugas/admin.',
+    ];
+
+    /** Alasan yang bersifat sementara: halaman informasi memeriksa ulang dan kembali ke form bila workcode aktif lagi. */
+    private const TEMPORARY_REASONS = ['inactive', 'not_started', 'closed_by_selection'];
 
     /**
-     * Tampilkan halaman Master QR Code untuk Admin.
+     * Tampilkan halaman Master QR Code untuk Admin: satu QR untuk tiap workcode aktif.
      */
-    public function masterQr(Request $request, QrCodeService $qrCodeService)
+    public function masterQr(QrCodeService $qrCodeService, SelfCheckInTokenService $tokens)
     {
         $activeWorkcodes = Workcode::getActiveWorkcodes();
-        if ($activeWorkcodes->count() > 1 && ! $request->filled('workcode_id')) {
-            return Inertia::render('Admin/WorkcodeQrSelection', [
-                'activeWorkcodes' => $activeWorkcodes,
-            ]);
-        }
 
-        $activeWorkcode = $request->filled('workcode_id')
-            ? $activeWorkcodes->firstWhere('id', $request->integer('workcode_id'))
-            : $activeWorkcodes->first();
+        $workcodeQrs = $activeWorkcodes->map(function (Workcode $workcode) use ($activeWorkcodes, $qrCodeService, $tokens) {
+            $item = [
+                'workcode' => $workcode->only(['id', 'nama_workcode', 'kategori', 'tanggal', 'jam_aktif_mulai', 'jam_aktif_selesai', 'participants_count']),
+                // Presensi harian memakai QR pribadi/aplikasi; workcode terbuka ditutup saat ada workcode aktif berpeserta.
+                'unavailable_reason' => $this->closedReason($workcode, $activeWorkcodes),
+                'checkInUrl' => null,
+                'qrCodeSvg' => null,
+            ];
 
-        if ($request->filled('workcode_id') && ! $activeWorkcode) {
-            abort(404, 'Workcode tidak sedang aktif.');
-        }
-        $token = $this->getWorkcodeToken();
+            if ($item['unavailable_reason'] === null) {
+                $item['checkInUrl'] = url('/self-checkin/'.$tokens->tokenFor($workcode));
+                $item['qrCodeSvg'] = $qrCodeService->generateWithLogo($item['checkInUrl'], 400);
+            }
 
-        // Buat URL check-in menggunakan host saat ini
-        $checkInUrl = url("/self-checkin/{$token}");
-
-        // Generate QR code SVG untuk URL tersebut dengan Logo Sekolah di tengahnya
-        $qrCodeSvg = $qrCodeService->generateWithLogo($checkInUrl, 400);
+            return $item;
+        })->values();
 
         return Inertia::render('Admin/MasterQr', [
-            'activeWorkcode' => $activeWorkcode,
-            'checkInUrl' => $checkInUrl,
-            'qrCodeSvg' => $qrCodeSvg,
-            'token' => $token,
-            'activeWorkcodes' => $activeWorkcodes,
+            'workcodeQrs' => $workcodeQrs,
+            'upcomingWorkcodes' => $this->upcomingWorkcodes(),
+            'nextChangeAt' => $this->nextScheduleChange()?->toIso8601String(),
+            'serverTime' => now()->toIso8601String(),
         ]);
     }
 
     /**
-     * Regenerasi token workcode.
+     * Regenerasi token URL satu workcode (atau semua workcode aktif bila tidak dipilih).
      */
-    public function regenerateToken()
+    public function regenerateToken(Request $request, SelfCheckInTokenService $tokens)
     {
-        Cache::forget('active_workcode_token');
+        $request->validate(['workcode_id' => 'nullable|integer|exists:workcodes,id']);
+
+        $workcodes = $request->filled('workcode_id')
+            ? Workcode::whereKey($request->integer('workcode_id'))->get()
+            : Workcode::getActiveWorkcodes();
+
+        $workcodes->each(fn (Workcode $workcode) => $tokens->regenerate($workcode));
 
         return redirect()->route('admin.master-qr')
             ->with('success', 'Token workcode berhasil diregenerasi! URL absen telah diperbarui.');
     }
 
     /**
-     * Tampilkan halaman form Self Check-In.
+     * Tampilkan form Self Check-In, atau halaman informasi bila QR/tautan sedang tidak dapat dipakai.
      */
-    public function showForm($token)
+    public function showForm(Request $request, $token, SelfCheckInTokenService $tokens)
     {
-        $activeToken = $this->getWorkcodeToken();
-        $activeWorkcode = Workcode::getActive();
+        $workcode = $tokens->resolve((string) $token);
+        $activeWorkcodes = Workcode::getActiveWorkcodes();
+        $reason = $workcode ? $this->closedReason($workcode, $activeWorkcodes) : 'invalid';
 
-        if (! hash_equals($activeToken, (string) $token)) {
-            abort(403, 'Tautan presensi tidak valid atau telah kadaluarsa.');
+        if ($reason !== null) {
+            return $this->closedPage($request, $reason, $workcode, $activeWorkcodes);
         }
 
         return Inertia::render('SelfCheckIn/Form', [
-            'activeWorkcode' => $activeWorkcode,
+            'activeWorkcode' => $activeWorkcodes->firstWhere('id', $workcode->id),
             'token' => $token,
         ]);
     }
 
     /**
-     * Cari peserta yang belum melakukan presensi pada Workcode aktif.
+     * Cari peserta yang belum melakukan presensi pada workcode milik QR ini.
      */
-    public function searchParticipants(Request $request, string $token)
+    public function searchParticipants(Request $request, string $token, SelfCheckInTokenService $tokens)
     {
-        if (! hash_equals($this->getWorkcodeToken(), $token)) {
+        $workcode = $tokens->resolve($token);
+
+        if (! $workcode) {
             return response()->json([
-                'message' => 'Tautan presensi telah kadaluarsa atau tidak valid.',
+                'message' => self::CLOSED_MESSAGES['invalid'],
             ], 403);
         }
 
-        $query = trim((string) $request->query('query', ''));
         $activeWorkcodes = Workcode::getActiveWorkcodes();
+        if ($reason = $this->closedReason($workcode, $activeWorkcodes)) {
+            return $this->closedJson($reason);
+        }
+
+        $query = trim((string) $request->query('query', ''));
+        $workcode = $activeWorkcodes->firstWhere('id', $workcode->id);
 
         // Nama minimal 3 huruf; NIS/NIP hanya cocok bila diketik lengkap (bukan awalan),
         // agar endpoint publik ini tidak bisa dipakai menebak/mendaftar nomor peserta.
-        if (mb_strlen($query) < 3 || $activeWorkcodes->isEmpty()) {
+        if (mb_strlen($query) < 3) {
             return response()->json([]);
         }
+
+        $workcodeOption = [
+            'workcode_id' => $workcode->id,
+            'nama_workcode' => $workcode->nama_workcode,
+            'kategori' => $workcode->kategori,
+        ];
 
         $participants = Participant::query()
             ->where(function ($participantQuery) use ($query) {
                 $participantQuery->where('nis_nip', $query)
                     ->orWhere('nama', 'like', '%'.$query.'%');
             })
-            ->limit(30)
+            ->when($workcode->participants_count > 0, fn ($participantQuery) => $participantQuery
+                ->whereHas('workcodes', fn ($assigned) => $assigned->whereKey($workcode->id)))
+            ->whereDoesntHave('attendances', fn ($attendance) => $attendance->where('workcode_id', $workcode->id))
+            ->limit(5)
             ->get(['id', 'nama', 'nis_nip', 'status'])
-            ->map(function (Participant $participant) use ($activeWorkcodes) {
-                $availableWorkcodes = $activeWorkcodes
-                    ->filter(fn (Workcode $workcode) => $workcode->isAvailableFor($participant))
-                    ->filter(fn (Workcode $workcode) => ! $participant->attendances()->where('workcode_id', $workcode->id)->exists())
-                    ->values()
-                    ->map(fn (Workcode $workcode) => [
-                        'workcode_id' => $workcode->id,
-                        'nama_workcode' => $workcode->nama_workcode,
-                        'kategori' => $workcode->kategori,
-                    ]);
-
-                $participant->setAttribute('available_workcodes', $availableWorkcodes);
-
-                return $participant;
-            })
-            ->filter(fn (Participant $participant) => $participant->available_workcodes->isNotEmpty())
-            ->take(5)
             ->map(fn (Participant $participant) => [
                 ...$participant->toPublicArray(),
-                'available_workcodes' => $participant->available_workcodes,
+                'available_workcodes' => [$workcodeOption],
             ])
             ->values();
 
@@ -147,25 +154,27 @@ class SelfCheckInController extends Controller
     /**
      * Proses input NIS/NIP untuk absen mandiri per Workcode.
      */
-    public function submitForm(Request $request, $token, AttendanceValidationService $validationService)
+    public function submitForm(Request $request, $token, AttendanceValidationService $validationService, SelfCheckInTokenService $tokens)
     {
-        $activeToken = $this->getWorkcodeToken();
+        $activeWorkcode = $tokens->resolve((string) $token);
 
-        if (! hash_equals($activeToken, (string) $token)) {
+        if (! $activeWorkcode) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Tautan presensi telah kadaluarsa atau tidak valid.',
+                'message' => self::CLOSED_MESSAGES['invalid'],
             ], 403);
         }
 
-        $activeWorkcode = Workcode::getActive();
-        try {
-            $validationService->validateWorkcodeActive($activeWorkcode);
-        } catch (ValidationException $e) {
+        // Token hanya berlaku selama workcode-nya aktif; di luar itu dinonaktifkan sementara.
+        $reason = $this->closedReason($activeWorkcode, Workcode::getActiveWorkcodes());
+        if ($reason === 'harian') {
             return response()->json([
                 'status' => 'error',
-                'message' => $e->validator->errors()->first(),
-            ], $e->status);
+                'message' => self::CLOSED_MESSAGES['harian'],
+            ], 403);
+        }
+        if ($reason !== null) {
+            return $this->closedJson($reason);
         }
 
         $request->validate([
@@ -206,27 +215,12 @@ class SelfCheckInController extends Controller
             ], 404);
         }
 
-        $availableWorkcodes = Workcode::getActiveWorkcodes($participant);
-        $activeWorkcode = $request->filled('workcode_id')
-            ? $availableWorkcodes->firstWhere('id', $request->integer('workcode_id'))
-            : ($availableWorkcodes->count() === 1 ? $availableWorkcodes->first() : null);
-
-        if (! $activeWorkcode) {
+        // QR menentukan workcode; peserta hanya boleh presensi bila workcode itu tersedia untuknya.
+        if (! Workcode::getActiveWorkcodes($participant)->contains('id', $activeWorkcode->id)) {
             return response()->json([
                 'status' => 'error',
-                'message' => $availableWorkcodes->isEmpty()
-                    ? 'Tidak ada workcode aktif yang tersedia untuk peserta ini.'
-                    : 'Pilih workcode presensi terlebih dahulu.',
-            ], 422);
-        }
-
-        try {
-            $validationService->validateWorkcodeActive($activeWorkcode);
-        } catch (ValidationException $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => $e->validator->errors()->first(),
-            ], $e->status);
+                'message' => 'Anda tidak terdaftar sebagai peserta workcode "'.$activeWorkcode->nama_workcode.'".',
+            ], 403);
         }
 
         if ($validationService->checkAlreadyAttended($activeWorkcode, $participant)) {
@@ -263,6 +257,116 @@ class SelfCheckInController extends Controller
             'participant' => $participant->toPublicArray(),
             'timestamp' => $attendance->waktu_hadir->format('H:i:s'),
         ]);
+    }
+
+    /**
+     * Alasan QR workcode tidak dapat dipakai saat ini, atau null bila dapat dipakai.
+     * $activeWorkcodes = Workcode::getActiveWorkcodes() (memuat participants_count).
+     */
+    private function closedReason(Workcode $workcode, Collection $activeWorkcodes): ?string
+    {
+        if ($workcode->kategori === 'harian') {
+            return 'harian';
+        }
+
+        $active = $activeWorkcodes->firstWhere('id', $workcode->id);
+
+        if (! $active) {
+            $startsAt = $workcode->activeWindowStartsAt();
+
+            if (! $startsAt) {
+                return 'inactive';
+            }
+
+            return now()->lessThan($startsAt) ? 'not_started' : 'ended';
+        }
+
+        return $active->isClosedAmong($activeWorkcodes) ? 'closed_by_selection' : null;
+    }
+
+    /**
+     * Halaman informasi untuk QR/tautan yang kadaluarsa, berakhir, atau ditutup sementara.
+     * Hanya data umum workcode yang ditampilkan (tanpa koordinat/radius).
+     */
+    private function closedPage(Request $request, string $reason, ?Workcode $workcode, Collection $activeWorkcodes)
+    {
+        $otherActive = $activeWorkcodes->contains(fn (Workcode $active) => $active->kategori !== 'harian'
+            && $active->id !== $workcode?->id
+            && ! $active->isClosedAmong($activeWorkcodes));
+
+        $response = Inertia::render('SelfCheckIn/Closed', [
+            'reason' => $reason,
+            'message' => self::CLOSED_MESSAGES[$reason],
+            'temporary' => in_array($reason, self::TEMPORARY_REASONS, true),
+            'workcode' => $workcode ? [
+                'id' => $workcode->id,
+                'nama_workcode' => $workcode->nama_workcode,
+                'starts_at' => $workcode->activeWindowStartsAt()?->toIso8601String(),
+                'tanggal' => $workcode->tanggal,
+                'jam_aktif_mulai' => $workcode->jam_aktif_mulai,
+                'jam_aktif_selesai' => $workcode->jam_aktif_selesai,
+            ] : null,
+            'hasOtherActiveWorkcode' => $otherActive,
+            'serverTime' => now()->toIso8601String(),
+        ])->toResponse($request);
+
+        // Tautan yang sudah tidak berlaku lagi: 410 Gone. Penutupan sementara tetap 200.
+        return in_array($reason, ['invalid', 'ended'], true)
+            ? $response->setStatusCode(410)
+            : $response;
+    }
+
+    private function closedJson(string $reason)
+    {
+        return response()->json([
+            'status' => 'closed',
+            'reason' => $reason,
+            'message' => self::CLOSED_MESSAGES[$reason],
+        ], 410);
+    }
+
+    /** Kegiatan terjadwal hari ini yang belum dimulai, untuk ditampilkan di Master QR. */
+    private function upcomingWorkcodes(): Collection
+    {
+        $now = now();
+
+        return $this->scheduledToday()
+            ->filter(fn (Workcode $workcode) => $workcode->activeWindowStartsAt()->greaterThan($now))
+            ->sortBy(fn (Workcode $workcode) => $workcode->activeWindowStartsAt()->getTimestamp())
+            ->map(fn (Workcode $workcode) => [
+                'id' => $workcode->id,
+                'nama_workcode' => $workcode->nama_workcode,
+                'starts_at' => $workcode->activeWindowStartsAt()->toIso8601String(),
+                'jam_aktif_mulai' => $workcode->jam_aktif_mulai,
+                'jam_aktif_selesai' => $workcode->jam_aktif_selesai,
+            ])
+            ->values();
+    }
+
+    /**
+     * Waktu terdekat sebuah workcode terjadwal hari ini mulai/selesai (atau pergantian hari),
+     * agar halaman Master QR bisa memuat ulang tepat saat workcode aktif berganti.
+     */
+    private function nextScheduleChange(): ?Carbon
+    {
+        $now = now();
+
+        return $this->scheduledToday()
+            ->flatMap(fn (Workcode $workcode) => [$workcode->activeWindowStartsAt(), $workcode->activeWindowEndsAt()])
+            ->push($now->copy()->addDay()->startOfDay())
+            ->filter(fn (Carbon $moment) => $moment->greaterThan($now))
+            ->sortBy(fn (Carbon $moment) => $moment->getTimestamp())
+            ->first();
+    }
+
+    private function scheduledToday(): Collection
+    {
+        return Workcode::query()
+            ->where('kategori', 'workcode')
+            ->whereDate('tanggal', now()->toDateString())
+            ->whereNotNull('jam_aktif_mulai')
+            ->whereNotNull('jam_aktif_selesai')
+            ->get(['id', 'nama_workcode', 'kategori', 'tanggal', 'jam_aktif_mulai', 'jam_aktif_selesai']);
     }
 
     private function storeSignature(string $dataUrl): string

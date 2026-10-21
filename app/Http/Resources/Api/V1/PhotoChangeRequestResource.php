@@ -22,6 +22,7 @@ class PhotoChangeRequestResource extends JsonResource
                 ? PrivateFile::url('photo-change-request', $this->resource)
                 : null,
             'created_at' => $this->created_at?->toIso8601String(),
+            'submitted_at' => $this->created_at?->toIso8601String(),
             'reviewed_at' => $this->reviewed_at?->toIso8601String(),
             'rejection_reason' => $this->rejection_reason,
         ];

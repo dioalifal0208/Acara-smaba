@@ -33,7 +33,7 @@ export default function FaceRegistrationModal({ participant, onClose, onSuccess 
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-0 sm:p-4 backdrop-blur-sm" onClick={onClose}>
-            <div className="w-full sm:max-w-md animate-[fadeIn_0.2s_ease-out] sm:rounded-3xl rounded-none bg-white border border-slate-200 p-6 shadow-2xl flex flex-col max-h-screen sm:max-h-[95dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="w-full sm:max-w-md animate-[fadeIn_0.2s_ease-out] sm:rounded-xl rounded-none bg-white border border-slate-200 p-6 shadow-2xl flex flex-col max-h-screen sm:max-h-[95dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
                 {/* Header */}
                 <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
                     <div>

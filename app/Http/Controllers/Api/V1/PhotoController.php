@@ -7,6 +7,8 @@ use App\Http\Resources\Api\V1\PhotoChangeRequestResource;
 use App\Models\ApiIdempotencyLog;
 use App\Models\Participant;
 use App\Models\PhotoChangeRequest;
+use App\Services\FcmService;
+use App\Support\FaceDescriptor;
 use App\Support\PrivateFile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -23,19 +25,26 @@ class PhotoController extends Controller
         }
 
         $participant = $user->participant;
-        $pendingRequest = $participant->photoChangeRequests()
-            ->where('status', 'pending')
+        // Pengajuan terbaru apa pun statusnya; status foto aktif (face_status) terpisah dari status pengajuan ini.
+        $latestRequest = $participant->photoChangeRequests()
             ->latest()
+            ->orderByDesc('id')
             ->first();
+        $photoUrl = $this->activePhotoUrl($participant);
 
         return response()->json([
             'status' => 'success',
             'data' => [
-                'photo_url' => $this->activePhotoUrl($participant),
+                'photo_url' => $photoUrl,
                 'face_status' => $participant->face_status,
-                'photo_change_request' => $pendingRequest
-                    ? (new PhotoChangeRequestResource($pendingRequest))->resolve($request)
+                'active_photo' => [
+                    'photo_url' => $photoUrl,
+                    'status' => $participant->face_status,
+                ],
+                'photo_change_request' => $latestRequest
+                    ? (new PhotoChangeRequestResource($latestRequest))->resolve($request)
                     : null,
+                'has_pending_photo_change' => $participant->photoChangeRequests()->where('status', 'pending')->exists(),
             ],
         ]);
     }
@@ -57,14 +66,23 @@ class PhotoController extends Controller
 
         $validator = Validator::make($request->all(), [
             'photo' => 'required|image|mimes:jpg,jpeg,png,webp|max:5120',
-            'face_descriptor' => 'nullable|array|min:1|max:512',
-            'face_descriptor.*' => 'numeric',
+            'face_descriptor' => 'nullable|array',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
                 'status' => 'error',
                 'message' => $validator->errors()->first(),
+            ], 422);
+        }
+
+        // Descriptor opsional, tetapi bila dikirim harus model face-api.js 128-d (satu vector atau
+        // 3-10 sampel), agar tidak menimpa data wajah dengan vector model lain saat disetujui.
+        if ($request->filled('face_descriptor')
+            && ($error = FaceDescriptor::validateEnrollment($request->input('face_descriptor'), requireMultiple: false))) {
+            return response()->json([
+                'status' => 'invalid_face_data',
+                'message' => $error,
             ], 422);
         }
 
@@ -107,7 +125,10 @@ class PhotoController extends Controller
                 $changeRequest = PhotoChangeRequest::create([
                     'participant_id' => $user->participant_id,
                     'photo_path' => $storedPath,
-                    'face_descriptor' => $request->input('face_descriptor'),
+                    // Multipart mengirim angka sebagai string; simpan sebagai float (bentuk tetap).
+                    'face_descriptor' => $request->filled('face_descriptor')
+                        ? FaceDescriptor::toFloats($request->input('face_descriptor'))
+                        : null,
                     'status' => 'pending',
                 ]);
 
@@ -116,6 +137,7 @@ class PhotoController extends Controller
                     'message' => 'Foto berhasil diajukan dan menunggu verifikasi admin.',
                     'data' => [
                         'photo_change_request' => (new PhotoChangeRequestResource($changeRequest))->resolve($request),
+                        'has_pending_photo_change' => true,
                     ],
                 ];
 
@@ -177,7 +199,8 @@ class PhotoController extends Controller
         }
 
         $oldPhotoPath = null;
-        $result = DB::transaction(function () use ($admin, $photoChangeRequest, &$oldPhotoPath) {
+        $faceChanged = false;
+        $result = DB::transaction(function () use ($admin, $photoChangeRequest, &$oldPhotoPath, &$faceChanged) {
             $changeRequest = PhotoChangeRequest::lockForUpdate()->findOrFail($photoChangeRequest->id);
             if ($changeRequest->status !== 'pending') {
                 return null;
@@ -186,11 +209,7 @@ class PhotoController extends Controller
             $participant = Participant::lockForUpdate()->findOrFail($changeRequest->participant_id);
             $oldPhotoPath = $participant->photo_path;
 
-            $participant->photo_path = $changeRequest->photo_path;
-            if ($changeRequest->face_descriptor !== null) {
-                $participant->face_descriptor = $changeRequest->face_descriptor;
-            }
-            $participant->face_status = 'approved';
+            $faceChanged = $changeRequest->applyApprovalTo($participant);
             $participant->save();
 
             $changeRequest->update([
@@ -213,6 +232,8 @@ class PhotoController extends Controller
         if ($oldPhotoPath && $oldPhotoPath !== $result->photo_path) {
             Storage::disk('private')->delete($oldPhotoPath);
         }
+
+        $this->notifyParticipant($result, $faceChanged);
 
         return response()->json([
             'status' => 'success',
@@ -269,6 +290,8 @@ class PhotoController extends Controller
             Storage::disk('private')->delete($candidatePath);
         }
 
+        $this->notifyParticipant($result, false);
+
         return response()->json([
             'status' => 'success',
             'message' => 'Pengajuan perubahan foto ditolak.',
@@ -276,6 +299,21 @@ class PhotoController extends Controller
                 'photo_change_request' => (new PhotoChangeRequestResource($result))->resolve($request),
             ],
         ]);
+    }
+
+    /** Push FCM ke HP peserta: hasil pengajuan foto (dan status wajah bila ikut berubah). */
+    private function notifyParticipant(PhotoChangeRequest $changeRequest, bool $faceChanged): void
+    {
+        $participant = Participant::find($changeRequest->participant_id);
+        if (! $participant) {
+            return;
+        }
+
+        $fcm = app(FcmService::class);
+        $fcm->sendStateChanged($participant, 'photo');
+        if ($faceChanged) {
+            $fcm->sendStateChanged($participant, 'face');
+        }
     }
 
     private function participantUser(Request $request): mixed

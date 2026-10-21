@@ -5,7 +5,7 @@ window.axios = axios;
 
 window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
 
-// Request seperti axios.post('/api/face/match') diarahkan ke subfolder aplikasi (mis. /presensi).
+// Request axios relatif (mis. axios.post('/api/...')) diarahkan ke subfolder aplikasi (mis. /presensi).
 if (APP_URL) {
     window.axios.defaults.baseURL = APP_URL;
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Participant;
 use App\Models\PhotoChangeRequest;
+use App\Services\FcmService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -14,7 +15,8 @@ class PhotoChangeRequestController extends Controller
     public function approve(PhotoChangeRequest $photoChangeRequest): RedirectResponse
     {
         $oldPhotoPath = null;
-        $approvedRequest = DB::transaction(function () use ($photoChangeRequest, &$oldPhotoPath) {
+        $faceChanged = false;
+        $approvedRequest = DB::transaction(function () use ($photoChangeRequest, &$oldPhotoPath, &$faceChanged) {
             $changeRequest = PhotoChangeRequest::lockForUpdate()->findOrFail($photoChangeRequest->id);
             if ($changeRequest->status !== 'pending') {
                 return null;
@@ -23,11 +25,7 @@ class PhotoChangeRequestController extends Controller
             $participant = Participant::lockForUpdate()->findOrFail($changeRequest->participant_id);
             $oldPhotoPath = $participant->photo_path;
 
-            $participant->photo_path = $changeRequest->photo_path;
-            if ($changeRequest->face_descriptor !== null) {
-                $participant->face_descriptor = $changeRequest->face_descriptor;
-            }
-            $participant->face_status = 'approved';
+            $faceChanged = $changeRequest->applyApprovalTo($participant);
             $participant->save();
 
             $changeRequest->update([
@@ -47,6 +45,8 @@ class PhotoChangeRequestController extends Controller
         if ($oldPhotoPath && $oldPhotoPath !== $approvedRequest->photo_path) {
             Storage::disk('private')->delete($oldPhotoPath);
         }
+
+        $this->notifyParticipant($approvedRequest, $faceChanged);
 
         return back()->with('success', 'Foto baru peserta telah disetujui dan diaktifkan.');
     }
@@ -83,6 +83,23 @@ class PhotoChangeRequestController extends Controller
             Storage::disk('private')->delete($candidatePath);
         }
 
+        $this->notifyParticipant($rejectedRequest, false);
+
         return back()->with('success', 'Pengajuan perubahan foto ditolak.');
+    }
+
+    /** Push FCM ke HP peserta: hasil pengajuan foto (dan status wajah bila ikut berubah). */
+    private function notifyParticipant(PhotoChangeRequest $changeRequest, bool $faceChanged): void
+    {
+        $participant = Participant::find($changeRequest->participant_id);
+        if (! $participant) {
+            return;
+        }
+
+        $fcm = app(FcmService::class);
+        $fcm->sendStateChanged($participant, 'photo');
+        if ($faceChanged) {
+            $fcm->sendStateChanged($participant, 'face');
+        }
     }
 }

@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Models\Attendance;
+use App\Observers\AttendanceObserver;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -30,14 +32,11 @@ class AppServiceProvider extends ServiceProvider
 
         Vite::prefetch(concurrency: 3);
 
+        // Push FCM `state_changed` ke HP peserta saat presensi berubah di luar aplikasi Android.
+        Attendance::observe(AttendanceObserver::class);
+
         RateLimiter::for('api', function (Request $request) {
             return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
-        });
-
-        // Presensi wajah web (scanner admin & peserta login). Dibatasi per pengguna, bukan per IP,
-        // agar sekolah dengan satu IP publik (NAT) tidak saling memblokir saat ramai.
-        RateLimiter::for('face-match', function (Request $request) {
-            return Limit::perMinute(config('attendance.face.rate_per_minute'))->by('face-match|'.($request->user()?->id ?: $request->ip()));
         });
 
         RateLimiter::for('api-login', function (Request $request) {

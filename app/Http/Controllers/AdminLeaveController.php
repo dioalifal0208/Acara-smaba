@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Attendance;
 use App\Models\LeaveRequest;
+use App\Models\Participant;
 use App\Support\PrivateFile;
+use App\Services\FcmService;
 use Inertia\Inertia;
 
 class AdminLeaveController extends Controller
@@ -48,6 +50,7 @@ class AdminLeaveController extends Controller
         }
 
         $leaveRequest->update(['status_approval' => 'approved']);
+        $this->notifyParticipant($leaveRequest);
 
         $tanggalMulai = $leaveRequest->tanggal->copy()->startOfDay();
         $tanggalSelesai = $leaveRequest->tanggal_selesai?->copy()->startOfDay() ?? $tanggalMulai->copy();
@@ -102,8 +105,17 @@ class AdminLeaveController extends Controller
         }
 
         $leaveRequest->update(['status_approval' => 'rejected']);
+        $this->notifyParticipant($leaveRequest);
 
         return back()->with('success', 'Pengajuan ditolak.');
+    }
+
+    /** Push FCM `state_changed` (reason leave) ke HP peserta pemilik pengajuan. */
+    private function notifyParticipant(LeaveRequest $leaveRequest): void
+    {
+        if ($participant = Participant::find($leaveRequest->participant_id)) {
+            app(FcmService::class)->sendStateChanged($participant, 'leave');
+        }
     }
 
     private function tipeIzinLabel(?string $tipeIzin): string

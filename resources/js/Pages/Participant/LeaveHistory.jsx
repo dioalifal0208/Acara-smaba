@@ -21,17 +21,20 @@ export default function LeaveHistory({ leaveRequests }) {
             <Head title="Riwayat Izin" />
 
             <div className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
-                <div className="mx-auto max-w-5xl">
-                    <p className="mb-5 text-sm text-slate-600">Pantau status pengajuan Anda. Izin hanya berlaku setelah disetujui admin.</p>
+                <div className="mx-auto flex max-w-5xl flex-col gap-5">
+                    <section className="page-hero" data-aos="fade-down">
+                        <h2 className="relative text-xl font-extrabold tracking-tight sm:text-2xl">Riwayat Izin</h2>
+                        <p className="relative mt-1 text-sm font-medium text-white/85">Pantau status pengajuan Anda. Izin hanya berlaku setelah disetujui admin.</p>
+                    </section>
 
                     {leaveRequests.length === 0 ? (
-                        <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-sm font-semibold text-slate-500">
+                        <div className="card-soft p-10 text-center text-sm font-semibold text-slate-500" data-aos="fade-up">
                             Belum ada pengajuan izin.
                         </div>
                     ) : (
                         <div className="space-y-3">
-                            {leaveRequests.map((request) => (
-                                <article key={request.id} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+                            {leaveRequests.map((request, index) => (
+                                <article key={request.id} className="card-soft p-4 sm:p-5" data-aos="fade-up" data-aos-delay={Math.min(index * 60, 300)}>
                                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                         <div className="min-w-0">
                                             <p className="font-extrabold text-slate-900">{request.workcode_name}</p>

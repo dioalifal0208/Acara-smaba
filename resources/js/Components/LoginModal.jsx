@@ -43,56 +43,52 @@ export default function LoginModal({ isOpen, onClose, canResetPassword = true })
 
     if (!isOpen) return null;
 
+    const input = 'w-full rounded-md border border-neutral-300 bg-white py-2.5 pl-10 text-sm text-neutral-900 placeholder:text-neutral-400 transition-colors focus:border-brand-600 focus:outline-none focus:ring-0';
+
     return (
         <div
-            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 overflow-y-auto bg-slate-950/60 backdrop-blur-md transition-all duration-300"
+            className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-neutral-900/40 p-0 backdrop-blur-sm animate-[loginFade_0.2s_ease-out] sm:items-center sm:p-6"
             onClick={onClose}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="login-title"
         >
             <div
-                className="relative w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl rounded-none shadow-2xl border border-slate-100 p-6 sm:p-8 transform transition-all max-h-screen sm:max-h-[90dvh] overflow-y-auto flex flex-col"
+                className="relative mt-10 w-full rounded-t-lg border border-neutral-200 bg-white px-4 pb-6 pt-0 shadow-soft-lg animate-[loginPop_0.25s_cubic-bezier(0.4,0,0.2,1)] sm:max-w-sm sm:rounded-lg"
                 onClick={(e) => e.stopPropagation()}
             >
-                {/* Close Button */}
-                <button
-                    type="button"
-                    onClick={onClose}
-                    className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-slate-700 flex items-center justify-center transition-colors text-lg font-bold"
-                    aria-label="Tutup"
-                >
-                    &times;
-                </button>
-
-                {/* Header */}
-                <div className="flex items-center gap-3 mb-6">
-                    <img
-                        src={appUrl('images/logo.png')}
-                        alt="Logo E-Presensi SMABA"
-                        className="h-11 w-11 object-contain"
-                    />
-                    <div>
-                        <h2 className="text-xl font-black text-slate-900 leading-tight">Login</h2>
-                        <p className="text-xs text-indigo-600 font-semibold">E-Presensi SMABA</p>
-                    </div>
+                {/* Kepala gelap yang menumpang di tepi atas kartu (pola halaman Sign In referensi) */}
+                <div className="relative -mt-8 rounded-lg bg-brand-gradient px-4 py-5 text-center text-white shadow-dark">
+                    <img src={appUrl('images/logo.png')} alt="" className="mx-auto h-10 w-10 rounded-full bg-white object-contain p-1" />
+                    <h2 id="login-title" className="mt-2 text-lg font-bold">Masuk</h2>
+                    <p className="text-xs text-white/70">E-Presensi SMA Negeri 1 Babat</p>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-md text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+                        aria-label="Tutup"
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
                 </div>
 
-                {/* Form */}
-                <form onSubmit={submit} className="space-y-4">
+                <form onSubmit={submit} className="mt-6 space-y-4 px-2">
                     <div>
-                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5" htmlFor="modal-email">
-                            Email / NIP
-                        </label>
+                        <label className="mb-1 block text-sm text-neutral-600" htmlFor="modal-email">Email / NIP</label>
                         <div className="relative">
-                            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.207" />
+                            <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-neutral-400">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                 </svg>
-                            </div>
+                            </span>
                             <input
                                 id="modal-email"
                                 type="text"
                                 name="login"
                                 value={data.login}
-                                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-4 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium transition-all"
+                                className={`${input} pr-3`}
                                 placeholder="Email atau NIP Anda"
                                 autoComplete="username"
                                 autoFocus
@@ -104,21 +100,19 @@ export default function LoginModal({ isOpen, onClose, canResetPassword = true })
                     </div>
 
                     <div>
-                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5" htmlFor="modal-password">
-                            Password
-                        </label>
+                        <label className="mb-1 block text-sm text-neutral-600" htmlFor="modal-password">Password</label>
                         <div className="relative">
-                            <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-neutral-400">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                                 </svg>
-                            </div>
+                            </span>
                             <input
                                 id="modal-password"
                                 type={showPassword ? 'text' : 'password'}
                                 name="password"
                                 value={data.password}
-                                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-10 text-sm text-slate-900 placeholder-slate-400 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-medium transition-all"
+                                className={`${input} pr-10`}
                                 placeholder="••••••••"
                                 autoComplete="current-password"
                                 required
@@ -127,16 +121,17 @@ export default function LoginModal({ isOpen, onClose, canResetPassword = true })
                             <button
                                 type="button"
                                 onClick={() => setShowPassword(!showPassword)}
-                                className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                                className="absolute inset-y-0 right-0 flex items-center pr-3 text-neutral-400 transition-colors hover:text-neutral-700"
+                                aria-label={showPassword ? 'Sembunyikan password' : 'Tampilkan password'}
                             >
                                 {showPassword ? (
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
                                     </svg>
                                 ) : (
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                     </svg>
                                 )}
                             </button>
@@ -144,35 +139,38 @@ export default function LoginModal({ isOpen, onClose, canResetPassword = true })
                         <InputError message={errors.password} className="mt-1.5" />
                     </div>
 
-                    <div className="flex items-center justify-between pt-1">
-                        <label className="flex items-center cursor-pointer">
-                            <Checkbox
-                                name="remember"
-                                checked={data.remember}
-                                onChange={(e) => setData('remember', e.target.checked)}
-                            />
-                            <span className="ms-2 text-xs font-semibold text-slate-600">
-                                Ingat saya
-                            </span>
+                    <div className="flex items-center justify-between">
+                        <label className="flex cursor-pointer items-center">
+                            <Checkbox name="remember" checked={data.remember} onChange={(e) => setData('remember', e.target.checked)} />
+                            <span className="ms-2 text-sm text-neutral-600">Ingat saya</span>
                         </label>
+                        {canResetPassword && (
+                            <Link href={route('password.request')} className="text-sm font-medium text-brand-700 underline-offset-2 hover:underline">
+                                Lupa password?
+                            </Link>
+                        )}
                     </div>
 
-                    <button
-                        type="submit"
-                        disabled={processing}
-                        className="w-full mt-2 flex items-center justify-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 py-3 px-4 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition-all active:scale-[0.98] disabled:opacity-60"
-                    >
+                    <button type="submit" disabled={processing} className="btn-brand w-full">
                         {processing ? (
                             <>
-                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></div>
-                                <span>Memproses...</span>
+                                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                                Memproses…
                             </>
                         ) : (
-                            <span>Masuk ke Sistem</span>
+                            'Masuk'
                         )}
                     </button>
                 </form>
             </div>
+
+            <style>{`
+                @keyframes loginFade { from { opacity: 0; } to { opacity: 1; } }
+                @keyframes loginPop {
+                    from { opacity: 0; transform: translateY(12px) scale(0.97); }
+                    to { opacity: 1; transform: translateY(0) scale(1); }
+                }
+            `}</style>
         </div>
     );
 }

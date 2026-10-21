@@ -37,6 +37,7 @@ class User extends Authenticatable
         'password',
         'remember_token',
         'fcm_token',
+        'device_id_hash',
     ];
 
     /**
@@ -66,6 +67,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'device_bound_at' => 'datetime',
         ];
     }
 
@@ -83,5 +85,10 @@ class User extends Authenticatable
     public function participant()
     {
         return $this->belongsTo(Participant::class);
+    }
+
+    public function deviceChangeRequests()
+    {
+        return $this->hasMany(DeviceChangeRequest::class);
     }
 }

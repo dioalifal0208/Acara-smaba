@@ -48,3 +48,7 @@ storage/app/firebase-credentials.json
 # Analysis docs (local only)
 /business_logic_audit.md
 /face_recognition_analysis.md
+.venv-tflite/
+
+# Backup database produksi (berisi data pribadi): jangan pernah di-commit
+/backups/

@@ -19,7 +19,7 @@ export default function ApprovePhotoChangeRequestModal({ participant, onClose, o
 
     return (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/60 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
-            <div className="flex max-h-[90dvh] w-full flex-col overflow-y-auto rounded-t-3xl border border-slate-200 bg-white p-6 shadow-2xl sm:max-w-sm sm:rounded-3xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex max-h-[90dvh] w-full flex-col overflow-y-auto rounded-t-3xl border border-slate-200 bg-white p-6 shadow-2xl sm:max-w-sm sm:rounded-xl" onClick={(event) => event.stopPropagation()}>
                 <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
                     <div>
                         <h3 className="text-xl font-extrabold text-slate-800">Verifikasi Foto Baru</h3>

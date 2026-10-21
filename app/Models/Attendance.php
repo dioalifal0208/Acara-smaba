@@ -19,6 +19,7 @@ class Attendance extends Model
         'status',
         'signature_path',
         'face_capture_path',
+        'face_capture_pulang_path',
         'attendance_method',
         'leave_request_id',
         'device_hash',
@@ -36,7 +37,21 @@ class Attendance extends Model
             Storage::disk('private')->delete(array_filter([
                 $attendance->signature_path,
                 $attendance->face_capture_path,
+                $attendance->face_capture_pulang_path,
             ]));
+        });
+
+        // Foto yang tertimpa (mis. scan pulang ulang setelah jam pulang dikosongkan admin) ikut dihapus.
+        static::updated(function (Attendance $attendance) {
+            $replaced = collect(['signature_path', 'face_capture_path', 'face_capture_pulang_path'])
+                ->filter(fn (string $column) => $attendance->wasChanged($column))
+                ->map(fn (string $column) => $attendance->getOriginal($column))
+                ->filter()
+                ->all();
+
+            if ($replaced !== []) {
+                Storage::disk('private')->delete($replaced);
+            }
         });
     }
 

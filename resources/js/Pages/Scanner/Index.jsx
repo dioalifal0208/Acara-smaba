@@ -1,10 +1,9 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { MODEL_URL } from '@/lib/appUrl';
 import { Head, usePage } from '@inertiajs/react';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useToast } from '@/Components/Toast';
-import * as faceapi from 'face-api.js';
-import axios from 'axios';
+import KpiCard from '@/Components/KpiCard';
+import { icons } from '@/lib/adminMenu';
 import { Html5Qrcode } from 'html5-qrcode';
 
 // ─── Main Scanner Component ───
@@ -14,8 +13,6 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
     const activeWorkcode = propActiveWorkcode || globalActiveWorkcode;
     const [stats, setStats] = useState(initialStats);
     const [isScanning, setIsScanning] = useState(false);
-    const [isFaceModelsLoaded, setIsFaceModelsLoaded] = useState(false);
-    const [isFaceProcessing, setIsFaceProcessing] = useState(false);
     const [isCameraLoading, setIsCameraLoading] = useState(false);
     const [error, setError] = useState(null);
     const [scanHistory, setScanHistory] = useState([]);
@@ -35,25 +32,6 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
     const cooldownTimerRef = useRef(null);
     const lockTimerRef = useRef(null);
     const gpsDataRef = useRef(null);
-    const faceIntervalRef = useRef(null);
-    const isFaceProcessingRef = useRef(false);
-
-    // ─── Load Face Models ───
-    useEffect(() => {
-        const loadModels = async () => {
-            try {
-                await Promise.all([
-                    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-                    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
-                    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-                ]);
-                setIsFaceModelsLoaded(true);
-            } catch (err) {
-                console.error("Gagal memuat Wajah", err);
-            }
-        };
-        loadModels();
-    }, []);
 
     useEffect(() => {
         let watchId;
@@ -257,45 +235,6 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
         }
     }, [playSound, addToast, activeWorkcode, toast, showScanLock]);
 
-    const handleFaceScanResult = useCallback((data) => {
-        if (data.status === 'success' || data.status === 'warning' || data.status === 'already') {
-            playSound(data.status);
-            setScanCount(prev => prev + 1);
-
-            if (data.stats) {
-                setStats(data.stats);
-            }
-
-            const timestamp = data.timestamp || new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            addToast({
-                status: data.status,
-                message: data.message,
-                participantName: data.participant?.nama,
-                timestamp,
-            });
-
-            setScanHistory(prev => [{
-                id: Date.now(),
-                nama: data.participant?.nama || 'Peserta',
-                nis_nip: data.participant?.nis_nip || '-',
-                status: data.status,
-                is_late: data.is_late || false,
-                late_minutes: data.late_minutes || 0,
-                late_formatted: data.late_formatted || '',
-                timestamp,
-            }, ...prev.slice(0, 4)]);
-
-        } else {
-            playSound('error');
-            const timestamp = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            addToast({
-                status: 'error',
-                message: data.message || 'Gagal memproses Wajah.',
-                timestamp,
-            });
-        }
-    }, [playSound, addToast]);
-
     // ─── Start Scanner — called directly from user click ───
     const startScanner = async () => {
         if (!activeWorkcode) {
@@ -329,86 +268,6 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
             );
 
             setIsCameraLoading(false);
-
-            // Start Face Detection Interval
-            if (faceIntervalRef.current) clearInterval(faceIntervalRef.current);
-            faceIntervalRef.current = setInterval(async () => {
-                if (!isFaceModelsLoaded) return;
-                if (isFaceProcessingRef.current || isProcessingRef.current) return;
-
-                const video = document.querySelector('#qr-reader video');
-                if (!video || video.paused || video.ended) return;
-
-                const displaySize = { width: video.videoWidth || video.clientWidth, height: video.videoHeight || video.clientHeight };
-                if (displaySize.width === 0) return;
-
-                try {
-                    const detection = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }))
-                        .withFaceLandmarks()
-                        .withFaceDescriptor();
-
-                    if (detection && !isFaceProcessingRef.current && !isProcessingRef.current) {
-                        const p = detection.landmarks.positions;
-                        const calcEAR = (eyePts) => {
-                            const v1 = Math.hypot(eyePts[1].x - eyePts[5].x, eyePts[1].y - eyePts[5].y);
-                            const v2 = Math.hypot(eyePts[2].x - eyePts[4].x, eyePts[2].y - eyePts[4].y);
-                            const h = Math.hypot(eyePts[0].x - eyePts[3].x, eyePts[0].y - eyePts[3].y);
-                            if (h === 0) return 0.3;
-                            return (v1 + v2) / (2.0 * h);
-                        };
-                        const leftEyeEAR = calcEAR([p[36], p[37], p[38], p[39], p[40], p[41]]);
-                        const rightEyeEAR = calcEAR([p[42], p[43], p[44], p[45], p[46], p[47]]);
-
-                        if (leftEyeEAR > 0.20 && rightEyeEAR > 0.20) {
-                            isFaceProcessingRef.current = true;
-                            setIsFaceProcessing(true);
-
-                            const captureCanvas = document.createElement('canvas');
-                            const captureScale = Math.min(1, 640 / video.videoWidth);
-                            captureCanvas.width = Math.round(video.videoWidth * captureScale);
-                            captureCanvas.height = Math.round(video.videoHeight * captureScale);
-                            captureCanvas.getContext('2d')?.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
-
-                            let payload = {
-                                descriptor: Array.from(detection.descriptor),
-                                face_capture: captureCanvas.toDataURL('image/jpeg', 0.85),
-                            };
-                            if (activeWorkcode?.latitude && activeWorkcode?.longitude && gpsDataRef.current) {
-                                payload = { ...payload, ...gpsDataRef.current };
-                            }
-
-                            axios.post('/api/face/match', payload)
-                                .then(response => {
-                                    handleFaceScanResult(response.data);
-                                })
-                                .catch(error => {
-                                    const errorData = error.response?.data || { status: 'error', message: 'Gagal menghubungi server.' };
-                                    if (errorData.status === 'workcode_selection_required') {
-                                        const choices = errorData.workcodes.map((workcode) => `${workcode.id}: ${workcode.nama_workcode}`).join('\n');
-                                        const chosenId = window.prompt(`Pilih workcode untuk ${errorData.participant?.nama}:\n${choices}`);
-                                        const selected = errorData.workcodes.find((workcode) => String(workcode.id) === String(chosenId));
-                                        if (selected) {
-                                            axios.post('/api/face/match', { ...payload, workcode_id: selected.id })
-                                                .then((selectedResponse) => handleFaceScanResult(selectedResponse.data))
-                                                .catch((selectedError) => handleFaceScanResult(selectedError.response?.data || { status: 'error', message: 'Presensi gagal diproses.' }));
-                                            return;
-                                        }
-                                    }
-                                    handleFaceScanResult(errorData);
-                                })
-                                .finally(() => {
-                                    setTimeout(() => {
-                                        isFaceProcessingRef.current = false;
-                                        setIsFaceProcessing(false);
-                                    }, 3000);
-                                });
-                        }
-                    }
-                } catch (e) {
-                    // ignore frame errors
-                }
-            }, 600);
-
         } catch (err) {
             console.error('Camera Error:', err);
             setIsCameraLoading(false);
@@ -438,10 +297,6 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
     };
 
     const stopScanner = async () => {
-        if (faceIntervalRef.current) {
-            clearInterval(faceIntervalRef.current);
-            faceIntervalRef.current = null;
-        }
         if (html5QrCodeRef.current) {
             try {
                 await html5QrCodeRef.current.stop();
@@ -451,8 +306,6 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
         }
         setIsScanning(false);
         setIsCameraLoading(false);
-        setIsFaceProcessing(false);
-        isFaceProcessingRef.current = false;
     };
 
     // ─── Fullscreen Logic ───
@@ -486,11 +339,7 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
 
     useEffect(() => {
         return () => {
-            // Release camera and face interval on unmount
-            if (faceIntervalRef.current) {
-                clearInterval(faceIntervalRef.current);
-                faceIntervalRef.current = null;
-            }
+            // Release camera on unmount
             if (html5QrCodeRef.current) {
                 try {
                     html5QrCodeRef.current.stop();
@@ -506,13 +355,14 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
         };
     }, []);
 
-    // ─── Status Badge ───
+    // ─── Status Badge (badge gradien ala Material Dashboard) ───
     const getStatusBadge = (item) => {
         const status = typeof item === 'object' ? item.status : item;
         const isLate = typeof item === 'object' ? item.is_late : false;
         const lateMinutes = typeof item === 'object' ? item.late_minutes : 0;
         const lateFormatted = typeof item === 'object' ? item.late_formatted : '';
         const showLateStatus = activeWorkcode?.kategori === 'harian' && (status === 'warning' || isLate);
+        const badge = 'inline-flex items-center rounded-md px-2 py-0.5 text-[10px] font-bold uppercase leading-4 text-white';
 
         if (showLateStatus) {
             let label = lateFormatted;
@@ -525,338 +375,238 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
                     label = `${lateMinutes}m`;
                 }
             }
-            return (
-                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 border border-amber-200">
-                    ⏱ TELAT {label ? `(${label})` : ''}
-                </span>
-            );
+            return <span className={`${badge} bg-gradient-to-b from-amber-400 to-orange-500`}>Telat{label ? ` ${label}` : ''}</span>;
         }
         switch (status) {
             case 'warning':
             case 'success':
-                return <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">✓ HADIR</span>;
+                return <span className={`${badge} bg-gradient-to-b from-emerald-400 to-emerald-600`}>Hadir</span>;
             case 'already':
-                return <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700 border border-amber-200">⚠ DUPLIKAT</span>;
+                return <span className={`${badge} bg-gradient-to-b from-neutral-400 to-neutral-600`}>Duplikat</span>;
             default:
-                return <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-700 border border-red-200">✕ ERROR</span>;
+                return <span className={`${badge} bg-gradient-to-b from-rose-400 to-rose-600`}>Gagal</span>;
         }
     };
 
+    const historyTone = (item) => {
+        if (activeWorkcode?.kategori === 'harian' && (item.status === 'warning' || item.is_late)) return 'text-amber-500';
+        if (item.status === 'success' || item.status === 'warning') return 'text-emerald-500';
+        if (item.status === 'already') return 'text-neutral-400';
+        return 'text-rose-500';
+    };
+
     const attendancePercentage = stats.total > 0 ? Math.round((stats.hadir / stats.total) * 100) : 0;
+    const busy = cooldownActive;
 
     return (
-        <AuthenticatedLayout
-            header={
-                <div className="flex min-w-0 items-center justify-between gap-3">
-                    <div className="min-w-0">
-                        <h2 className="truncate text-base font-extrabold leading-tight text-slate-800 sm:text-xl">
-                            Scanner Presensi
-                        </h2>
-                        <p className="mt-0.5 max-w-[11rem] truncate text-[10px] font-bold text-indigo-600 sm:max-w-sm sm:text-xs lg:max-w-xl">
-                            {activeWorkcode ? `Workcode: ${activeWorkcode.nama_workcode}` : '⚠️ Workcode Tidak Aktif'}
-                        </p>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-                        {isScanning && (
-                            <span className="flex h-8 items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-100 px-2.5 text-xs font-semibold text-emerald-700 shadow-sm" title="Kamera Aktif">
-                                <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.8)]"></span>
-                                <span className="hidden sm:inline">Kamera Aktif</span>
-                            </span>
-                        )}
-                        <span className="inline-flex h-8 items-center rounded-full border border-indigo-100 bg-white px-2.5 text-xs font-semibold text-indigo-700 shadow-sm">
-                            {scanCount} scan
-                        </span>
-                    </div>
-                </div>
-            }
-        >
+        <AuthenticatedLayout>
             <Head title="Scanner Presensi" />
 
-            {/* ─── Fullscreen Overlay Warning ─── */}
+            {/* ─── Ajakan mode layar penuh ─── */}
             {showFullscreenWarning && (
-                <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-gray-900/95 backdrop-blur-md p-6">
-                    <div className="w-full max-w-md bg-white rounded-3xl p-8 shadow-2xl text-center transform transition-all">
-                        <div className="mx-auto w-20 h-20 bg-indigo-100 rounded-full flex items-center justify-center mb-6">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-neutral-900/60 p-6 backdrop-blur-sm">
+                    <div className="w-full max-w-md rounded-lg border border-neutral-200 bg-white p-6 shadow-soft-lg" data-aos="zoom-in">
+                        <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-brand-gradient text-white shadow-dark">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
                             </svg>
-                        </div>
-                        <h2 className="text-2xl font-black text-gray-800 mb-3">Mode Fullscreen</h2>
-                        <p className="text-gray-500 text-sm mb-8 leading-relaxed">
-                            {isMobile ? (
-                                "Demi kenyamanan dan agar antarmuka scanner terlihat sempurna, silakan masuk ke mode layar penuh (Fullscreen)."
-                            ) : (
-                                <>Demi kenyamanan dan agar seluruh antarmuka scanner terlihat sempurna tanpa terpotong, silakan masuk ke mode layar penuh (Fullscreen) atau tekan tombol <kbd className="bg-gray-100 border border-gray-300 rounded px-2 py-0.5 text-xs font-mono font-bold text-gray-700">F11</kbd>.</>
-                            )}
+                        </span>
+                        <h2 className="text-lg font-bold text-neutral-800">Gunakan mode layar penuh</h2>
+                        <p className="mt-1 text-sm leading-relaxed text-neutral-500">
+                            {isMobile
+                                ? 'Agar tampilan kamera dan riwayat scan terlihat utuh, masuk ke mode layar penuh.'
+                                : <>Agar tampilan kamera dan riwayat scan terlihat utuh, masuk ke mode layar penuh atau tekan <kbd className="rounded border border-neutral-300 bg-neutral-100 px-1.5 py-0.5 font-mono text-xs text-neutral-700">F11</kbd>.</>}
                         </p>
-                        
-                        <div className="flex flex-col gap-3">
-                            <button
-                                onClick={handleEnterFullscreen}
-                                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 px-6 rounded-xl shadow-lg shadow-indigo-200 transition-all active:scale-95"
-                            >
-                                Masuk Fullscreen Sekarang
-                            </button>
-                            <button
-                                onClick={() => setShowFullscreenWarning(false)}
-                                className="w-full bg-white hover:bg-gray-50 text-gray-500 font-bold py-3 px-6 rounded-xl transition-all text-xs"
-                            >
-                                Lanjutkan tanpa Fullscreen
-                            </button>
+                        <hr className="hr-fade my-5" />
+                        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                            <button type="button" onClick={() => setShowFullscreenWarning(false)} className="btn-soft">Lanjut tanpa layar penuh</button>
+                            <button type="button" onClick={handleEnterFullscreen} className="btn-brand">Masuk layar penuh</button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Main container: Allow scroll if screen is too small, but aim for full screen */}
-            <div className="p-3 sm:p-6 w-full max-w-7xl mx-auto flex flex-col gap-3 lg:gap-6 min-h-[calc(100vh-100px)]">
-                
-                {!activeWorkcode && (
-                    <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-amber-900 flex items-center justify-between gap-4 shadow-sm shrink-0">
-                        <div className="flex items-center gap-3">
-                            <span className="text-2xl">⚠️</span>
-                            <div>
-                                <p className="text-sm font-bold">Presensi terkunci karena belum ada Workcode Aktif.</p>
-                                <p className="text-xs text-amber-700 mt-0.5">Admin harus memilih atau mengaktifkan workcode terlebih dahulu.</p>
-                            </div>
-                        </div>
-                        <a
-                            href={route('workcodes.index')}
-                            className="rounded-lg bg-amber-600 px-4 py-2 text-xs font-bold text-white shadow hover:bg-amber-700 shrink-0 transition-colors"
-                        >
-                            Kelola Workcode
-                        </a>
+            <div className="flex w-full flex-1 flex-col px-4 py-2 sm:px-6 xl:min-h-0 xl:overflow-hidden">
+                {/* Judul halaman + status kamera */}
+                <div className="mb-4 shrink-0 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between" data-aos="fade-up">
+                    <div className="min-w-0">
+                        <h3 className="text-xl font-bold text-neutral-800">Scanner Presensi</h3>
+                        <p className="mt-0.5 truncate text-sm text-neutral-500">
+                            {activeWorkcode
+                                ? <>Workcode aktif: <span className="font-medium text-neutral-700">{activeWorkcode.nama_workcode}</span></>
+                                : 'Presensi terkunci: belum ada workcode aktif.'}
+                        </p>
                     </div>
-                )}
-                
-                {/* Compact Stats Bar (1 row) - Shrinks if needed */}
-                <div className="shrink-0 flex flex-wrap sm:flex-nowrap items-center justify-between rounded-xl sm:rounded-2xl bg-white p-2.5 sm:p-4 shadow-sm border border-gray-100 gap-3 sm:gap-6">
-                    <div className="flex items-center gap-4 sm:gap-6 px-1 sm:px-2 w-full sm:w-auto justify-around sm:justify-start">
-                        <div className="text-center sm:text-left">
-                            <p className="text-[9px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-400">Total Peserta</p>
-                            <p className="text-lg sm:text-2xl font-black text-gray-800 leading-none mt-0.5 sm:mt-1">{stats.total}</p>
-                        </div>
-                        <div className="w-px h-8 sm:h-10 bg-gray-200 hidden sm:block"></div>
-                        <div className="text-center sm:text-left">
-                            <p className="text-[9px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-400">Telah Hadir</p>
-                            <p className="text-lg sm:text-2xl font-black text-emerald-600 leading-none mt-0.5 sm:mt-1">{stats.hadir}</p>
-                        </div>
-                    </div>
-                    <div className="w-px h-8 sm:h-10 bg-gray-200 hidden sm:block"></div>
-                    <div className="flex-1 px-1 sm:px-2 w-full sm:w-auto">
-                        <div className="flex items-center justify-between mb-1.5 sm:mb-2">
-                            <p className="text-[9px] sm:text-[11px] font-bold uppercase tracking-wider text-gray-400">Progress Presensi</p>
-                            <p className="text-xs sm:text-sm font-black text-indigo-600">{attendancePercentage}%</p>
-                        </div>
-                        <div className="h-1.5 sm:h-2.5 w-full overflow-hidden rounded-full bg-gray-100 shadow-inner">
-                            <div
-                                className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-700 ease-out"
-                                style={{ width: `${attendancePercentage}%` }}
-                            />
-                        </div>
+                    <div className="flex flex-wrap items-center gap-2 text-xs font-medium">
+                        <StatusChip on={isScanning} label={isScanning ? 'Kamera aktif' : 'Kamera mati'} />
                     </div>
                 </div>
 
-                {/* Golden Ratio Grid (~61.8% / 38.2% -> 7.4/4.6 -> 7.5/4.5 -> Col 8 / Col 4 is 66%/33% close enough) */}
-                <div className="flex-1 flex flex-col lg:grid lg:grid-cols-[1.618fr_1fr] gap-3 lg:gap-6 lg:items-stretch lg:min-h-0">
-                    
-                    {/* ── Left: Scanner Card (Golden Ratio: Larger Part) ── */}
-                    <div className="overflow-hidden rounded-2xl bg-white shadow-sm border border-gray-100 flex flex-col lg:h-full">
-                        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-3 sm:px-4 py-2 sm:py-3 flex items-center justify-between shrink-0">
-                            <div className="flex items-center gap-2 text-white">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 opacity-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                                </svg>
-                                <span className="text-sm font-bold tracking-wide">
-                                    {cooldownActive || isFaceProcessing ? 'Memproses...' : 'Kamera Scanner (QR & Wajah)'}
+                {!activeWorkcode && (
+                    <div className="mb-4 flex shrink-0 items-start gap-3 rounded-lg bg-gradient-to-b from-amber-400 to-orange-500 p-4 text-sm text-white shadow-soft" role="alert" data-aos="fade-up">
+                        <svg className="mt-0.5 h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                        </svg>
+                        <p><strong className="font-semibold">Presensi terkunci.</strong> Aktifkan workcode lewat menu Workcode di sidebar agar scan dapat diproses.</p>
+                    </div>
+                )}
+
+                {/* KPI */}
+                <section className="grid shrink-0 grid-cols-1 gap-4 sm:grid-cols-3">
+                    <KpiCard delay={0} label="Total Peserta" value={stats.total} icon={icons.users}>
+                        terdaftar di sistem
+                    </KpiCard>
+                    <KpiCard delay={50} label="Telah Hadir" value={stats.hadir} icon={icons.check}>
+                        <span className="font-bold text-emerald-600">+{scanCount}</span> scan di sesi ini
+                    </KpiCard>
+                    <KpiCard delay={100} label="Progres Presensi" value={`${attendancePercentage}%`} icon={icons.chart}>
+                        <span className="mt-1.5 block h-1 overflow-hidden rounded-full bg-neutral-200">
+                            <span className="block h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600 transition-all duration-700 ease-out" style={{ width: `${attendancePercentage}%` }} />
+                        </span>
+                    </KpiCard>
+                </section>
+
+                {/* Kamera + riwayat */}
+                <section className="mt-4 grid flex-1 grid-cols-1 gap-4 lg:min-h-[28rem] lg:grid-cols-3 xl:min-h-0">
+                    {/* ── Kamera ── */}
+                    <div className="card-soft flex flex-col p-4 lg:col-span-2 xl:min-h-0" data-aos="fade-up">
+                        <div className="flex items-start justify-between gap-3">
+                            <div>
+                                <h6 className="text-base font-semibold text-neutral-800">Kamera Scanner</h6>
+                                <p className="text-sm text-neutral-500">Arahkan QR presensi peserta ke kamera</p>
+                            </div>
+                            {busy && (
+                                <span className="flex items-center gap-2 text-xs font-medium text-neutral-500">
+                                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-800" />
+                                    Memproses…
                                 </span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                {isScanning && (
-                                    <div className="flex items-center gap-2">
-                                        <div className={`h-2 w-2 rounded-full ${isFaceModelsLoaded ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-amber-400 animate-pulse'}`}></div>
-                                        <span className="text-[10px] font-bold uppercase tracking-wider text-white/80 hidden sm:inline">
-                                            {isFaceModelsLoaded ? 'AI Ready' : 'Load AI...'}
-                                        </span>
-                                    </div>
-                                )}
-                                {(cooldownActive || isFaceProcessing) && (
-                                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></div>
-                                )}
-                            </div>
+                            )}
                         </div>
 
-                        <div className="p-3 sm:p-4 flex flex-col gap-3 sm:gap-4">
-                            {/* Camera View Wrapper - Predictable height using aspect ratio */}
-                            <div className="relative overflow-hidden rounded-xl bg-gray-950 w-full aspect-[4/3] lg:aspect-video flex items-center justify-center transition-all duration-300 shadow-inner">
-                                {/* Target container for Html5Qrcode scanner. */}
-                                <div
-                                    id="qr-reader"
-                                    className="w-full h-full absolute inset-0 flex items-center justify-center"
-                                    style={{ opacity: isScanning ? 1 : 0, pointerEvents: isScanning ? 'auto' : 'none', zIndex: isScanning ? 1 : -1 }}
-                                />
+                        <div className="relative mt-4 flex aspect-[4/3] w-full items-center justify-center overflow-hidden rounded-lg bg-neutral-900 lg:aspect-video xl:aspect-auto xl:min-h-0 xl:flex-1">
+                            {/* Wadah video Html5Qrcode. */}
+                            <div
+                                id="qr-reader"
+                                className="absolute inset-0 flex h-full w-full items-center justify-center"
+                                style={{ opacity: isScanning ? 1 : 0, pointerEvents: isScanning ? 'auto' : 'none', zIndex: isScanning ? 1 : -1 }}
+                            />
 
-                                {isCameraLoading && (
-                                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 z-10 text-white">
-                                        <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent mb-3"></div>
-                                        <p className="text-sm font-bold">Mengaktifkan kamera...</p>
-                                        <p className="text-xs text-gray-400 mt-1 text-center px-4">Izinkan akses kamera pada popup browser</p>
-                                    </div>
-                                )}
+                            {isCameraLoading && (
+                                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-neutral-900 text-white">
+                                    <div className="mb-3 h-7 w-7 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                                    <p className="text-sm font-medium">Mengaktifkan kamera…</p>
+                                    <p className="mt-1 px-4 text-center text-xs text-neutral-400">Izinkan akses kamera pada pop-up browser</p>
+                                </div>
+                            )}
 
-                                {isScanning && !isCameraLoading && (
-                                    <div className={`scanner-search-overlay ${scanLock.active ? 'is-locked' : 'is-searching'}`} aria-hidden="true">
-                                        <div className="scanner-search-box" style={scanLock.style || undefined}>
-                                            <span className="scanner-search-corner scanner-search-corner-tl"></span>
-                                            <span className="scanner-search-corner scanner-search-corner-tr"></span>
-                                            <span className="scanner-search-corner scanner-search-corner-bl"></span>
-                                            <span className="scanner-search-corner scanner-search-corner-br"></span>
-                                            <span className="scanner-search-line"></span>
-                                            <span className="scanner-lock-pulse"></span>
-                                        </div>
-                                    </div>
-                                )}
-                                {/* Inactive State */}
-                                {!isScanning && (
-                                    <div className="flex flex-col items-center justify-center py-6 text-gray-500 absolute inset-0">
-                                        <div className="w-16 h-16 bg-gray-800/50 rounded-full flex items-center justify-center mb-3">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                                            </svg>
-                                        </div>
-                                        <p className="text-sm font-semibold text-gray-400">Kamera Offline</p>
-                                        <p className="text-xs text-gray-500 mt-1">Klik tombol di bawah untuk memulai</p>
-                                    </div>
-                                )}
-                            </div>
-
-                            {error && (
-                                <div className="shrink-0 rounded-lg bg-red-50 p-3 border border-red-100">
-                                    <div className="flex items-start gap-3">
-                                        <svg className="mt-0.5 h-4 w-4 shrink-0 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                        <div>
-                                            <p className="text-xs font-semibold text-red-800">{error}</p>
-                                            <button
-                                                onClick={startScanner}
-                                                className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-white bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg transition-colors"
-                                            >
-                                                Coba Aktifkan Kamera Lagi
-                                            </button>
-                                        </div>
+                            {isScanning && !isCameraLoading && (
+                                <div className={`scanner-search-overlay ${scanLock.active ? 'is-locked' : 'is-searching'}`} aria-hidden="true">
+                                    <div className="scanner-search-box" style={scanLock.style || undefined}>
+                                        <span className="scanner-search-corner scanner-search-corner-tl"></span>
+                                        <span className="scanner-search-corner scanner-search-corner-tr"></span>
+                                        <span className="scanner-search-corner scanner-search-corner-bl"></span>
+                                        <span className="scanner-search-corner scanner-search-corner-br"></span>
+                                        <span className="scanner-search-line"></span>
+                                        <span className="scanner-lock-pulse"></span>
                                     </div>
                                 </div>
                             )}
 
-                            {/* Control Button */}
-                            <div className="shrink-0">
-                                {isScanning ? (
-                                    <button
-                                        onClick={stopScanner}
-                                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-50 px-3 sm:px-4 py-2.5 sm:py-3 text-sm font-bold text-red-600 transition-all hover:bg-red-100 border border-red-100 shadow-sm"
-                                    >
-                                        <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="currentColor" viewBox="0 0 20 20">
-                                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z" clipRule="evenodd" />
-                                        </svg>
-                                        Hentikan Kamera
-                                    </button>
-                                ) : (
-                                    <button
-                                        onClick={startScanner}
-                                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-3 sm:px-4 py-2.5 sm:py-3 text-sm font-bold text-white shadow-md transition-all hover:bg-indigo-700 hover:shadow-lg active:scale-[0.99]"
-                                    >
-                                        <svg className="h-4 w-4 sm:h-5 sm:w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                        </svg>
-                                        {isMobile ? 'Aktifkan Kamera' : 'Mulai Scan QR Code'}
-                                    </button>
-                                )}
+                            {!isScanning && !isCameraLoading && (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                                    <span className="mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-white/10 text-white/70">
+                                        <span className="h-6 w-6">{icons.camera}</span>
+                                    </span>
+                                    <p className="text-sm font-medium text-white/80">Kamera belum aktif</p>
+                                    <p className="mt-1 text-xs text-white/50">Tekan tombol di bawah untuk mulai</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {error && (
+                            <div className="mt-4 flex items-start gap-3 rounded-lg bg-gradient-to-b from-rose-400 to-rose-600 p-3 text-sm text-white" role="alert">
+                                <svg className="mt-0.5 h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <p className="flex-1">{error}</p>
                             </div>
+                        )}
+
+                        <hr className="hr-fade my-3" />
+                        <div className="flex items-center justify-between gap-3">
+                            <p className="flex items-center gap-1 text-sm text-neutral-500">
+                                <span className="h-4 w-4">{icons.clock}</span>
+                                {isScanning ? 'Memindai otomatis' : 'Siap memindai'}
+                            </p>
+                            {isScanning ? (
+                                <button type="button" onClick={stopScanner} className="btn-soft !border-rose-500 !text-rose-600 hover:!bg-rose-500 hover:!text-white">
+                                    Hentikan kamera
+                                </button>
+                            ) : (
+                                <button type="button" onClick={startScanner} className="btn-brand">
+                                    <span className="h-4 w-4">{icons.camera}</span>
+                                    {error ? 'Coba lagi' : isMobile ? 'Aktifkan kamera' : 'Mulai scan'}
+                                </button>
+                            )}
                         </div>
                     </div>
 
-                    {/* ── Right: Scan History (Golden Ratio: Smaller Part) ── */}
-                    {/* Flex column taking full height of grid cell */}
-                    <div className="flex flex-col rounded-2xl bg-white shadow-sm border border-gray-100 overflow-hidden lg:h-full">
-                        <div className="bg-white border-b border-gray-100 px-3 sm:px-5 py-2.5 sm:py-3.5 shrink-0 flex items-center justify-between z-10">
-                            <h3 className="text-xs sm:text-sm font-bold text-gray-800">Riwayat Scan</h3>
+                    {/* ── Riwayat scan ── */}
+                    <div className="card-soft flex min-h-[18rem] flex-col lg:min-h-0" data-aos="fade-up" data-aos-delay="100">
+                        <div className="flex items-start justify-between gap-3 p-4 pb-2">
+                            <div>
+                                <h6 className="text-base font-semibold text-neutral-800">Riwayat Scan</h6>
+                                <p className="mt-0.5 flex items-center gap-1 text-sm text-neutral-500">
+                                    <span className="h-4 w-4 text-emerald-500">{icons.check}</span>
+                                    <span className="font-bold text-neutral-700">{scanHistory.length}</span> scan di sesi ini
+                                </p>
+                            </div>
                             {scanHistory.length > 0 && (
-                                <button
-                                    onClick={() => setScanHistory([])}
-                                    className="text-[10px] sm:text-[11px] font-bold text-gray-500 hover:text-gray-800 bg-gray-100 hover:bg-gray-200 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg transition-colors"
-                                >
+                                <button type="button" onClick={() => setScanHistory([])} className="text-xs font-medium text-neutral-500 transition-colors hover:text-neutral-900">
                                     Bersihkan
                                 </button>
                             )}
                         </div>
 
-                        {/* This area flex-grows to take all remaining vertical space inside the history card */}
-                        <div className="lg:flex-1 overflow-y-auto max-h-[220px] lg:max-h-none lg:min-h-0 lg:h-0 bg-gray-50/50">
+                        <div className="min-h-0 flex-1 overflow-y-auto px-4 lg:h-0">
                             {scanHistory.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center h-full text-center px-6 py-10">
-                                    <div className="w-16 h-16 rounded-full bg-white shadow-sm border border-gray-100 flex items-center justify-center mb-4">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                                        </svg>
-                                    </div>
-                                    <p className="text-sm font-bold text-gray-600">Belum ada riwayat</p>
-                                    <p className="text-[11px] text-gray-400 mt-1 leading-relaxed">Hasil scan presensi akan muncul di sini.</p>
+                                <div className="flex h-full flex-col items-center justify-center py-10 text-center">
+                                    <span className="mb-3 h-8 w-8 text-neutral-300">{icons.document}</span>
+                                    <p className="text-sm font-medium text-neutral-600">Belum ada scan</p>
+                                    <p className="mt-0.5 text-xs text-neutral-400">Hasil scan akan muncul di sini.</p>
                                 </div>
                             ) : (
-                                <div className="divide-y divide-gray-100">
+                                <ol className="relative py-2 before:absolute before:bottom-6 before:left-[13px] before:top-6 before:w-px before:bg-neutral-200">
                                     {scanHistory.map((item, index) => (
-                                        <div
-                                            key={item.id}
-                                            className={`flex items-center gap-2 sm:gap-3 px-3 sm:px-5 py-2 sm:py-3 transition-colors hover:bg-white ${index === 0 ? 'bg-indigo-50/30' : ''}`}
-                                        >
-                                            <div className={`flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full text-xs sm:text-sm font-bold shadow-sm ${
-                                                activeWorkcode?.kategori === 'harian' && (item.status === 'warning' || item.is_late) ? 'bg-amber-100 text-amber-800 border border-amber-300' :
-                                                item.status === 'success' || (activeWorkcode?.kategori !== 'harian' && item.status === 'warning') ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
-                                                item.status === 'already' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
-                                                'bg-red-100 text-red-700 border border-red-200'
-                                            }`}>
-                                                {item.nama?.charAt(0)?.toUpperCase() || '?'}
-                                            </div>
+                                        <li key={item.id} className={`relative flex items-start gap-3 rounded-md py-2 transition-colors ${index === 0 ? 'animate-[scan-in_0.35s_ease-out]' : ''}`}>
+                                            <span className={`relative z-10 mt-0.5 flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-white ${historyTone(item)}`}>
+                                                <span className="h-2.5 w-2.5 rounded-full bg-current" />
+                                            </span>
                                             <div className="min-w-0 flex-1">
-                                                <p className="truncate text-[12px] sm:text-[13px] font-bold text-gray-900">{item.nama}</p>
-                                                <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5">
-                                                    <span className="text-[10px] sm:text-[11px] text-gray-500 font-medium">{item.nis_nip}</span>
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <p className="truncate text-sm font-semibold text-neutral-800">{item.nama}</p>
+                                                    <span className="shrink-0 text-xs font-medium tabular-nums text-neutral-500">{item.timestamp}</span>
+                                                </div>
+                                                <div className="mt-1 flex items-center gap-2">
                                                     {getStatusBadge(item)}
+                                                    <span className="truncate text-xs text-neutral-500">{item.nis_nip}</span>
                                                 </div>
                                             </div>
-                                            <div className="shrink-0">
-                                                <span className="text-[9px] sm:text-[10px] font-bold text-gray-400 bg-white border border-gray-100 px-1 sm:px-1.5 py-0.5 sm:py-1 rounded shadow-sm">
-                                                    {item.timestamp}
-                                                </span>
-                                            </div>
-                                        </div>
+                                        </li>
                                     ))}
-                                </div>
+                                </ol>
                             )}
                         </div>
 
-                        {/* Mini Legend */}
-                        <div className="bg-white border-t border-gray-100 px-3 sm:px-5 py-2 sm:py-3 shrink-0 z-10">
-                            <div className="flex items-center justify-between">
-                                <p className="flex items-center gap-1 sm:gap-1.5 text-[8px] sm:text-[10px] font-bold uppercase tracking-wider text-gray-500">
-                                    <span className="h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-full bg-emerald-500 shadow-[0_0_4px_rgba(16,185,129,0.6)]"></span>
-                                    Berhasil
-                                </p>
-                                <p className="flex items-center gap-1 sm:gap-1.5 text-[8px] sm:text-[10px] font-bold uppercase tracking-wider text-gray-500">
-                                    <span className="h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-full bg-amber-500 shadow-[0_0_4px_rgba(245,158,11,0.6)]"></span>
-                                    Duplikat
-                                </p>
-                                <p className="flex items-center gap-1 sm:gap-1.5 text-[8px] sm:text-[10px] font-bold uppercase tracking-wider text-gray-500">
-                                    <span className="h-2 w-2 sm:h-2.5 sm:w-2.5 rounded-full bg-red-500 shadow-[0_0_4px_rgba(239,68,68,0.6)]"></span>
-                                    Gagal
-                                </p>
-                            </div>
+                        <hr className="hr-fade" />
+                        <div className="flex items-center justify-between gap-2 p-4 py-3 text-xs text-neutral-500">
+                            <Legend className="bg-emerald-500" label="Hadir" />
+                            <Legend className="bg-amber-500" label="Telat" />
+                            <Legend className="bg-neutral-400" label="Duplikat" />
+                            <Legend className="bg-rose-500" label="Gagal" />
                         </div>
                     </div>
-                </div>
+                </section>
             </div>
 
             <style>{`
@@ -911,9 +661,9 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
                     width: min(280px, 60%);
                     aspect-ratio: 1 / 1;
                     max-height: 80%;
-                    border: 2px solid rgba(99, 102, 241, 0.95);
+                    border: 2px solid rgba(255, 255, 255, 0.9);
                     border-radius: 16px;
-                    box-shadow: 0 0 0 999px rgba(3, 7, 18, 0.15), 0 0 24px rgba(99, 102, 241, 0.45);
+                    box-shadow: 0 0 0 999px rgba(0, 0, 0, 0.18), 0 0 18px rgba(255, 255, 255, 0.25);
                     transform: translate(-50%, -50%);
                     transition: all 180ms ease;
                     animation: qr-search-focus 2.4s ease-in-out infinite;
@@ -958,7 +708,7 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
                     width: 24px;
                     height: 24px;
                     border-color: #ffffff;
-                    filter: drop-shadow(0 0 6px rgba(99, 102, 241, 0.85));
+                    filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.4));
                 }
                 .scanner-search-corner-tl {
                     left: -2px;
@@ -988,6 +738,10 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
                     border-bottom: 3px solid;
                     border-bottom-right-radius: 16px;
                 }
+                @keyframes scan-in {
+                    from { opacity: 0; transform: translateY(-6px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
                 @keyframes qr-search-focus {
                     0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.9; }
                     50% { transform: translate(-50%, -50%) scale(0.97); opacity: 1; }
@@ -1007,5 +761,23 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
                 }
             `}</style>
         </AuthenticatedLayout>
+    );
+}
+
+function StatusChip({ on, label }) {
+    return (
+        <span className="inline-flex items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2.5 py-1 text-neutral-600">
+            <span className={`h-1.5 w-1.5 rounded-full ${on ? 'bg-emerald-500' : 'bg-neutral-300'}`} />
+            {label}
+        </span>
+    );
+}
+
+function Legend({ className, label }) {
+    return (
+        <span className="flex items-center gap-1.5">
+            <span className={`h-2 w-2 rounded-full ${className}`} />
+            {label}
+        </span>
     );
 }

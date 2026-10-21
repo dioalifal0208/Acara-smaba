@@ -1,99 +1,113 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, Link } from '@inertiajs/react';
+import { Head, usePage } from '@inertiajs/react';
+import { useState } from 'react';
 import DeleteUserForm from './Partials/DeleteUserForm';
 import UpdatePasswordForm from './Partials/UpdatePasswordForm';
 import UpdateProfileInformationForm from './Partials/UpdateProfileInformationForm';
-import { useState, useEffect } from 'react';
+
+const tabs = [
+    ['profile-info', 'Informasi Profil'],
+    ['security', 'Keamanan'],
+    ['danger-zone', 'Hapus Akun'],
+];
 
 export default function Edit({ mustVerifyEmail, status }) {
-    const [mounted, setMounted] = useState(false);
+    const { auth } = usePage().props;
+    const user = auth.user;
     const [activeTab, setActiveTab] = useState('profile-info');
 
-    useEffect(() => {
-        setMounted(true);
-    }, []);
-
     return (
-        <AuthenticatedLayout
-            header={
-                <h2 className="truncate text-base font-extrabold leading-tight text-slate-800 sm:text-xl">Pengaturan Profil</h2>
-            }
-        >
-            <Head title="Pengaturan Profil" />
+        <AuthenticatedLayout>
+            <Head title="Profil" />
 
-            <div className="py-6 px-4 sm:px-6 lg:px-8 flex-1 flex flex-col w-full max-w-7xl mx-auto overflow-hidden">
+            <div className="flex w-full flex-1 flex-col px-4 py-2 sm:px-6 xl:min-h-0 xl:overflow-hidden">
+                <div className="mb-4 shrink-0" data-aos="fade-up">
+                    <h3 className="text-xl font-bold text-neutral-800">Profil</h3>
+                    <p className="mt-0.5 text-sm text-neutral-500">Kelola nama, email, dan password akun Anda.</p>
+                </div>
 
-
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1 min-h-0">
-                    {/* Left Sidebar Menu */}
-                    <div className={`hidden lg:block lg:col-span-3 transition-all duration-700 ease-out delay-100 transform ${mounted ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-8'}`}>
-                        <div className="bg-white border border-slate-200/60 rounded-2xl p-2 shadow-sm">
-                            <nav className="flex flex-col space-y-1">
+                {/* Kartu identitas + tab (pola halaman Profile pada referensi) */}
+                <section className="card-soft p-4" data-aos="fade-up">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                        <div className="flex min-w-0 items-center gap-4">
+                            <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-brand-gradient text-2xl font-semibold text-white shadow-dark">
+                                {user.name.charAt(0).toUpperCase()}
+                            </span>
+                            <div className="min-w-0">
+                                <h5 className="truncate text-lg font-semibold text-neutral-800">{user.name}</h5>
+                                <p className="truncate text-sm text-neutral-500">{user.email}</p>
+                                <span className="mt-1 inline-flex rounded-md bg-brand-gradient px-2 py-0.5 text-[10px] font-bold uppercase leading-4 text-white">
+                                    {user.is_admin ? 'Administrator' : 'Peserta'}
+                                </span>
+                            </div>
+                        </div>
+                        <div className="inline-flex w-full rounded-lg bg-neutral-100 p-1 md:w-auto" role="tablist" aria-label="Bagian profil">
+                            {tabs.map(([key, label]) => (
                                 <button
-                                    onClick={() => setActiveTab('profile-info')}
-                                    className={`flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors w-full text-left ${activeTab === 'profile-info' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+                                    key={key}
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={activeTab === key}
+                                    onClick={() => setActiveTab(key)}
+                                    className={`flex-1 whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-all duration-200 md:flex-none ${
+                                        activeTab === key
+                                            ? `bg-white shadow-soft ${key === 'danger-zone' ? 'text-rose-600' : 'text-brand-700'}`
+                                            : 'text-neutral-500 hover:text-neutral-900'
+                                    }`}
                                 >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                    </svg>
-                                    Informasi Profil
+                                    {label}
                                 </button>
-                                <button
-                                    onClick={() => setActiveTab('security')}
-                                    className={`flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors w-full text-left ${activeTab === 'security' ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                    </svg>
-                                    Keamanan
-                                </button>
-                                <button
-                                    onClick={() => setActiveTab('danger-zone')}
-                                    className={`flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors w-full text-left ${activeTab === 'danger-zone' ? 'bg-red-50 text-red-700' : 'text-slate-600 hover:bg-red-50 hover:text-red-700'}`}
-                                >
-                                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
-                                    Hapus Akun
-                                </button>
-                            </nav>
+                            ))}
                         </div>
                     </div>
+                </section>
 
-                    {/* Right Content */}
-                    <div className="col-span-1 lg:col-span-9 flex-1 min-h-0 overflow-y-auto pb-4 pr-1 scrollbar-thin scrollbar-thumb-slate-200 scrollbar-track-transparent">
+                <section className="mt-4 grid grid-cols-1 gap-4 xl:min-h-0 xl:flex-1 xl:grid-cols-3 xl:items-start">
+                    <div key={activeTab} className="card-soft p-4 sm:p-6 xl:col-span-2 animate-[profileTab_0.25s_ease-out]">
                         {activeTab === 'profile-info' && (
-                            <div className="bg-white border border-slate-200/60 shadow-sm rounded-3xl p-6 sm:p-10 min-h-full animate-[fadeIn_0.3s_ease-out]">
-                                <UpdateProfileInformationForm
-                                    mustVerifyEmail={mustVerifyEmail}
-                                    status={status}
-                                    className="max-w-2xl"
-                                />
-                            </div>
+                            <UpdateProfileInformationForm mustVerifyEmail={mustVerifyEmail} status={status} className="max-w-xl" />
                         )}
-
-                        {activeTab === 'security' && (
-                            <div className="bg-white border border-slate-200/60 shadow-sm rounded-3xl p-6 sm:p-10 min-h-full animate-[fadeIn_0.3s_ease-out]">
-                                <UpdatePasswordForm className="max-w-2xl" />
-                            </div>
-                        )}
-
-                        {activeTab === 'danger-zone' && (
-                            <div className="bg-white border border-red-200/60 shadow-sm shadow-red-500/5 rounded-3xl p-6 sm:p-10 relative overflow-hidden min-h-full animate-[fadeIn_0.3s_ease-out]">
-                                <div className="absolute top-0 right-0 -mr-16 -mt-16 w-48 h-48 rounded-full bg-red-50 blur-3xl opacity-50 pointer-events-none"></div>
-                                <DeleteUserForm className="max-w-2xl relative z-10" />
-                            </div>
-                        )}
+                        {activeTab === 'security' && <UpdatePasswordForm className="max-w-xl" />}
+                        {activeTab === 'danger-zone' && <DeleteUserForm className="max-w-xl" />}
                     </div>
-                </div>
+
+                    <aside className="card-soft p-4" data-aos="fade-up" data-aos-delay="100">
+                        <h6 className="text-base font-semibold text-neutral-800">Informasi Akun</h6>
+                        <p className="mt-0.5 text-sm text-neutral-500">Ringkasan akun yang sedang masuk</p>
+                        <hr className="hr-fade my-3" />
+                        <dl className="space-y-3 text-sm">
+                            <InfoRow label="Nama lengkap" value={user.name} />
+                            <InfoRow label="Email" value={user.email} />
+                            <InfoRow label="Peran" value={user.is_admin ? 'Administrator' : 'Peserta'} />
+                            <InfoRow
+                                label="Status email"
+                                value={
+                                    <span className={`inline-flex items-center gap-1.5 ${user.email_verified_at ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                        <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                                        {user.email_verified_at ? 'Terverifikasi' : 'Belum terverifikasi'}
+                                    </span>
+                                }
+                            />
+                        </dl>
+                    </aside>
+                </section>
             </div>
-            
+
             <style>{`
-                @keyframes fadeIn {
-                    from { opacity: 0; transform: translateY(10px); }
+                @keyframes profileTab {
+                    from { opacity: 0; transform: translateY(6px); }
                     to { opacity: 1; transform: translateY(0); }
                 }
             `}</style>
         </AuthenticatedLayout>
+    );
+}
+
+function InfoRow({ label, value }) {
+    return (
+        <div className="flex items-start justify-between gap-4">
+            <dt className="shrink-0 text-neutral-500">{label}</dt>
+            <dd className="min-w-0 truncate text-right font-medium text-neutral-800">{value}</dd>
+        </div>
     );
 }

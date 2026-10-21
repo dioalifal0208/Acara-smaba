@@ -28,8 +28,14 @@ class CalculateAttendanceStatus extends Command
                 continue; // Tidak aktif hari ini
             }
 
-            $jamDatangSelesai = $workcode->jam_datang_selesai;
-            $jamPulangSelesai = $workcode->jam_pulang_selesai;
+            // Batas hari ini mengikuti jadwal_per_hari, bukan hanya jam bawaan workcode.
+            $schedule = $workcode->scheduleFor($today);
+            // Lupa absen datang baru dicatat setelah toleransi terlambat habis, agar peserta yang datang
+            // terlambat masih tercatat sebagai presensi datang (bukan dianggap presensi pulang).
+            $jamDatangSelesai = $schedule['jam_datang_selesai']
+                ? Workcode::withLateTolerance($today->copy()->setTimeFromTimeString($schedule['jam_datang_selesai']))->format('H:i:s')
+                : null;
+            $jamPulangSelesai = $schedule['jam_pulang_selesai'];
 
             $participants = Participant::all();
 

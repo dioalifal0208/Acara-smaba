@@ -9,16 +9,20 @@ import AOS from 'aos';
 import { ToastProvider } from '@/Components/Toast';
 import { ConfirmProvider } from '@/Components/ConfirmDialog';
 
-// Initialize AOS (Animate On Scroll) globally
+// AOS (Animate On Scroll): animasi masuk ringan di setiap halaman. Diputar sekali, singkat,
+// dan nonaktif bila pengguna memilih "kurangi gerakan" di sistemnya (aksesibilitas).
+const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 AOS.init({
-    duration: 800,
-    once: true,
+    duration: 600,
     easing: 'ease-out-cubic',
+    once: true,
+    offset: 24,
+    disable: reduceMotion,
 });
 
-// Refresh AOS on Inertia page transitions
+// Halaman Inertia berganti tanpa muat ulang: daftarkan ulang elemen data-aos yang baru.
 router.on('navigate', () => {
-    AOS.refresh();
+    window.requestAnimationFrame(() => AOS.refreshHard());
 });
 
 const appName = import.meta.env.VITE_APP_NAME || 'E-Presensi SMABA';
@@ -42,6 +46,6 @@ createInertiaApp({
         );
     },
     progress: {
-        color: '#4f46e5', // Theme indigo color for progress bar
+        color: '#2f9338', // Hijau logo sekolah (warna utama web)
     },
 });

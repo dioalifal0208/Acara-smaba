@@ -2,21 +2,28 @@
 
 use App\Http\Controllers\AdminLeaveController;
 use App\Http\Controllers\AttendanceController;
+use App\Http\Controllers\DeviceController;
 use App\Http\Controllers\FaceRecognitionController;
 use App\Http\Controllers\HolidayController;
 use App\Http\Controllers\LeaveRequestController;
+use App\Http\Controllers\LocationIntegrityLogController;
 use App\Http\Controllers\ParticipantController;
 use App\Http\Controllers\PhotoChangeRequestController;
 use App\Http\Controllers\PrivateFileController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SelfCheckInController;
 use App\Http\Controllers\SettingController;
+use App\Http\Controllers\SyncController;
 use App\Http\Controllers\VerificationController;
 use App\Http\Controllers\WorkcodeController;
 use App\Models\Attendance;
+use App\Models\DeviceChangeRequest;
 use App\Models\LeaveRequest;
+use App\Models\LocationIntegrityViolation;
 use App\Models\Participant;
 use App\Models\Workcode;
+use App\Support\AdminDashboardStats;
+use App\Support\AdminNotifications;
 use App\Support\PrivateFile;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
@@ -82,13 +89,23 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
             'activeWorkcode' => $activeWorkcode,
             'activeWorkcodes' => $activeWorkcodes,
             'pendingLeaveCount' => $pendingLeaveCount,
+            'pendingDeviceCount' => DeviceChangeRequest::where('status', 'pending')->count(),
+            'fakeGpsBlockedToday' => LocationIntegrityViolation::where('blocked', true)->whereDate('created_at', today())->count(),
             'stats' => [
                 'total' => $totalParticipants,
                 'hadir' => $totalAttended,
                 'belum' => $totalParticipants - $totalAttended,
             ],
+            'weekly' => AdminDashboardStats::weekly(),
+            'lateness' => AdminDashboardStats::lateness(),
+            'methods' => AdminDashboardStats::methods(),
+            'recentAttendances' => AdminDashboardStats::recent(),
         ]);
     })->name('dashboard');
+
+    // Notifikasi admin: pekerjaan yang menunggu verifikasi (dipolling oleh lonceng notifikasi)
+    Route::get('/admin/notifications', fn () => response()->json(AdminNotifications::summary()))
+        ->name('admin.notifications');
 
     // Leave Approvals
     Route::get('/admin/leaves', [AdminLeaveController::class, 'index'])->name('admin.leave.index');
@@ -102,6 +119,9 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::post('/workcodes/{workcode}/activate', [WorkcodeController::class, 'activate'])->name('workcodes.activate');
     Route::post('/workcodes/{workcode}/deactivate', [WorkcodeController::class, 'deactivate'])->name('workcodes.deactivate');
     Route::delete('/workcodes/{workcode}', [WorkcodeController::class, 'destroy'])->name('workcodes.destroy');
+
+    // Tombol Sync (petir): minta semua aplikasi Android memuat ulang data dari server.
+    Route::post('/sync', [SyncController::class, 'push'])->name('sync.push');
 
     // Participant management routes
     Route::get('/participants', [ParticipantController::class, 'index'])->name('participants.index');
@@ -126,6 +146,15 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     // Photo change request verification (Admin)
     Route::post('/admin/photo-change-requests/{photoChangeRequest}/approve', [PhotoChangeRequestController::class, 'approve'])->name('photo-change-requests.approve');
     Route::post('/admin/photo-change-requests/{photoChangeRequest}/reject', [PhotoChangeRequestController::class, 'reject'])->name('photo-change-requests.reject');
+
+    // Kunci perangkat Android: pengajuan pindah HP & reset (Admin)
+    Route::get('/admin/devices', [DeviceController::class, 'index'])->name('admin.devices.index');
+    Route::post('/admin/device-change-requests/{deviceChangeRequest}/approve', [DeviceController::class, 'approve'])->name('admin.device-change-requests.approve');
+    Route::post('/admin/device-change-requests/{deviceChangeRequest}/reject', [DeviceController::class, 'reject'])->name('admin.device-change-requests.reject');
+    Route::post('/admin/users/{user}/device/reset', [DeviceController::class, 'reset'])->name('admin.devices.reset');
+
+    // Catatan anti fake GPS dari aplikasi Android (Admin)
+    Route::get('/admin/fake-gps', [LocationIntegrityLogController::class, 'index'])->name('admin.fake-gps.index');
 
     // Master QR routes
     Route::get('/admin/master-qr', [SelfCheckInController::class, 'masterQr'])->name('admin.master-qr');
@@ -202,11 +231,8 @@ Route::post('/self-checkin/{token}', [SelfCheckInController::class, 'submitForm'
 // Public Holidays API
 Route::get('/api/holidays', [HolidayController::class, 'index'])->middleware('throttle:120,1')->name('api.holidays');
 
-// Presensi wajah web: wajib login. Admin (scanner) mencocokkan ke semua wajah yang disetujui;
-// peserta hanya dicocokkan 1:1 dengan wajahnya sendiri (lihat FaceRecognitionController::match).
-Route::post('/api/face/match', [FaceRecognitionController::class, 'match'])
-    ->middleware(['auth', 'throttle:face-match'])
-    ->name('face.match');
+// Presensi wajah hanya lewat aplikasi Android (POST /api/v1/attendance); website tidak lagi
+// menyediakan presensi wajah. Presensi web: scan QR workcode (self check-in) & scan QR peserta.
 
 // File pribadi peserta (foto wajah, foto presensi, tanda tangan, dokumen izin).
 // Hanya bisa dibuka lewat URL bertanda tangan sementara buatan server (App\Support\PrivateFile).

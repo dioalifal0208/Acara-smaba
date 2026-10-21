@@ -1,444 +1,223 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, usePage } from '@inertiajs/react';
-import Dropdown from '@/Components/Dropdown';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
+import { backgroundReload, jitteredInterval } from '@/lib/backgroundReload';
+import { icons } from '@/lib/adminMenu';
+import MaterialChart from '@/Components/MaterialChart';
+import KpiCard from '@/Components/KpiCard';
 
-export default function Dashboard({ stats, activeWorkcode: propActiveWorkcode, activeWorkcodes = [], pendingLeaveCount }) {
-    const { auth, activeWorkcode: globalActiveWorkcode } = usePage().props;
+export default function Dashboard({
+    stats,
+    activeWorkcode: propActiveWorkcode,
+    activeWorkcodes = [],
+    pendingLeaveCount = 0,
+    pendingDeviceCount = 0,
+    fakeGpsBlockedToday = 0,
+    weekly = [],
+    lateness = [],
+    methods = [],
+    recentAttendances = [],
+}) {
+    const { activeWorkcode: globalActiveWorkcode } = usePage().props;
     const activeWorkcode = propActiveWorkcode || globalActiveWorkcode;
-    const user = auth.user;
     const attendancePercentage = stats.total > 0 ? Math.round((stats.hadir / stats.total) * 100) : 0;
-    
-    // For staggered entry animations
-    const [mounted, setMounted] = useState(false);
+    const todayCount = methods.reduce((sum, item) => sum + item.value, 0);
+    const lateTotal = lateness.reduce((sum, item) => sum + item.late, 0);
+    const dailyTotal = lateness.reduce((sum, item) => sum + item.total, 0);
+    const dayLabel = (date, options) => new Date(`${date}T00:00:00`).toLocaleDateString('id-ID', options);
+    const weekDays = weekly.map((item) => new Date(`${item.date}T00:00:00`));
+
+    // Presensi dari aplikasi Android/scanner masuk terus: segarkan data di latar belakang.
     useEffect(() => {
-        setMounted(true);
+        const reload = () => backgroundReload({
+            only: ['stats', 'activeWorkcode', 'activeWorkcodes', 'pendingLeaveCount', 'pendingDeviceCount', 'fakeGpsBlockedToday', 'weekly', 'lateness', 'methods', 'recentAttendances'],
+            preserveScroll: true,
+            preserveState: true,
+        });
+        const interval = window.setInterval(reload, jitteredInterval(20000));
+        const onVisible = () => document.visibilityState === 'visible' && reload();
+        document.addEventListener('visibilitychange', onVisible);
+
+        return () => {
+            window.clearInterval(interval);
+            document.removeEventListener('visibilitychange', onVisible);
+        };
     }, []);
 
     return (
         <AuthenticatedLayout>
             <Head title="Dashboard" />
 
-            <div className="py-3 px-4 sm:px-6 lg:px-8 flex-1 flex flex-col w-full max-w-7xl mx-auto">
-                
-                {/* Header Section (User Profile & Title) */}
-                <div className={`relative z-30 flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3 transition-all duration-700 ease-out transform ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-4'}`}>
-                    <div>
-                        <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">Overview</h1>
-                        <p className="text-sm text-slate-500 font-medium mt-1">Pantau performa presensi SMA Negeri 1 Babat.</p>
-                    </div>
-                    
-                    <div className="flex items-center gap-3 self-start sm:self-auto z-20">
-                        <Dropdown>
-                            <Dropdown.Trigger>
-                                <button
-                                    type="button"
-                                    className="group relative flex items-center gap-3 rounded-full bg-white/60 backdrop-blur-md border border-white/80 p-1.5 pr-4 shadow-sm transition-all hover:bg-white hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                                >
-                                    <div className="h-9 w-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 p-[2px]">
-                                        <div className="h-full w-full rounded-full bg-white flex items-center justify-center text-indigo-600">
-                                            <span className="font-bold text-sm">{user.name.charAt(0).toUpperCase()}</span>
-                                        </div>
-                                    </div>
-                                    <div className="text-left hidden sm:block">
-                                        <p className="text-xs font-bold text-slate-800 leading-tight">{user.name}</p>
-                                        <p className="text-[10px] font-semibold text-slate-500 leading-tight">Admin</p>
-                                    </div>
-                                    <svg className="h-4 w-4 text-slate-400 group-hover:text-indigo-500 transition-colors hidden sm:block" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                                    </svg>
-                                </button>
-                            </Dropdown.Trigger>
-
-                            <Dropdown.Content contentClasses="py-1 bg-white/90 backdrop-blur-xl border border-white/50 shadow-xl rounded-2xl overflow-hidden mt-2">
-                                <div className="px-4 py-3 border-b border-slate-100/50 bg-slate-50/50">
-                                    <p className="text-xs text-slate-500 font-medium">Masuk sebagai</p>
-                                    <p className="text-sm font-bold text-slate-900 truncate">{user.name}</p>
-                                    <p className="text-xs text-slate-500 truncate">{user.email}</p>
-                                </div>
-                                <div className="p-1">
-                                    <Dropdown.Link href={route('profile.edit')} className="text-sm font-semibold text-slate-700 hover:text-indigo-600 hover:bg-indigo-50/50 rounded-lg py-2 transition-colors">
-                                        Pengaturan Profil
-                                    </Dropdown.Link>
-                                    {user.is_admin && (
-                                        <Dropdown.Link href={route('admin.settings')} className="text-sm font-semibold text-slate-700 hover:text-indigo-600 hover:bg-indigo-50/50 rounded-lg py-2 transition-colors">
-                                            Pengaturan TTD
-                                        </Dropdown.Link>
-                                    )}
-                                    <Dropdown.Link href={route('logout')} method="post" as="button" className="text-sm font-semibold text-red-600 hover:text-red-700 hover:bg-red-50/50 rounded-lg py-2 w-full text-left transition-colors">
-                                        Log Out
-                                    </Dropdown.Link>
-                                </div>
-                            </Dropdown.Content>
-                        </Dropdown>
-                    </div>
-                </div>
-                
-                {/* Alerts Area */}
-                <div className="space-y-2 mb-4 flex-none">
-                    {activeWorkcodes.length > 1 && (
-                        <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-3">
-                            <p className="text-sm font-extrabold text-indigo-900">{activeWorkcodes.length} workcode sedang aktif bersamaan</p>
-                            <p className="mt-1 text-xs font-medium text-indigo-700">{activeWorkcodes.map((workcode) => workcode.nama_workcode).join(' · ')}</p>
-                        </div>
-                    )}
-                    {/* No Workcode Banner */}
-                    {!activeWorkcode && (
-                        <div className={`overflow-hidden rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/60 p-1 shadow-sm transition-all duration-500 ease-out transform ${mounted ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-8'}`}>
-                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 gap-4 bg-white/40 backdrop-blur-sm rounded-xl">
-                                <div className="flex items-center gap-4">
-                                    <div className="relative">
-                                        <div className="absolute inset-0 bg-amber-400 rounded-xl blur opacity-50 animate-pulse"></div>
-                                        <div className="relative h-12 w-12 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-white flex items-center justify-center shadow-lg shadow-amber-500/30">
-                                            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
-                                            </svg>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <h3 className="text-base font-extrabold text-amber-900 tracking-tight">Belum Ada Workcode Aktif</h3>
-                                        <p className="text-sm text-amber-700 font-medium mt-0.5">
-                                            Pilih atau buat workcode terlebih dahulu agar sistem presensi dapat berjalan.
-                                        </p>
-                                    </div>
-                                </div>
-                                <Link
-                                    href={route('workcodes.index')}
-                                    className="w-full sm:w-auto shrink-0 inline-flex justify-center items-center rounded-xl bg-amber-600 px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-amber-600/20 transition-all hover:bg-amber-700 hover:shadow-lg hover:-translate-y-0.5"
-                                >
-                                    Kelola Workcode
-                                </Link>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Pending Leave Banner */}
-                    {pendingLeaveCount > 0 && (
-                        <div className={`overflow-hidden rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/60 p-1 shadow-sm transition-all duration-500 ease-out delay-100 transform ${mounted ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-8'}`}>
-                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 gap-4 bg-white/40 backdrop-blur-sm rounded-xl">
-                                <div className="flex items-center gap-4">
-                                    <div className="relative">
-                                        <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4 z-10">
-                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
-                                            <span className="relative inline-flex rounded-full h-4 w-4 bg-rose-500 border-2 border-white"></span>
-                                        </span>
-                                        <div className="relative h-12 w-12 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white flex items-center justify-center shadow-lg shadow-blue-500/30">
-                                            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                            </svg>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <h3 className="text-base font-extrabold text-blue-900 tracking-tight">Terdapat {pendingLeaveCount} Pengajuan Izin</h3>
-                                        <p className="text-sm text-blue-700 font-medium mt-0.5">
-                                            Segera verifikasi pengajuan izin/sakit dari peserta.
-                                        </p>
-                                    </div>
-                                </div>
-                                <Link
-                                    href={route('admin.leave.index')}
-                                    className="w-full sm:w-auto shrink-0 inline-flex justify-center items-center rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-md shadow-blue-600/20 transition-all hover:bg-blue-700 hover:shadow-lg hover:-translate-y-0.5"
-                                >
-                                    Verifikasi Sekarang
-                                </Link>
-                            </div>
-                        </div>
-                    )}
+            <div className="flex w-full flex-col px-4 py-2 sm:px-6 xl:min-h-0 xl:flex-1 xl:overflow-hidden">
+                <div className="mb-4 shrink-0" data-aos="fade-up">
+                    <h3 className="text-xl font-bold text-neutral-800">Dashboard</h3>
+                    <p className="mt-0.5 text-sm text-neutral-500">
+                        {activeWorkcode
+                            ? <>Ringkasan presensi <span className="font-medium text-neutral-700">{activeWorkcode.nama_workcode}</span>{activeWorkcodes.length > 1 && ` dan ${activeWorkcodes.length - 1} workcode aktif lainnya`}.</>
+                            : 'Belum ada workcode aktif. Aktifkan workcode agar presensi dapat berjalan.'}
+                    </p>
                 </div>
 
-                {/* Main Content Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 lg:min-h-0">
-                    
-                    {/* Left Column (Hero & Quick Actions) */}
-                    <div className="lg:col-span-7 xl:col-span-8 flex flex-col gap-4">
-                        
-                        {/* Premium Hero / Welcome Banner */}
-                        <div className={`relative overflow-hidden rounded-3xl p-6 lg:p-8 shadow-2xl flex-none transition-all duration-700 ease-out delay-200 transform ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
-                            {/* Animated Mesh Background */}
-                            <div className="absolute inset-0 bg-slate-900 overflow-hidden">
-                                <div className="absolute top-[-20%] left-[-10%] w-[70%] h-[140%] rounded-full bg-indigo-600/40 mix-blend-screen filter blur-[80px] animate-blob"></div>
-                                <div className="absolute top-[-10%] right-[-10%] w-[60%] h-[120%] rounded-full bg-violet-600/40 mix-blend-screen filter blur-[80px] animate-blob animation-delay-2000"></div>
-                                <div className="absolute bottom-[-30%] left-[20%] w-[80%] h-[120%] rounded-full bg-fuchsia-600/40 mix-blend-screen filter blur-[80px] animate-blob animation-delay-4000"></div>
-                                <div className="absolute inset-0 bg-gradient-to-b from-transparent to-slate-900/50"></div>
-                                {/* Optional subtle noise/grid pattern */}
-                                <div className="absolute inset-0 bg-[url('/img/grid-pattern.svg')] opacity-10 mix-blend-overlay"></div>
-                            </div>
-                            
-                            <div className="relative z-10 flex flex-col h-full justify-center">
-                                <div className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 mb-5 border shadow-sm backdrop-blur-md bg-white/10 border-white/20 self-start">
-                                    <span className={`relative flex h-2.5 w-2.5`}>
-                                        {activeWorkcode && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
-                                        <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${activeWorkcode ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'bg-amber-400'}`}></span>
-                                    </span>
-                                    <span className={`text-[11px] font-bold tracking-widest uppercase ${activeWorkcode ? 'text-emerald-50' : 'text-amber-50'}`}>
-                                        {activeWorkcode ? activeWorkcode.nama_workcode : 'Standby Mode'}
-                                    </span>
-                                </div>
-                                
-                                <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight leading-[1.1] drop-shadow-sm">
-                                    E-Presensi <br className="hidden sm:block" />
-                                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-200 via-white to-purple-200">
-                                        SMA NEGERI 1 BABAT
-                                    </span>
-                                </h1>
-                                <p className="mt-4 text-sm sm:text-base text-indigo-100/90 font-medium max-w-xl leading-relaxed">
-                                    Kelola kehadiran secara real-time dengan teknologi scan QR dan Face Recognition yang terintegrasi.
-                                </p>
-                                
-                                <div className="mt-4 lg:mt-6 flex flex-wrap gap-3">
-                                    <Link
-                                        href={route('scanner')}
-                                        className="inline-flex items-center gap-2.5 rounded-2xl bg-white px-6 py-3 text-sm font-bold text-slate-900 shadow-[0_8px_30px_rgb(0,0,0,0.12)] transition-all hover:bg-indigo-50 hover:shadow-[0_8px_30px_rgba(79,70,229,0.3)] hover:-translate-y-1 active:translate-y-0 group"
-                                    >
-                                        <div className="rounded-full bg-indigo-100 p-1.5 text-indigo-600 transition-transform group-hover:scale-110 group-hover:rotate-3">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                                            </svg>
-                                        </div>
-                                        Buka Scanner
-                                    </Link>
-                                </div>
-                            </div>
+                {/* KPI */}
+                <section className="grid shrink-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                    <KpiCard delay={0} label="Tingkat Kehadiran" value={`${attendancePercentage}%`} icon={icons.chart}>
+                        <span className="font-bold text-emerald-600">{stats.hadir}</span> dari {stats.total} peserta
+                    </KpiCard>
+                    <KpiCard delay={50} label="Sudah Hadir" value={stats.hadir} icon={icons.check}>
+                        <span className="font-bold text-emerald-600">+{todayCount}</span> presensi masuk hari ini
+                    </KpiCard>
+                    <KpiCard delay={100} label="Belum Hadir" value={stats.belum} icon={icons.clock}>
+                        <span className="font-bold text-rose-500">{stats.total > 0 ? 100 - attendancePercentage : 0}%</span> peserta belum presensi
+                    </KpiCard>
+                    <KpiCard delay={150} label="Total Peserta" value={stats.total} icon={icons.users}>
+                        <span className="font-bold text-neutral-800">{activeWorkcodes.length}</span> workcode aktif
+                    </KpiCard>
+                </section>
+
+                {/* Grafik */}
+                <section className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:min-h-0 xl:flex-[1.15] xl:grid-cols-3">
+                    <ChartCard delay={0} title="Presensi 7 Hari" subtitle="Jumlah peserta hadir per hari" footer="7 hari terakhir">
+                        <MaterialChart
+                            className={CHART_FILL}
+                            type="bar"
+                            label="Hadir"
+                            labels={weekDays.map((day) => day.toLocaleDateString('id-ID', { weekday: 'short' }))}
+                            titles={weekDays.map((day) => day.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' }))}
+                            data={weekly.map((item) => item.value)}
+                        />
+                    </ChartCard>
+                    <ChartCard
+                        delay={50}
+                        title="Keterlambatan 7 Hari"
+                        subtitle="Presensi harian yang melewati batas jam datang"
+                        footer={dailyTotal > 0 ? `${lateTotal} dari ${dailyTotal} presensi harian terlambat` : 'belum ada presensi harian'}
+                    >
+                        <MaterialChart
+                            className={CHART_FILL}
+                            type="line"
+                            label="Terlambat"
+                            color="#F44335"
+                            labels={lateness.map((item) => dayLabel(item.date, { weekday: 'short' }))}
+                            titles={lateness.map((item) => `${dayLabel(item.date, { weekday: 'long', day: 'numeric', month: 'long' })} · ${item.total} presensi`)}
+                            data={lateness.map((item) => item.late)}
+                        />
+                    </ChartCard>
+                    <ChartCard delay={100} title="Metode Presensi" subtitle="Sebaran metode hari ini" footer={`${todayCount} presensi hari ini`} className="md:col-span-2 xl:col-span-1">
+                        <MaterialChart
+                            className={CHART_FILL}
+                            type="bar"
+                            label="Presensi"
+                            labels={methods.map((item) => item.label)}
+                            data={methods.map((item) => item.value)}
+                        />
+                    </ChartCard>
+                </section>
+
+                {/* Tabel & linimasa */}
+                <section className="mt-4 grid grid-cols-1 gap-4 xl:min-h-0 xl:flex-1 xl:grid-cols-3">
+                    <div className="card-soft flex flex-col overflow-hidden xl:col-span-2 xl:min-h-0" data-aos="fade-up">
+                        <div className="p-4 pb-2">
+                            <h6 className="text-base font-semibold text-neutral-800">Presensi Terbaru</h6>
+                            <p className="mt-0.5 flex items-center gap-1 text-sm text-neutral-500">
+                                <span className="h-4 w-4 text-sky-600">{icons.check}</span>
+                                <span className="font-bold text-neutral-700">{todayCount}</span> presensi hari ini
+                            </p>
                         </div>
 
-                        {/* Bento Grid - Quick Actions */}
-                        <div className="flex-none lg:flex-1 flex flex-col lg:min-h-0">
-                            <h3 className={`text-sm font-bold text-slate-800 tracking-tight mb-4 flex items-center gap-2 transition-all duration-700 ease-out delay-300 transform ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-indigo-500" viewBox="0 0 20 20" fill="currentColor">
-                                    <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                                </svg>
-                                Akses Cepat
-                            </h3>
-                            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 flex-none lg:flex-1">
-                                
-                                {/* Item 1 */}
-                                <Link
-                                    href={route('participants.index')}
-                                    className={`group relative overflow-hidden rounded-2xl bg-white p-3 sm:p-4 border border-slate-100 shadow-sm transition-all duration-500 hover:shadow-xl hover:shadow-blue-500/10 hover:border-blue-200 hover:-translate-y-1.5 flex flex-col items-center justify-center text-center transform ${mounted ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
-                                    style={{ transitionDelay: '350ms' }}
-                                >
-                                    <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                                    <div className="relative z-10">
-                                        <div className="mx-auto mb-2 h-10 w-10 sm:h-12 sm:w-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shadow-inner group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                                            </svg>
-                                        </div>
-                                        <h3 className="font-extrabold text-slate-800 text-sm mb-1 group-hover:text-blue-700 transition-colors">Data Peserta</h3>
-                                        <p className="text-[11px] text-slate-500 font-medium">Kelola & cetak QR</p>
-                                    </div>
-                                </Link>
-
-                                {/* Item 2 */}
-                                <Link
-                                    href={route('report')}
-                                    className={`group relative overflow-hidden rounded-2xl bg-white p-3 sm:p-4 border border-slate-100 shadow-sm transition-all duration-500 hover:shadow-xl hover:shadow-emerald-500/10 hover:border-emerald-200 hover:-translate-y-1.5 flex flex-col items-center justify-center text-center transform ${mounted ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
-                                    style={{ transitionDelay: '400ms' }}
-                                >
-                                    <div className="absolute inset-0 bg-gradient-to-br from-emerald-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                                    <div className="relative z-10">
-                                        <div className="mx-auto mb-2 h-10 w-10 sm:h-12 sm:w-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shadow-inner group-hover:bg-emerald-600 group-hover:text-white transition-colors duration-300">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                            </svg>
-                                        </div>
-                                        <h3 className="font-extrabold text-slate-800 text-sm mb-1 group-hover:text-emerald-700 transition-colors">Laporan</h3>
-                                        <p className="text-[11px] text-slate-500 font-medium">Rekap absensi</p>
-                                    </div>
-                                </Link>
-
-                                {/* Item 3 */}
-                                <Link
-                                    href={route('admin.master-qr')}
-                                    className={`group relative overflow-hidden rounded-2xl bg-white p-3 sm:p-4 border border-slate-100 shadow-sm transition-all duration-500 hover:shadow-xl hover:shadow-amber-500/10 hover:border-amber-200 hover:-translate-y-1.5 flex flex-col items-center justify-center text-center transform ${mounted ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
-                                    style={{ transitionDelay: '450ms' }}
-                                >
-                                    <div className="absolute inset-0 bg-gradient-to-br from-amber-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                                    <div className="relative z-10">
-                                        <div className="mx-auto mb-2 h-10 w-10 sm:h-12 sm:w-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shadow-inner group-hover:bg-amber-500 group-hover:text-white transition-colors duration-300">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z" />
-                                            </svg>
-                                        </div>
-                                        <h3 className="font-extrabold text-slate-800 text-sm mb-1 group-hover:text-amber-700 transition-colors">Master QR</h3>
-                                        <p className="text-[11px] text-slate-500 font-medium">Self check-in</p>
-                                    </div>
-                                </Link>
-
-                                {/* Item 4 */}
-                                <Link
-                                    href={route('workcodes.index')}
-                                    className={`group relative overflow-hidden rounded-2xl bg-white p-3 sm:p-4 border border-slate-100 shadow-sm transition-all duration-500 hover:shadow-xl hover:shadow-purple-500/10 hover:border-purple-200 hover:-translate-y-1.5 flex flex-col items-center justify-center text-center transform ${mounted ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
-                                    style={{ transitionDelay: '500ms' }}
-                                >
-                                    <div className="absolute inset-0 bg-gradient-to-br from-purple-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                                    <div className="relative z-10">
-                                        <div className="mx-auto mb-2 h-10 w-10 sm:h-12 sm:w-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center shadow-inner group-hover:bg-purple-600 group-hover:text-white transition-colors duration-300">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                            </svg>
-                                        </div>
-                                        <h3 className="font-extrabold text-slate-800 text-sm mb-1 group-hover:text-purple-700 transition-colors">Workcode</h3>
-                                        <p className="text-[11px] text-slate-500 font-medium">Konfigurasi</p>
-                                    </div>
-                                </Link>
-
-                                {/* Item 5 */}
-                                <Link
-                                    href={route('admin.leave.index')}
-                                    className={`group relative overflow-hidden rounded-2xl bg-white p-3 sm:p-4 border border-slate-100 shadow-sm transition-all duration-500 hover:shadow-xl hover:shadow-rose-500/10 hover:border-rose-200 hover:-translate-y-1.5 flex flex-col items-center justify-center text-center transform ${mounted ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
-                                    style={{ transitionDelay: '550ms' }}
-                                >
-                                    <div className="absolute inset-0 bg-gradient-to-br from-rose-50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-                                    {pendingLeaveCount > 0 && (
-                                        <span className="absolute right-3 top-3 z-10 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-rose-500 px-1 text-[10px] font-black text-white shadow-sm">
-                                            {pendingLeaveCount > 99 ? '99+' : pendingLeaveCount}
-                                        </span>
-                                    )}
-                                    <div className="relative z-10">
-                                        <div className="mx-auto mb-2 h-10 w-10 sm:h-12 sm:w-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center shadow-inner group-hover:bg-rose-600 group-hover:text-white transition-colors duration-300">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                            </svg>
-                                        </div>
-                                        <h3 className="font-extrabold text-slate-800 text-sm mb-1 group-hover:text-rose-700 transition-colors">Perizinan</h3>
-                                        <p className="text-[11px] text-slate-500 font-medium">Riwayat & verifikasi</p>
-                                    </div>
-                                </Link>
+                        {recentAttendances.length === 0 ? (
+                            <p className="px-4 pb-10 pt-6 text-center text-sm text-neutral-400">Belum ada presensi hari ini.</p>
+                        ) : (
+                            <div className="min-h-0 flex-1 overflow-x-auto xl:overflow-hidden">
+                                <table className="min-w-full text-left">
+                                    <thead>
+                                        <tr className="border-b border-neutral-200 text-xs font-semibold uppercase text-neutral-500 opacity-70">
+                                            <th className="whitespace-nowrap px-6 py-2.5">Peserta</th>
+                                            <th className="hidden whitespace-nowrap px-6 py-2.5 md:table-cell">Workcode</th>
+                                            <th className="whitespace-nowrap px-6 py-2.5 text-center">Masuk</th>
+                                            <th className="hidden whitespace-nowrap px-6 py-2.5 text-center sm:table-cell">Pulang</th>
+                                            <th className="whitespace-nowrap px-6 py-2.5 text-center">Metode</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {recentAttendances.map((row) => (
+                                            <tr key={row.id} className="border-b border-neutral-100 transition-colors last:border-0 hover:bg-neutral-50">
+                                                <td className="whitespace-nowrap px-6 py-2">
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-gradient text-xs font-semibold text-white">
+                                                            {initials(row.nama)}
+                                                        </span>
+                                                        <div className="min-w-0">
+                                                            <p className="truncate text-sm font-medium text-neutral-800">{row.nama}</p>
+                                                            <p className="truncate text-xs text-neutral-500">{row.nis_nip || 'Tanpa NIS/NIP'}</p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="hidden max-w-[14rem] truncate px-6 py-2 text-xs text-neutral-600 md:table-cell">{row.workcode || '-'}</td>
+                                                <td className="px-6 py-2 text-center text-xs font-bold tabular-nums text-neutral-800">{row.waktu || '-'}</td>
+                                                <td className="hidden px-6 py-2 text-center text-xs tabular-nums text-neutral-500 sm:table-cell">{row.pulang || '-'}</td>
+                                                <td className="px-6 py-2 text-center text-xs font-bold text-neutral-600">{row.metode}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
                             </div>
-                        </div>
+                        )}
                     </div>
 
-                    {/* Right Column (Statistics) */}
-                    <div className="lg:col-span-5 xl:col-span-4">
-                        <div className={`relative h-full rounded-3xl bg-white border border-slate-200/60 shadow-xl shadow-slate-200/50 overflow-hidden flex flex-col transition-all duration-700 ease-out delay-500 transform ${mounted ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-8'}`}>
-                            
-                            {/* Decorative Background for Stats */}
-                            <div className="absolute top-0 right-0 -mr-16 -mt-16 w-48 h-48 rounded-full bg-indigo-50 blur-3xl opacity-60"></div>
-                            <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-48 h-48 rounded-full bg-blue-50 blur-3xl opacity-60"></div>
-
-                            {/* Stats Header */}
-                            <div className="relative z-10 p-5 pb-2">
-                                <h3 className="text-base font-extrabold text-slate-800 tracking-tight flex items-center gap-2.5">
-                                    <span className="p-1.5 rounded-lg bg-indigo-100 text-indigo-600">
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                                            <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
-                                        </svg>
-                                    </span>
-                                    Statistik Presensi
-                                </h3>
-                                <p className="text-xs font-medium text-slate-500 mt-2 pl-9">
-                                    {activeWorkcode ? `Data dari workcode: ${activeWorkcode.nama_workcode}` : 'Ringkasan presensi (Tidak ada workcode aktif)'}
-                                </p>
-                            </div>
-                            
-                            {/* Stats Content */}
-                            <div className="relative z-10 p-5 pt-3 space-y-4 lg:space-y-6 flex-1 flex flex-col">
-                                
-                                {/* Progress Indicator */}
-                                <div className="bg-slate-50/50 rounded-2xl p-4 border border-slate-100 flex-none">
-                                    <div className="flex items-end justify-between mb-3">
-                                        <div className="flex flex-col">
-                                            <span className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Tingkat Kehadiran</span>
-                                            <div className="flex items-baseline gap-1">
-                                                <span className="text-4xl font-black text-indigo-600 tracking-tighter">{attendancePercentage}</span>
-                                                <span className="text-xl font-bold text-indigo-400">%</span>
-                                            </div>
-                                        </div>
-                                        <div className="text-right flex flex-col items-end">
-                                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Total Hadir</span>
-                                            <div className="flex items-baseline gap-1.5">
-                                                <span className="text-xl font-extrabold text-slate-800">{stats.hadir}</span>
-                                                <span className="text-xs font-medium text-slate-500">/ {stats.total}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    
-                                    {/* Premium Progress Bar */}
-                                    <div className="h-3.5 w-full overflow-hidden rounded-full bg-slate-200/70 shadow-inner relative">
-                                        <div
-                                            className="absolute top-0 left-0 h-full rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-indigo-500 bg-[length:200%_auto] transition-all duration-1500 ease-out shadow-[0_0_10px_rgba(99,102,241,0.5)]"
-                                            style={{ width: `${mounted ? attendancePercentage : 0}%`, backgroundPosition: mounted ? 'right center' : 'left center' }}
-                                        >
-                                            <div className="absolute inset-0 bg-white/20 w-full animate-[shimmer_2s_infinite]"></div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Detail Grid */}
-                                <div className="grid grid-cols-2 gap-3 lg:gap-4 flex-none">
-                                    {/* Card Hadir */}
-                                    <div className="relative overflow-hidden rounded-2xl bg-white border border-emerald-100 p-4 shadow-sm group hover:border-emerald-300 hover:shadow-md transition-all duration-300">
-                                        <div className="absolute top-0 right-0 -mr-4 -mt-4 w-16 h-16 rounded-full bg-emerald-50 transition-transform group-hover:scale-150"></div>
-                                        <div className="relative z-10">
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <div className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_5px_rgba(16,185,129,0.5)]"></div>
-                                                <span className="text-xs font-bold text-slate-600">Sudah Hadir</span>
-                                            </div>
-                                            <p className="text-3xl font-black text-slate-800">{stats.hadir}</p>
-                                        </div>
-                                    </div>
-                                    
-                                    {/* Card Belum */}
-                                    <div className="relative overflow-hidden rounded-2xl bg-white border border-rose-100 p-4 shadow-sm group hover:border-rose-300 hover:shadow-md transition-all duration-300">
-                                        <div className="absolute top-0 right-0 -mr-4 -mt-4 w-16 h-16 rounded-full bg-rose-50 transition-transform group-hover:scale-150"></div>
-                                        <div className="relative z-10">
-                                            <div className="flex items-center gap-2 mb-2">
-                                                <div className="h-2 w-2 rounded-full bg-rose-500 shadow-[0_0_5px_rgba(244,63,94,0.5)]"></div>
-                                                <span className="text-xs font-bold text-slate-600">Belum Hadir</span>
-                                            </div>
-                                            <p className="text-3xl font-black text-slate-800">{stats.belum}</p>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                {/* Total Summary */}
-                                <div className="mt-auto rounded-2xl bg-slate-900 text-white p-4 flex items-center justify-between relative overflow-hidden group">
-                                    <div className="absolute inset-0 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 opacity-80"></div>
-                                    {/* Subtle animated pattern */}
-                                    <div className="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMiIgY3k9IjIiIHI9IjIiIGZpbGw9IiNmZmYiLz48L3N2Zz4=')] bg-[length:12px_12px] group-hover:animate-pulse"></div>
-                                    
-                                    <div className="relative z-10 flex items-center gap-4">
-                                        <div className="rounded-xl bg-white/10 backdrop-blur p-2.5 text-white/90">
-                                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                                            </svg>
-                                        </div>
-                                        <div>
-                                            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest block mb-0.5">Total Keseluruhan</span>
-                                            <p className="text-xl font-black text-white">{stats.total} <span className="text-sm font-medium text-slate-400">Peserta</span></p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                    <div className="card-soft flex flex-col xl:min-h-0" data-aos="fade-up" data-aos-delay="100">
+                        <div className="p-4 pb-0">
+                            <h6 className="text-base font-semibold text-neutral-800">Perlu Perhatian</h6>
+                            <p className="mt-0.5 text-sm text-neutral-500">Menunggu tindakan admin</p>
                         </div>
+                        <ol className="relative flex flex-1 flex-col justify-center p-4 pt-3 before:absolute before:bottom-8 before:left-[29px] before:top-8 before:w-px before:bg-neutral-200">
+                            <TimelineItem href={route('admin.leave.index')} icon={icons.document} count={pendingLeaveCount} title="pengajuan izin" hint="menunggu verifikasi" tone="text-rose-500" />
+                            <TimelineItem href={route('admin.devices.index')} icon={icons.phone} count={pendingDeviceCount} title="permintaan pindah HP" hint="menunggu persetujuan" tone="text-sky-600" />
+                            <TimelineItem href={route('admin.fake-gps.index')} icon={icons.gpsOff} count={fakeGpsBlockedToday} title="fake GPS diblokir" hint="hari ini" tone="text-amber-500" />
+                        </ol>
                     </div>
-
-                </div>
+                </section>
             </div>
-            
-            {/* Custom Animations & Styles */}
-            <style jsx="true">{`
-                @keyframes shimmer {
-                    0% { transform: translateX(-100%); }
-                    100% { transform: translateX(100%); }
-                }
-                @keyframes blob {
-                    0% { transform: translate(0px, 0px) scale(1); }
-                    33% { transform: translate(30px, -50px) scale(1.1); }
-                    66% { transform: translate(-20px, 20px) scale(0.9); }
-                    100% { transform: translate(0px, 0px) scale(1); }
-                }
-                .animate-blob {
-                    animation: blob 10s infinite alternate ease-in-out;
-                }
-                .animation-delay-2000 {
-                    animation-delay: 2s;
-                }
-                .animation-delay-4000 {
-                    animation-delay: 4s;
-                }
-            `}</style>
         </AuthenticatedLayout>
     );
+}
+
+// HP: tinggi tetap; desktop: isi sisa tinggi kartu.
+const CHART_FILL = 'h-[170px] xl:h-auto xl:min-h-[90px] xl:flex-1';
+
+function ChartCard({ title, subtitle, footer, delay, className = '', children }) {
+    return (
+        <div className={`card-soft flex flex-col p-4 xl:min-h-0 ${className}`} data-aos="fade-up" data-aos-delay={delay}>
+            <h6 className="text-base font-semibold text-neutral-800">{title}</h6>
+            <p className="text-sm text-neutral-500">{subtitle}</p>
+            <div className="mt-3 flex flex-1 flex-col xl:min-h-0">{children}</div>
+            <hr className="hr-fade my-2.5" />
+            <p className="flex items-center gap-1 text-sm text-neutral-500">
+                <span className="h-4 w-4">{icons.clock}</span>
+                {footer}
+            </p>
+        </div>
+    );
+}
+
+function TimelineItem({ href, icon, count, title, hint, tone }) {
+    return (
+        <li className="relative pb-4 last:pb-0">
+            <Link href={href} className="group -mx-2 flex items-start gap-3 rounded-md p-2 transition-colors hover:bg-neutral-50">
+                <span className={`relative z-10 flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-white ${count > 0 ? tone : 'text-neutral-400'}`}>
+                    <span className="h-[18px] w-[18px]">{icon}</span>
+                </span>
+                <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-neutral-800">
+                        {count} {title}
+                    </span>
+                    <span className="block truncate text-xs font-medium text-neutral-500">{hint}</span>
+                </span>
+                <span className="mt-1 h-4 w-4 shrink-0 text-neutral-300 transition-transform group-hover:translate-x-0.5 group-hover:text-neutral-500">{icons.chevron}</span>
+            </Link>
+        </li>
+    );
+}
+
+function initials(name = '') {
+    return name.split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || '?';
 }
