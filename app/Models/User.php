@@ -68,6 +68,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'device_bound_at' => 'datetime',
+            'app_version_code' => 'integer',
         ];
     }
 

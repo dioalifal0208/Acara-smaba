@@ -89,4 +89,21 @@ return [
         'require_device_id' => (bool) env('DEVICE_LOCK_REQUIRE_ID', false),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Versi Minimum Aplikasi Android
+    |--------------------------------------------------------------------------
+    |
+    | Aplikasi mengirim X-App-Version-Code di setiap request API. Request dari versi di bawah
+    | min_version_code (termasuk APK lama yang tidak mengirim header) ditolak 426 app_update_required,
+    | dan aplikasi menampilkan layar "Perbarui aplikasi" dengan tautan update_url. 0 = tidak dibatasi.
+    | Naikkan setelah APK baru siap dibagikan; versi yang dipakai tiap peserta tampil di halaman Perangkat.
+    |
+    */
+
+    'android_app' => [
+        'min_version_code' => (int) env('ANDROID_MIN_VERSION_CODE', 0),
+        'update_url' => env('ANDROID_UPDATE_URL'),
+    ],
+
 ];

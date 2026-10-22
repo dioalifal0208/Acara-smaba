@@ -47,11 +47,14 @@ class DeviceController extends Controller
                 'participant_nip' => $user->participant?->nis_nip ?? '-',
                 'device_model' => $user->device_model ?: 'Tidak diketahui',
                 'bound_at' => $user->device_bound_at?->format('d M Y H:i'),
+                'app_version_name' => $user->app_version_name,
+                'app_version_code' => $user->app_version_code,
             ]);
 
         return Inertia::render('Devices/Index', [
             'deviceRequests' => $requests,
             'devices' => $devices,
+            'minAppVersionCode' => (int) config('attendance.android_app.min_version_code'),
             'violationsToday' => LocationIntegrityViolation::where('blocked', true)->whereDate('created_at', today())->count(),
         ]);
     }
@@ -129,6 +132,48 @@ class DeviceController extends Controller
     }
 
     /** HP hilang/rusak: lepas kunci tanpa pengajuan; login berikutnya mendaftarkan HP baru. */
+    /**
+     * Reset kunci perangkat SEMUA peserta sekaligus, mis. saat aplikasi berganti kunci tanda tangan
+     * (ANDROID_ID ikut berubah sehingga semua kunci lama tidak cocok lagi). Semua peserta keluar dari
+     * aplikasi, dan HP yang dipakai login berikutnya otomatis terdaftar.
+     */
+    public function resetAll(FcmService $fcm): RedirectResponse
+    {
+        $oldFcmTokens = [];
+        $count = DB::transaction(function () use (&$oldFcmTokens) {
+            $users = User::lockForUpdate()
+                ->where('role', 'participant')
+                ->whereNotNull('device_id_hash')
+                ->get();
+
+            foreach ($users as $user) {
+                $oldFcmTokens[] = $user->fcm_token;
+                DeviceLock::release($user);
+            }
+
+            DeviceChangeRequest::where('status', 'pending')->update([
+                'status' => 'rejected',
+                'reviewed_by' => auth()->id(),
+                'reviewed_at' => now(),
+                'rejection_reason' => 'Kunci perangkat direset admin. Silakan login langsung.',
+            ]);
+
+            return $users->count();
+        });
+
+        if ($count === 0) {
+            return back()->with('error', 'Tidak ada perangkat terdaftar yang perlu direset.');
+        }
+
+        foreach (array_filter($oldFcmTokens) as $token) {
+            $fcm->sendSessionRevoked($token, 'device_reset');
+        }
+
+        Log::warning('Kunci perangkat SEMUA peserta direset admin.', ['count' => $count, 'admin_id' => auth()->id()]);
+
+        return back()->with('success', "Kunci perangkat {$count} peserta direset. Semua peserta perlu login ulang, dan HP yang dipakai otomatis terdaftar.");
+    }
+
     public function reset(User $user, FcmService $fcm): RedirectResponse
     {
         if (! DeviceLock::appliesTo($user)) {

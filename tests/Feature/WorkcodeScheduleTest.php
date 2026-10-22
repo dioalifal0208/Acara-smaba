@@ -126,6 +126,40 @@ class WorkcodeScheduleTest extends TestCase
         $this->assertNull(Workcode::getActive());
     }
 
+    public function test_extending_an_ended_activity_reactivates_it_immediately(): void
+    {
+        $this->travelTo(Carbon::parse('2026-10-22 11:00:00', 'Asia/Jakarta'));
+        $this->mock(FcmService::class)->shouldReceive('sendWorkcodeUpdate')->once();
+        $workcode = Workcode::create([
+            'nama_workcode' => 'Hari Santri Nasional 2026',
+            'kategori' => 'workcode',
+            'tanggal' => '2026-10-22',
+            'jam_aktif_mulai' => '07:00:00',
+            'jam_aktif_selesai' => '10:00:00',
+            'is_active' => false,
+            'radius_meters' => 100,
+        ]);
+        $this->assertFalse($workcode->isEffectivelyActive());
+
+        $this->actingAs(User::factory()->create(['role' => 'admin']))
+            ->from(route('workcodes.index'))
+            ->put(route('workcodes.update', $workcode), [
+                'nama_workcode' => 'Hari Santri Nasional 2026',
+                'kategori' => 'workcode',
+                'tanggal' => '2026-10-22',
+                'jam_aktif_mulai' => '07:00',
+                'jam_aktif_selesai' => '12:00',
+                'radius_meters' => 100,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $workcode->refresh();
+        $this->assertSame('12:00', substr($workcode->jam_aktif_selesai, 0, 5));
+        $this->assertTrue($workcode->is_active);
+        $this->assertTrue($workcode->isEffectivelyActive());
+        $this->assertTrue(Workcode::getActive()->is($workcode));
+    }
+
     public function test_daily_departure_cannot_open_before_late_tolerance_ends(): void
     {
         $admin = User::factory()->create(['role' => 'admin']);

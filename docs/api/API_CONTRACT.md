@@ -76,6 +76,29 @@ Setelah admin **menyetujui**, HP lama langsung keluar (semua tokennya dicabut, r
 
 ---
 
+## Versi Aplikasi dan Versi Minimum (sejak Okt 2026)
+
+Aplikasi Android mengirim di **setiap** request API:
+
+| Header | Contoh | Keterangan |
+|---|---|---|
+| `X-App-Version-Code` | `2` | `versionCode` APK. Tanpa header = dianggap `0` (APK lama). |
+| `X-App-Version-Name` | `1.1.0` | Hanya untuk ditampilkan di halaman admin Perangkat. |
+
+Bila `ANDROID_MIN_VERSION_CODE` di `.env` > 0 dan `X-App-Version-Code` di bawahnya, **semua** endpoint (termasuk login) membalas:
+
+```json
+HTTP 426
+{
+  "status": "error",
+  "code": "app_update_required",
+  "message": "Versi aplikasi Anda sudah usang. Perbarui aplikasi untuk melanjutkan.",
+  "data": { "min_version_code": 2, "update_url": "https://… (ANDROID_UPDATE_URL, boleh null)" }
+}
+```
+
+Aplikasi lalu menahan semua layar di "Perbarui Aplikasi" dengan tombol ke `update_url`. Versi terakhir yang dipakai tiap peserta disimpan (`users.app_version_code/name`) dan tampil di halaman Perangkat.
+
 ## Header Idempotency-Key
 
 Header `Idempotency-Key` **wajib** dikirim pada setiap **request tulis (POST)** berikut:

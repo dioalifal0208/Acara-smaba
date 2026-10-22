@@ -222,6 +222,41 @@ class DeviceLockTest extends TestCase
         $this->assertSame(DeviceLock::hash(self::HP_BARU), $user->fresh()->device_id_hash);
     }
 
+    public function test_admin_can_reset_all_device_locks_at_once(): void
+    {
+        $pertama = $this->participantUser();
+        $kedua = $this->participantUser();
+        $belumLogin = $this->participantUser();
+        $this->login($pertama, self::HP_LAMA)->assertOk();
+        $this->login($kedua, self::HP_BARU)->assertOk();
+        $this->requestChange($kedua, 'aabbccddeeff0011', null, 'Ganti HP')->assertCreated();
+
+        // Peserta biasa tidak boleh memicu reset massal.
+        $this->actingAs($belumLogin)->post(route('admin.devices.reset-all'))->assertRedirect();
+        $this->assertNotNull($pertama->fresh()->device_id_hash);
+
+        $admin = User::factory()->create(['role' => 'admin']);
+        $this->actingAs($admin)
+            ->post(route('admin.devices.reset-all'))
+            ->assertSessionHas('success');
+
+        foreach ([$pertama, $kedua] as $user) {
+            $user->refresh();
+            $this->assertNull($user->device_id_hash);
+            $this->assertNull($user->device_bound_at);
+            $this->assertCount(0, $user->tokens()->get());
+        }
+        $this->assertSame('rejected', DeviceChangeRequest::sole()->status);
+
+        // Login berikutnya (mis. APK dengan kunci tanda tangan baru) langsung mendaftarkan HP.
+        $this->login($pertama, 'ffff000011112222')->assertOk();
+        $this->assertSame(DeviceLock::hash('ffff000011112222'), $pertama->fresh()->device_id_hash);
+
+        // Tidak ada lagi yang terkunci: reset kedua memberi pesan, bukan sukses palsu.
+        User::whereKey($pertama->id)->update(['device_id_hash' => null]);
+        $this->actingAs($admin)->post(route('admin.devices.reset-all'))->assertSessionHas('error');
+    }
+
     public function test_device_admin_pages_are_admin_only(): void
     {
         $user = $this->participantUser();

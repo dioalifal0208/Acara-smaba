@@ -13,7 +13,7 @@ const statusMeta = {
     rejected: { label: 'Ditolak', badge: 'from-rose-400 to-rose-600' },
 };
 
-export default function DevicesIndex({ deviceRequests, devices, violationsToday = 0 }) {
+export default function DevicesIndex({ deviceRequests, devices, violationsToday = 0, minAppVersionCode = 0 }) {
     const { flash } = usePage().props;
     const { toast } = useToast();
     const [statusFilter, setStatusFilter] = useState('pending');
@@ -97,6 +97,19 @@ export default function DevicesIndex({ deviceRequests, devices, violationsToday 
         });
         if (confirmed) {
             submit(route('admin.devices.reset', device.user_id));
+        }
+    };
+
+    const handleResetAll = async () => {
+        const confirmed = await confirm({
+            title: 'Reset Semua Kunci Perangkat',
+            message: `Reset kunci perangkat ${devices.length} peserta sekaligus? Semua peserta akan keluar dari aplikasi dan harus login ulang. HP yang dipakai login berikutnya otomatis terdaftar. Pengajuan pindah perangkat yang menunggu juga ditutup.`,
+            type: 'danger',
+            confirmText: 'Ya, Reset Semua',
+            cancelText: 'Batal',
+        });
+        if (confirmed) {
+            submit(route('admin.devices.reset-all'));
         }
     };
 
@@ -198,8 +211,20 @@ export default function DevicesIndex({ deviceRequests, devices, violationsToday 
                     {/* Perangkat terdaftar */}
                     <div className="card-soft flex flex-col overflow-hidden xl:min-h-0" data-aos="fade-up" data-aos-delay="100">
                         <div className="p-4 pb-3">
-                            <h6 className="text-base font-semibold text-neutral-800">Perangkat Terdaftar</h6>
-                            <p className="mt-0.5 text-sm text-neutral-500">{devices.length} akun terkunci ke perangkat</p>
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <h6 className="text-base font-semibold text-neutral-800">Perangkat Terdaftar</h6>
+                                    <p className="mt-0.5 text-sm text-neutral-500">{devices.length} akun terkunci ke perangkat</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleResetAll}
+                                    disabled={processing || devices.length === 0}
+                                    className="shrink-0 rounded-md border border-rose-500 px-3 py-1.5 text-xs font-medium text-rose-600 transition-colors hover:bg-rose-500 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                    Reset semua
+                                </button>
+                            </div>
                             <div className="relative mt-3">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -227,6 +252,11 @@ export default function DevicesIndex({ deviceRequests, devices, violationsToday 
                                             <p className="truncate text-sm font-semibold text-neutral-800">{device.participant_name}</p>
                                             <p className="mt-0.5 truncate text-xs text-neutral-500">
                                                 {device.device_model}{device.bound_at && ` · sejak ${device.bound_at}`}
+                                                {' · '}
+                                                {/* APK lama tidak mengirim versi, jadi kosong = di bawah versi apa pun yang tercatat. */}
+                                                <span className={minAppVersionCode > 0 && (device.app_version_code ?? 0) < minAppVersionCode ? 'font-medium text-rose-600' : ''}>
+                                                    {device.app_version_code ? `v${device.app_version_name ?? '?'} (${device.app_version_code})` : 'versi lama'}
+                                                </span>
                                             </p>
                                         </div>
                                         <button

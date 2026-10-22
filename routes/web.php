@@ -151,6 +151,7 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::post('/admin/device-change-requests/{deviceChangeRequest}/approve', [DeviceController::class, 'approve'])->name('admin.device-change-requests.approve');
     Route::post('/admin/device-change-requests/{deviceChangeRequest}/reject', [DeviceController::class, 'reject'])->name('admin.device-change-requests.reject');
     Route::post('/admin/users/{user}/device/reset', [DeviceController::class, 'reset'])->name('admin.devices.reset');
+    Route::post('/admin/devices/reset-all', [DeviceController::class, 'resetAll'])->name('admin.devices.reset-all');
 
     // Catatan anti fake GPS dari aplikasi Android (Admin)
     Route::get('/admin/fake-gps', [LocationIntegrityLogController::class, 'index'])->name('admin.fake-gps.index');
