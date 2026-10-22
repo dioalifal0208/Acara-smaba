@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Models\FaceHistory;
 use App\Models\Participant;
 use App\Services\FcmService;
 use App\Support\FaceDescriptor;
@@ -162,6 +163,7 @@ class UpdateFaceDescriptor extends Command
             'face_descriptor' => $descriptor,
             'face_status' => 'approved',
         ]);
+        FaceHistory::record($participant, 'admin', null);
 
         // Aplikasi Android peserta menyegarkan status wajah tanpa harus dibuka ulang.
         app(FcmService::class)->sendStateChanged($participant, 'face');

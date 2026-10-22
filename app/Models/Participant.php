@@ -102,6 +102,12 @@ class Participant extends Model
         });
     }
 
+    /** Wajah yang pernah disetujui admin, terbaru dulu. */
+    public function faceHistories()
+    {
+        return $this->hasMany(FaceHistory::class)->orderByDesc('approved_at')->orderByDesc('id');
+    }
+
     /**
      * Relasi ke attendances.
      */

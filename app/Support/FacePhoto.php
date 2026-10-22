@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\FaceHistory;
 use App\Models\Participant;
 use Illuminate\Support\Facades\Storage;
 
@@ -37,11 +38,11 @@ final class FacePhoto
         return $filename;
     }
 
-    /** Hapus foto lama setelah foto baru tersimpan. */
+    /** Hapus foto lama setelah foto baru tersimpan, kecuali foto itu bagian dari riwayat wajah. */
     public static function deleteReplaced(?string $oldPath, ?string $newPath): void
     {
         if ($oldPath && $newPath && $oldPath !== $newPath) {
-            Storage::disk('private')->delete($oldPath);
+            FaceHistory::deleteFileUnlessReferenced($oldPath);
         }
     }
 }

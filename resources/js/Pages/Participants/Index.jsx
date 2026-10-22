@@ -9,6 +9,7 @@ import ImportModal from '@/Components/ImportModal';
 import FaceRegistrationModal from '@/Components/FaceRegistrationModal';
 import ApproveFaceModal from '@/Components/ApproveFaceModal';
 import ApprovePhotoChangeRequestModal from '@/Components/ApprovePhotoChangeRequestModal';
+import FaceHistoryModal from '@/Components/FaceHistoryModal';
 
 const NON_PERMANENT_STATUSES = ['GTT', 'PTT'];
 
@@ -20,7 +21,7 @@ export default function ParticipantsIndex({ participants }) {
     const confirm = useConfirm();
     const [showModal, setShowModal] = useState(false);
     const [showImportModal, setShowImportModal] = useState(false);
-    const [showQr, setShowQr] = useState(null);
+    const [historyParticipant, setHistoryParticipant] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [sortBy, setSortBy] = useState('latest');
@@ -138,7 +139,7 @@ export default function ParticipantsIndex({ participants }) {
         if (confirmed) {
             router.post(route('participants.qr.regenerate', participant.id), {}, {
                 preserveScroll: true,
-                onSuccess: () => setShowQr(null),
+                preserveState: true,
             });
         }
     };
@@ -417,7 +418,7 @@ export default function ParticipantsIndex({ participants }) {
                                         participant={participant}
                                         onPhoto={() => setApprovePhotoChangeRequestParticipant(participant)}
                                         onFace={() => setApproveFaceParticipant(participant)}
-                                        onQr={() => setShowQr(participant)}
+                                        onHistory={() => setHistoryParticipant(participant)}
                                         onEdit={() => handleEditClick(participant)}
                                         onDelete={() => handleDelete(participant.id, participant.nama)}
                                     />
@@ -497,7 +498,7 @@ export default function ParticipantsIndex({ participants }) {
                                                     participant={participant}
                                                     onPhoto={() => setApprovePhotoChangeRequestParticipant(participant)}
                                                     onFace={() => setApproveFaceParticipant(participant)}
-                                                    onQr={() => setShowQr(participant)}
+                                                    onHistory={() => setHistoryParticipant(participant)}
                                                     onEdit={() => handleEditClick(participant)}
                                                     onDelete={() => handleDelete(participant.id, participant.nama)}
                                                 />
@@ -614,9 +615,13 @@ export default function ParticipantsIndex({ participants }) {
             )}
 
             {/* Edit Participant Modal */}
-            {editParticipant && (
+            {editParticipant && (() => {
+                // Ambil versi terbaru dari daftar (mis. token QR baru setelah Reset QR).
+                const editTarget = participants.find((p) => p.id === editParticipant.id) ?? editParticipant;
+
+                return (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm" onClick={() => { setEditParticipant(null); editForm.reset(); }}>
-                    <div className="w-full max-w-md animate-[fadeIn_0.2s_ease-out] rounded-lg bg-white border border-slate-100 p-6 shadow-soft-lg" onClick={(e) => e.stopPropagation()}>
+                    <div className="max-h-[92vh] w-full max-w-md animate-[fadeIn_0.2s_ease-out] overflow-y-auto rounded-lg bg-white border border-slate-100 p-6 shadow-soft-lg" onClick={(e) => e.stopPropagation()}>
                         <div className="mb-6 flex items-center justify-between border-b border-slate-100 pb-3">
                             <h3 className="text-lg font-bold text-slate-800">Edit Data Peserta</h3>
                             <button onClick={() => { setEditParticipant(null); editForm.reset(); }} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors">
@@ -692,6 +697,31 @@ export default function ParticipantsIndex({ participants }) {
                                     </select>
                                     {editForm.errors.status && <p className="mt-1 text-xs text-red-600 font-bold">{editForm.errors.status}</p>}
                                 </div>
+
+                                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                                    <p className="mb-3 text-sm font-bold text-slate-600">QR Code Presensi</p>
+                                    <div className="flex items-center gap-4">
+                                        <img
+                                            src={`${route('participants.qr', editTarget.id)}?v=${encodeURIComponent(editTarget.qr_token ?? '')}`}
+                                            alt={`QR Code - ${editTarget.nama}`}
+                                            className="h-28 w-28 shrink-0 rounded-md border border-slate-200 bg-white p-1.5"
+                                        />
+                                        <div className="min-w-0 flex-1 space-y-2">
+                                            <p className="text-xs text-slate-500">Dipakai untuk presensi scan QR.</p>
+                                            <div className="flex gap-2">
+                                                <button type="button" onClick={() => handleDownloadSvg(editTarget)} className="flex-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100">
+                                                    Download
+                                                </button>
+                                                <button type="button" onClick={() => handlePrint(editTarget)} className="flex-1 rounded-md bg-brand-gradient px-2 py-1.5 text-xs font-bold text-white shadow-dark-sm">
+                                                    Cetak
+                                                </button>
+                                            </div>
+                                            <button type="button" onClick={() => handleResetQr(editTarget)} className="w-full rounded-md border border-rose-200 bg-white px-2 py-1.5 text-[11px] font-bold text-rose-600 transition-colors hover:bg-rose-50">
+                                                Reset QR (QR lama tidak berlaku)
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
 
                             <div className="mt-6 flex items-center gap-3 border-t border-slate-100 pt-4">
@@ -749,7 +779,8 @@ export default function ParticipantsIndex({ participants }) {
                         </form>
                     </div>
                 </div>
-            )}
+                );
+            })()}
 
             {/* Face Registration Modal */}
             {faceRegistrationParticipant && (
@@ -786,75 +817,8 @@ export default function ParticipantsIndex({ participants }) {
                 />
             )}
 
-            {/* QR Code Modal — Enhanced with Download & Print */}
-            {showQr && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm" onClick={() => setShowQr(null)}>
-                    <div className="w-full max-w-sm animate-[fadeIn_0.2s_ease-out] rounded-lg bg-white border border-slate-100 shadow-soft-lg" onClick={(e) => e.stopPropagation()}>
-                        {/* Header */}
-                        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-                            <h3 className="text-sm font-bold text-slate-800">QR Code Peserta</h3>
-                            <button onClick={() => setShowQr(null)} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                                </svg>
-                            </button>
-                        </div>
-
-                        {/* Content */}
-                        <div className="p-6 text-center">
-                            <div className="mb-4 flex items-center justify-center gap-3">
-                                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-neutral-100 border border-neutral-200 text-sm font-bold text-neutral-800">
-                                    {showQr.nama.charAt(0).toUpperCase()}
-                                </div>
-                                <div className="text-left">
-                                    <h4 className="text-base font-bold text-slate-800 leading-tight">{showQr.nama}</h4>
-                                    <p className="text-xs text-neutral-800 font-bold mt-0.5">{showQr.nis_nip}</p>
-                                </div>
-                            </div>
-
-                            <div className="my-4 flex items-center justify-center rounded-lg bg-slate-50 p-4 shadow-inner border border-slate-200">
-                                <img
-                                    src={route('participants.qr', showQr.id)}
-                                    alt={`QR Code - ${showQr.nama}`}
-                                    className="h-52 w-52 sm:h-56 sm:w-56"
-                                />
-                            </div>
-
-                            <p className="mb-2 text-xs text-slate-500 font-semibold">Scan QR ini untuk presensi otomatis</p>
-                            <p className="break-all rounded-lg bg-slate-100 border border-slate-200 px-3 py-1.5 font-mono text-[9px] text-slate-500">{showQr.qr_token}</p>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex gap-2 border-t border-slate-200 px-6 py-4 bg-slate-50 rounded-b-lg">
-                            <button
-                                onClick={() => handleDownloadSvg(showQr)}
-                                className="flex flex-1 items-center justify-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                </svg>
-                                Download
-                            </button>
-                            <button
-                                onClick={() => handlePrint(showQr)}
-                                className="flex flex-1 items-center justify-center gap-2 rounded-md bg-brand-gradient px-3 py-2.5 text-xs font-bold text-white transition-all hover:bg-brand-gradient shadow-dark-sm"
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                                </svg>
-                                Cetak
-                            </button>
-                        </div>
-                        <div className="px-6 pb-4 bg-slate-50 rounded-b-lg">
-                            <button
-                                onClick={() => handleResetQr(showQr)}
-                                className="w-full rounded-md border border-rose-200 bg-white px-3 py-2 text-[11px] font-bold text-rose-600 transition-colors hover:bg-rose-50"
-                            >
-                                Reset QR (QR lama tidak berlaku)
-                            </button>
-                        </div>
-                    </div>
-                </div>
+            {historyParticipant && (
+                <FaceHistoryModal participant={historyParticipant} onClose={() => setHistoryParticipant(null)} />
             )}
 
             {/* Import Excel Modal */}
@@ -930,7 +894,7 @@ function FaceStatus({ participant }) {
 }
 
 /** Aksi baris: verifikasi (bila ada) sebagai tombol gradien, sisanya tombol ikon tenang dengan tooltip. */
-function RowActions({ participant, compact = false, onPhoto, onFace, onQr, onEdit, onDelete }) {
+function RowActions({ participant, compact = false, onPhoto, onFace, onHistory, onEdit, onDelete }) {
     const review = 'inline-flex items-center gap-1 rounded-md bg-gradient-to-b from-amber-400 to-orange-500 px-2.5 py-1 text-xs font-medium text-white shadow-dark-sm transition-shadow hover:shadow-dark-hover';
     const ghost = 'inline-flex h-8 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900';
 
@@ -942,9 +906,9 @@ function RowActions({ participant, compact = false, onPhoto, onFace, onQr, onEdi
             {participant.face_status === 'pending' && (
                 <button type="button" onClick={onFace} className={review} title="Tinjau pendaftaran wajah">Tinjau wajah</button>
             )}
-            <button type="button" onClick={onQr} className={ghost} title="Lihat QR code">
-                <span className="h-4 w-4">{icons.qr}</span>
-                {!compact && 'QR'}
+            <button type="button" onClick={onHistory} className={ghost} title="Riwayat wajah yang disetujui">
+                <span className="h-4 w-4">{icons.clock}</span>
+                {!compact && 'Riwayat'}
             </button>
             <button type="button" onClick={onEdit} className={ghost} title="Edit peserta">
                 <span className="h-4 w-4">{actionIcons.edit}</span>

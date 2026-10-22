@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\FaceHistory;
 use App\Models\Participant;
 use App\Models\PhotoChangeRequest;
 use App\Services\FcmService;
@@ -34,6 +35,7 @@ class PhotoChangeRequestController extends Controller
                 'reviewed_at' => now(),
                 'rejection_reason' => null,
             ]);
+            FaceHistory::record($participant, 'photo_change', auth()->id());
 
             return $changeRequest->fresh();
         });
@@ -42,8 +44,9 @@ class PhotoChangeRequestController extends Controller
             return back()->with('error', 'Pengajuan foto ini sudah diproses.');
         }
 
+        // Foto lama yang tercatat di riwayat wajah tetap disimpan.
         if ($oldPhotoPath && $oldPhotoPath !== $approvedRequest->photo_path) {
-            Storage::disk('private')->delete($oldPhotoPath);
+            FaceHistory::deleteFileUnlessReferenced($oldPhotoPath);
         }
 
         $this->notifyParticipant($approvedRequest, $faceChanged);

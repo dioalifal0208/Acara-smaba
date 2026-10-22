@@ -1,1 +1,0 @@
-import{j as o}from"./app-BRtvYaTT.js";function n({className:r="",...e}){return o.jsx("input",{...e,type:"checkbox",className:"rounded border-neutral-300 text-brand-600 shadow-sm focus:ring-brand-500 "+r})}export{n as C};

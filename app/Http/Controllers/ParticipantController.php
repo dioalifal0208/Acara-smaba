@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\FaceHistory;
 use App\Models\Participant;
 use App\Models\User;
 use App\Services\QrCodeService;
 use App\Support\PrivateFile;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
@@ -257,6 +259,17 @@ class ParticipantController extends Controller
 
         return redirect()->route('participants.index')
             ->with('success', 'Data peserta berhasil diperbarui!');
+    }
+
+    /** Riwayat wajah yang disetujui admin (modal Riwayat Wajah di Data Peserta). */
+    public function faceHistory(Participant $participant): JsonResponse
+    {
+        $history = $participant->faceHistories()->with('approver:id,name')->get();
+
+        return response()->json([
+            'participant' => ['id' => $participant->id, 'nama' => $participant->nama, 'nis_nip' => $participant->nis_nip],
+            'items' => $history->map(fn (FaceHistory $item) => $item->toAdminArray($participant->photo_path))->values(),
+        ]);
     }
 
     /**

@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\FaceHistory;
 use App\Models\Participant;
 use App\Services\FcmService;
 use App\Support\FaceDescriptor;
 use App\Support\FaceMatcher;
 use App\Support\FacePhoto;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 class FaceRecognitionController extends Controller
@@ -48,6 +48,7 @@ class FaceRecognitionController extends Controller
 
         // Simpan 128-dimensional array dan photo
         $participant->update($updateData);
+        FaceHistory::record($participant, 'admin', auth()->id());
         FacePhoto::deleteReplaced($oldPhotoPath, $photoPath);
         app(FcmService::class)->sendStateChanged($participant, 'face');
 
@@ -105,6 +106,7 @@ class FaceRecognitionController extends Controller
         }
 
         $participant->update(['face_status' => 'approved']);
+        FaceHistory::record($participant, 'registration', auth()->id());
         app(FcmService::class)->sendStateChanged($participant, 'face');
 
         return redirect()->back()->with('success', 'Wajah peserta '.$participant->nama.' berhasil disetujui.');
@@ -115,10 +117,8 @@ class FaceRecognitionController extends Controller
      */
     public function rejectFace(Participant $participant)
     {
-        // Hapus foto jika ditolak
-        if ($participant->photo_path) {
-            Storage::disk('private')->delete($participant->photo_path);
-        }
+        // Hapus foto jika ditolak (foto yang tercatat di riwayat wajah tetap disimpan)
+        FaceHistory::deleteFileUnlessReferenced($participant->photo_path);
 
         $participant->update([
             'face_status' => 'rejected',
@@ -135,9 +135,8 @@ class FaceRecognitionController extends Controller
      */
     public function deleteFace(Participant $participant)
     {
-        if ($participant->photo_path) {
-            Storage::disk('private')->delete($participant->photo_path);
-        }
+        // Foto yang tercatat di riwayat wajah tetap disimpan.
+        FaceHistory::deleteFileUnlessReferenced($participant->photo_path);
 
         $participant->update([
             'face_descriptor' => null,
