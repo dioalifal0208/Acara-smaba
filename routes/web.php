@@ -16,7 +16,6 @@ use App\Http\Controllers\SyncController;
 use App\Http\Controllers\VerificationController;
 use App\Http\Controllers\WorkcodeController;
 use App\Models\Attendance;
-use App\Models\DeviceChangeRequest;
 use App\Models\LeaveRequest;
 use App\Models\LocationIntegrityViolation;
 use App\Models\Participant;
@@ -88,7 +87,6 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
             'activeWorkcode' => $activeWorkcode,
             'activeWorkcodes' => $activeWorkcodes,
             'pendingLeaveCount' => $pendingLeaveCount,
-            'pendingDeviceCount' => DeviceChangeRequest::where('status', 'pending')->count(),
             'fakeGpsBlockedToday' => LocationIntegrityViolation::where('blocked', true)->whereDate('created_at', today())->count(),
             'stats' => [
                 'total' => $totalParticipants,
@@ -148,8 +146,6 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
 
     // Kunci perangkat Android: pengajuan pindah HP & reset (Admin)
     Route::get('/admin/devices', [DeviceController::class, 'index'])->name('admin.devices.index');
-    Route::post('/admin/device-change-requests/{deviceChangeRequest}/approve', [DeviceController::class, 'approve'])->name('admin.device-change-requests.approve');
-    Route::post('/admin/device-change-requests/{deviceChangeRequest}/reject', [DeviceController::class, 'reject'])->name('admin.device-change-requests.reject');
     Route::post('/admin/users/{user}/device/reset', [DeviceController::class, 'reset'])->name('admin.devices.reset');
     Route::post('/admin/devices/reset-all', [DeviceController::class, 'resetAll'])->name('admin.devices.reset-all');
 

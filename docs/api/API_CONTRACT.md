@@ -12,7 +12,7 @@ Token dari `POST /api/v1/auth/login` **kedaluwarsa setelah 30 hari**. Setiap res
 
 ## Login dan Kunci Perangkat (sejak Okt 2026)
 
-Akun **peserta** terkunci ke HP Android pertama yang dipakai login. Login dari HP lain ditolak sampai admin menyetujui pengajuan pindah perangkat (panel web → **Perangkat**). Akun admin tidak dikunci. Presensi lewat browser web tidak terkena kunci ini.
+Akun **peserta** terkunci ke HP Android pertama yang dipakai login. Login dari HP lain ditolak sampai admin mereset kunci perangkatnya (panel web → **Perangkat** → **Reset kunci**). Tidak ada pengajuan pindah perangkat dari aplikasi (fitur itu dihapus Okt 2026). Akun admin tidak dikunci. Presensi lewat browser web tidak terkena kunci ini.
 
 **ID perangkat** = `Settings.Secure.ANDROID_ID` (tetap sama saat aplikasi diinstal ulang, berubah setelah reset pabrik). **Jangan memakai IMEI**: sejak Android 10 aplikasi biasa tidak bisa membacanya. Server hanya menyimpan HMAC-nya.
 
@@ -34,45 +34,24 @@ Akun **peserta** terkunci ke HP Android pertama yang dipakai login. Login dari H
 |---|---|---|
 | 200 | — | `data.token` seperti biasa |
 | 401 | — | Username/password salah (pesan generik, tanpa info perangkat) |
-| 403 | `device_not_registered` | Akun terkunci ke HP lain (`data.registered_device_model`). Tampilkan formulir pengajuan pindah perangkat. Bila `data.device_change_request.status = "rejected"`, tampilkan `rejection_reason`. |
-| 403 | `device_change_pending` | Pengajuan untuk HP ini sedang menunggu admin. Tampilkan status menunggu; coba login lagi nanti. |
-| 403 | `device_in_use` | HP ini sudah terkunci untuk akun peserta lain (satu HP satu akun; pemiliknya akun yang paling dulu terikat). Tidak ada pengajuan pindah perangkat; tampilkan `message`. Juga dikembalikan oleh `POST auth/device-change-requests`. |
+| 403 | `device_not_registered` | Akun terkunci ke HP lain (`data.registered_device_model`). Tampilkan `message` (berisi arahan meminta admin mereset kunci perangkat). |
+| 403 | `device_in_use` | HP ini sudah terkunci untuk akun peserta lain (satu HP satu akun; pemiliknya akun yang paling dulu terikat). Tampilkan `message`. |
 | 426 | `app_update_required` | Aplikasi tidak mengirim `device_id` dan server sudah mewajibkannya (`DEVICE_LOCK_REQUIRE_ID=true`). |
 
 Contoh 403:
 ```json
 {
   "status": "error",
-  "code": "device_change_pending",
-  "message": "Pengajuan pindah perangkat Anda sedang menunggu persetujuan admin.",
-  "data": {
-    "registered_device_model": "Samsung Galaxy A12",
-    "device_change_request": {
-      "id": 7, "status": "pending", "device_model": "Xiaomi Redmi 13", "reason": "HP lama rusak",
-      "rejection_reason": null, "created_at": "2026-10-16T08:00:00+07:00", "reviewed_at": null
-    }
-  }
+  "code": "device_not_registered",
+  "message": "Akun Anda sudah terdaftar di HP lain (Samsung Galaxy A12). Minta admin mereset kunci perangkat agar bisa login di HP ini.",
+  "data": { "registered_device_model": "Samsung Galaxy A12" }
 }
 ```
 
 **Masa transisi:** selama `DEVICE_LOCK_REQUIRE_ID=false` (bawaan), aplikasi versi lama yang tidak mengirim `device_id` tetap bisa login tanpa dikunci. Setelah semua peserta memakai versi baru, admin server mengubahnya ke `true`.
 
-### Pengajuan Pindah Perangkat
-**URL**: `POST /api/v1/auth/device-change-requests` (tanpa token, diverifikasi dengan password; batas sama dengan login)
-```json
-{
-  "login": "username atau email",
-  "password": "rahasia",
-  "device_id": "ffee112233445566",
-  "device_model": "Xiaomi Redmi 13",
-  "reason": "HP lama rusak"
-}
-```
-- `reason` wajib, 5–500 karakter. Tidak ada batas jumlah pengajuan; pengajuan baru **menggantikan** yang masih menunggu.
-- **201** pengajuan baru dibuat / **200** pengajuan menunggu diperbarui → `data.device_change_request`.
-- **401** kredensial salah. **409** `device_already_allowed`: HP ini sudah bisa dipakai, langsung login. **422** `device_lock_not_applicable`: akun admin.
-
-Setelah admin **menyetujui**, HP lama langsung keluar (semua tokennya dicabut, respons berikutnya 401) dan login di HP baru berhasil. Admin juga bisa **reset kunci** (HP hilang): akun keluar dari semua perangkat dan HP berikutnya yang login otomatis terdaftar. HP lama menerima push FCM `{"type":"session_revoked","reason":"device_changed|device_reset","v":"1"}` (token FCM diambil sebelum kunci dipindah) sehingga aplikasi langsung keluar dengan pesan yang jelas. HP baru belum punya token FCM, jadi selama pengajuan menunggu aplikasi mencoba login ulang otomatis tiap 30 detik (kredensial hanya di memori selama layar login terbuka). Halaman admin **Perangkat** memuat ulang datanya tiap ±15 detik.
+### Ganti HP (Reset Kunci)
+Admin menekan **Reset kunci** (satu peserta) atau **Reset semua** di halaman **Perangkat**: akun keluar dari semua perangkat (token dicabut, respons berikutnya 401) dan HP berikutnya yang login otomatis terdaftar. HP lama menerima push FCM `{"type":"session_revoked","reason":"device_reset","v":"1"}` sehingga aplikasi langsung keluar dengan pesan yang jelas. `POST /api/v1/auth/device-change-requests` sudah dihapus (404).
 
 ---
 

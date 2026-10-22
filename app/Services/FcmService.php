@@ -194,7 +194,7 @@ class FcmService
     }
 
     /** Alasan sesi HP dicabut: pindah perangkat disetujui admin, atau kunci perangkat direset admin. */
-    public const SESSION_REVOKED_REASONS = ['device_changed', 'device_reset'];
+    public const SESSION_REVOKED_REASONS = ['device_reset'];
 
     /**
      * Beri tahu HP lama bahwa sesinya dicabut, agar aplikasi langsung keluar (tanpa menunggu request

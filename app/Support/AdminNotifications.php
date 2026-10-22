@@ -2,7 +2,6 @@
 
 namespace App\Support;
 
-use App\Models\DeviceChangeRequest;
 use App\Models\LeaveRequest;
 use App\Models\Participant;
 use App\Models\PhotoChangeRequest;
@@ -29,11 +28,6 @@ final class AdminNotifications
             self::faceRegistrationSource(),
             self::leaveSource(),
         ];
-
-        // Kunci perangkat dikembangkan terpisah; lewati bila modelnya belum ada di build ini.
-        if (class_exists(DeviceChangeRequest::class)) {
-            $sources[] = self::deviceChangeSource();
-        }
 
         $groups = collect($sources)->map(fn (array $source) => [
             'type' => $source['type'],
@@ -115,27 +109,6 @@ final class AdminNotifications
                     ($leave->participant?->nama ?? 'Peserta').' mengajukan izin '.self::leaveDate($leave).'.',
                     $leave->created_at,
                     route('admin.leave.index'),
-                )),
-        );
-    }
-
-    private static function deviceChangeSource(): array
-    {
-        $query = DeviceChangeRequest::where('status', 'pending');
-
-        return self::source(
-            'device_change',
-            'Pengajuan pindah perangkat',
-            (clone $query)->count(),
-            route('admin.devices.index'),
-            (clone $query)->with('user.participant:id,nama')->latest()->orderByDesc('id')->limit(self::RECENT_LIMIT)->get()
-                ->map(fn (DeviceChangeRequest $request) => self::item(
-                    "device_change:{$request->id}",
-                    'device_change',
-                    'Pengajuan pindah perangkat',
-                    ($request->user?->participant?->nama ?? $request->user?->name ?? 'Peserta').' ingin memakai HP baru.',
-                    $request->created_at,
-                    route('admin.devices.index'),
                 )),
         );
     }

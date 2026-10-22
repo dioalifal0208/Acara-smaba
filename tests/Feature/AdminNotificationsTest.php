@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Models\DeviceChangeRequest;
 use App\Models\LeaveRequest;
 use App\Models\Participant;
 use App\Models\PhotoChangeRequest;
@@ -29,39 +28,29 @@ class AdminNotificationsTest extends TestCase
             'status' => 'pending',
         ]);
         $this->leave($budi);
-        $deviceUser = User::factory()->create(['role' => 'participant', 'participant_id' => $sari->id]);
-        DeviceChangeRequest::create([
-            'user_id' => $deviceUser->id,
-            'device_id_hash' => hash('sha256', 'device-baru'),
-            'device_model' => 'Xiaomi',
-            'reason' => 'Ganti HP',
-            'status' => 'pending',
-        ]);
         // Yang sudah diproses tidak muncul.
         PhotoChangeRequest::create(['participant_id' => $sari->id, 'photo_path' => 'x.jpg', 'status' => 'rejected']);
 
         $response = $this->actingAs($this->admin())->getJson(route('admin.notifications'))->assertOk();
 
-        $response->assertJsonPath('total', 4)
+        $response->assertJsonPath('total', 3)
             ->assertJsonPath('groups', [
                 ['type' => 'photo_change', 'label' => 'Pengajuan ganti foto', 'count' => 1, 'url' => route('participants.index', ['review' => 'pending'])],
                 ['type' => 'face_registration', 'label' => 'Pendaftaran wajah', 'count' => 1, 'url' => route('participants.index', ['review' => 'pending'])],
                 ['type' => 'leave', 'label' => 'Pengajuan izin', 'count' => 1, 'url' => route('admin.leave.index')],
-                ['type' => 'device_change', 'label' => 'Pengajuan pindah perangkat', 'count' => 1, 'url' => route('admin.devices.index')],
             ]);
 
         $items = collect($response->json('items'))->keyBy('id');
-        $this->assertCount(4, $items);
+        $this->assertCount(3, $items);
         $this->assertSame('Budi mengajukan foto wajah baru.', $items["photo_change:{$photo->id}"]['body']);
         $this->assertSame(
             route('participants.index', ['review' => 'photo', 'participant' => $budi->id]),
             $items["photo_change:{$photo->id}"]['url'],
         );
         $this->assertSame(route('participants.index', ['review' => 'face', 'participant' => $sari->id]), $items["face_registration:{$sari->id}"]['url']);
-        $this->assertStringContainsString('Sari ingin memakai HP baru', $response->getContent());
 
         // Notifikasi tidak membawa data wajah, path file, atau hash perangkat.
-        foreach (['face_descriptor', 'photo_path', 'device_id_hash', 'budi.jpg', hash('sha256', 'device-baru')] as $secret) {
+        foreach (['face_descriptor', 'photo_path', 'budi.jpg'] as $secret) {
             $this->assertStringNotContainsString($secret, $response->getContent());
         }
     }

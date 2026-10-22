@@ -39,81 +39,28 @@ const icons = {
 };
 
 const themeConfig = {
-    success: {
-        gradient: 'from-emerald-500 to-teal-600',
-        iconBg: 'bg-emerald-500',
-        iconRing: 'ring-emerald-400/30',
-        progressBar: 'bg-emerald-400',
-        glow: 'shadow-emerald-500/20',
-        title: 'Berhasil',
-    },
-    error: {
-        gradient: 'from-rose-500 to-red-600',
-        iconBg: 'bg-rose-500',
-        iconRing: 'ring-rose-400/30',
-        progressBar: 'bg-rose-400',
-        glow: 'shadow-rose-500/20',
-        title: 'Gagal',
-    },
-    already: {
-        gradient: 'from-amber-500 to-orange-500',
-        iconBg: 'bg-amber-500',
-        iconRing: 'ring-amber-400/30',
-        progressBar: 'bg-amber-400',
-        glow: 'shadow-amber-500/20',
-        title: 'Sudah Absen',
-    },
-    warning: {
-        gradient: 'from-amber-500 to-orange-500',
-        iconBg: 'bg-amber-500',
-        iconRing: 'ring-amber-400/30',
-        progressBar: 'bg-amber-400',
-        glow: 'shadow-amber-500/20',
-        title: 'Peringatan',
-    },
-    info: {
-        gradient: 'from-brand-500 to-brand-600',
-        iconBg: 'bg-blue-500',
-        iconRing: 'ring-blue-400/30',
-        progressBar: 'bg-blue-400',
-        glow: 'shadow-blue-500/20',
-        title: 'Informasi',
-    },
+    success: { icon: 'bg-emerald-500 shadow-emerald-500/30', title: 'text-emerald-600', progress: 'bg-emerald-500', label: 'Berhasil' },
+    error: { icon: 'bg-rose-500 shadow-rose-500/30', title: 'text-rose-600', progress: 'bg-rose-500', label: 'Gagal' },
+    already: { icon: 'bg-amber-500 shadow-amber-500/30', title: 'text-amber-600', progress: 'bg-amber-500', label: 'Sudah Absen' },
+    warning: { icon: 'bg-amber-500 shadow-amber-500/30', title: 'text-amber-600', progress: 'bg-amber-500', label: 'Peringatan' },
+    info: { icon: 'bg-sky-500 shadow-sky-500/30', title: 'text-sky-600', progress: 'bg-sky-500', label: 'Informasi' },
 };
 
+const EXIT_MS = 350;
+
 // ─── Single Toast Item ───
+// Kapsul persegi panjang di atas tengah: turun dari atas saat muncul, naik kembali saat hilang.
 function ToastItem({ toast, onRemove }) {
     const [phase, setPhase] = useState('enter'); // enter | visible | exit
-    const [progress, setProgress] = useState(100);
     const duration = toast.duration || 4000;
-    const timerRef = useRef(null);
-    const startTimeRef = useRef(null);
 
     const theme = themeConfig[toast.status] || themeConfig.info;
     const icon = icons[toast.status] || icons.info;
 
-    // Progress bar animation
     useEffect(() => {
-        startTimeRef.current = Date.now();
-        const animate = () => {
-            const elapsed = Date.now() - startTimeRef.current;
-            const remaining = Math.max(0, 100 - (elapsed / duration) * 100);
-            setProgress(remaining);
-            if (remaining > 0) {
-                timerRef.current = requestAnimationFrame(animate);
-            }
-        };
-        timerRef.current = requestAnimationFrame(animate);
-        return () => cancelAnimationFrame(timerRef.current);
-    }, [duration]);
-
-    // Auto-dismiss lifecycle
-    useEffect(() => {
-        // Enter → visible
-        const visibleTimer = setTimeout(() => setPhase('visible'), 50);
-        // visible → exit
-        const exitTimer = setTimeout(() => setPhase('exit'), duration - 400);
-        // Remove from DOM
+        // Satu frame di posisi awal (di atas, transparan) agar transisi turunnya berjalan.
+        const visibleTimer = setTimeout(() => setPhase('visible'), 20);
+        const exitTimer = setTimeout(() => setPhase('exit'), duration - EXIT_MS);
         const removeTimer = setTimeout(() => onRemove(toast.id), duration);
         return () => {
             clearTimeout(visibleTimer);
@@ -124,83 +71,65 @@ function ToastItem({ toast, onRemove }) {
 
     const handleClose = () => {
         setPhase('exit');
-        setTimeout(() => onRemove(toast.id), 400);
+        setTimeout(() => onRemove(toast.id), EXIT_MS);
     };
 
-    const animationClass =
-        phase === 'enter'
-            ? 'translate-x-[120%] opacity-0 scale-95'
-            : phase === 'exit'
-            ? 'translate-x-[120%] opacity-0 scale-95'
-            : 'translate-x-0 opacity-100 scale-100';
+    const motion = phase === 'visible'
+        ? 'translate-y-0 opacity-100 scale-100'
+        : '-translate-y-[130%] opacity-0 scale-95';
 
     return (
         <div
-            className={`group relative flex w-full max-w-[400px] overflow-hidden rounded-2xl bg-white/95 backdrop-blur-xl border border-white/40 shadow-2xl ${theme.glow} transition-all duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] ${animationClass}`}
-            role="alert"
+            className={`group relative flex w-full items-center gap-3 overflow-hidden rounded-2xl border border-neutral-200/80 bg-white/95 py-3 pl-3 pr-2 shadow-[0_12px_32px_-8px_rgba(15,23,42,0.25)] backdrop-blur-md transition-all duration-[350ms] ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${motion}`}
+            role={toast.status === 'error' ? 'alert' : 'status'}
         >
-            {/* Left accent gradient bar */}
-            <div className={`w-1.5 shrink-0 bg-gradient-to-b ${theme.gradient}`} />
+            <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white shadow-md ${theme.icon}`}>
+                {icon}
+            </div>
 
-            {/* Content */}
-            <div className="flex flex-1 items-start gap-3 p-3.5 min-w-0">
-                {/* Icon */}
-                <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${theme.iconBg} text-white ring-4 ${theme.iconRing} shadow-lg`}>
-                    {icon}
-                </div>
-
-                {/* Text */}
-                <div className="flex-1 min-w-0 pt-0.5">
-                    <div className="flex items-center justify-between gap-2">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                            {theme.title}
-                        </span>
-                        {toast.timestamp && (
-                            <span className="text-[9px] font-semibold text-slate-400 tabular-nums shrink-0">
-                                {toast.timestamp}
-                            </span>
-                        )}
-                    </div>
-                    <p className="mt-0.5 text-sm font-semibold text-slate-800 leading-snug line-clamp-2">
-                        {toast.message}
-                    </p>
-                    {toast.participantName && (
-                        <p className="mt-0.5 text-xs font-bold text-indigo-600 truncate">
-                            {toast.participantName}
-                        </p>
+            <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                    <span className={`text-xs font-bold ${theme.title}`}>{theme.label}</span>
+                    {toast.timestamp && (
+                        <span className="text-[11px] tabular-nums text-neutral-400">{toast.timestamp}</span>
                     )}
                 </div>
-
-                {/* Close button */}
-                <button
-                    onClick={handleClose}
-                    className="shrink-0 rounded-lg p-1 text-slate-400 opacity-0 transition-all group-hover:opacity-100 hover:bg-slate-100 hover:text-slate-600"
-                >
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
-                </button>
+                <p className="mt-0.5 text-sm font-medium leading-snug text-neutral-800 line-clamp-2">{toast.message}</p>
+                {toast.participantName && (
+                    <p className="mt-0.5 truncate text-xs font-semibold text-neutral-500">{toast.participantName}</p>
+                )}
             </div>
 
-            {/* Progress bar */}
-            <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-slate-100/50">
-                <div
-                    className={`h-full ${theme.progressBar} transition-none rounded-full`}
-                    style={{ width: `${progress}%` }}
-                />
-            </div>
+            <button
+                type="button"
+                onClick={handleClose}
+                className="shrink-0 self-start rounded-full p-1.5 text-neutral-400 transition-colors hover:bg-neutral-100 hover:text-neutral-600"
+                aria-label="Tutup notifikasi"
+            >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+
+            {/* Sisa waktu tampil: garis tipis yang menyusut di tepi bawah. */}
+            <div
+                className={`absolute bottom-0 left-0 h-[3px] origin-left ${theme.progress} opacity-70`}
+                style={{ width: '100%', animation: `toast-progress ${duration}ms linear forwards` }}
+            />
         </div>
     );
 }
 
 // ─── Toast Stack ───
+// Atas tengah layar; notifikasi terbaru paling atas dan mendorong yang lama ke bawah.
 function ToastStack({ toasts, onRemove }) {
     if (toasts.length === 0) return null;
 
     return (
-        <div className="fixed top-4 right-4 z-[9999] flex flex-col gap-2.5 w-full max-w-[420px] px-4 sm:px-0 pointer-events-none">
-            {toasts.map((toast) => (
-                <div key={toast.id} className="pointer-events-auto">
+        <div className="pointer-events-none fixed inset-x-0 top-4 z-[9999] flex flex-col items-center gap-2.5 px-4">
+            <style>{'@keyframes toast-progress { from { transform: scaleX(1); } to { transform: scaleX(0); } }'}</style>
+            {[...toasts].reverse().map((toast) => (
+                <div key={toast.id} className="pointer-events-auto w-full max-w-md">
                     <ToastItem toast={toast} onRemove={onRemove} />
                 </div>
             ))}

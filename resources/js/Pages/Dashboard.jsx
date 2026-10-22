@@ -11,7 +11,6 @@ export default function Dashboard({
     activeWorkcode: propActiveWorkcode,
     activeWorkcodes = [],
     pendingLeaveCount = 0,
-    pendingDeviceCount = 0,
     fakeGpsBlockedToday = 0,
     weekly = [],
     lateness = [],
@@ -30,7 +29,7 @@ export default function Dashboard({
     // Presensi dari aplikasi Android/scanner masuk terus: segarkan data di latar belakang.
     useEffect(() => {
         const reload = () => backgroundReload({
-            only: ['stats', 'activeWorkcode', 'activeWorkcodes', 'pendingLeaveCount', 'pendingDeviceCount', 'fakeGpsBlockedToday', 'weekly', 'lateness', 'methods', 'recentAttendances'],
+            only: ['stats', 'activeWorkcode', 'activeWorkcodes', 'pendingLeaveCount', 'fakeGpsBlockedToday', 'weekly', 'lateness', 'methods', 'recentAttendances'],
             preserveScroll: true,
             preserveState: true,
         });
@@ -171,7 +170,6 @@ export default function Dashboard({
                         </div>
                         <ol className="relative flex flex-1 flex-col justify-center p-4 pt-3 before:absolute before:bottom-8 before:left-[29px] before:top-8 before:w-px before:bg-neutral-200">
                             <TimelineItem href={route('admin.leave.index')} icon={icons.document} count={pendingLeaveCount} title="pengajuan izin" hint="menunggu verifikasi" tone="text-rose-500" />
-                            <TimelineItem href={route('admin.devices.index')} icon={icons.phone} count={pendingDeviceCount} title="permintaan pindah HP" hint="menunggu persetujuan" tone="text-sky-600" />
                             <TimelineItem href={route('admin.fake-gps.index')} icon={icons.gpsOff} count={fakeGpsBlockedToday} title="fake GPS diblokir" hint="hari ini" tone="text-amber-500" />
                         </ol>
                     </div>

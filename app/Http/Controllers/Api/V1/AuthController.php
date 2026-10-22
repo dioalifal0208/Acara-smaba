@@ -93,7 +93,7 @@ class AuthController extends Controller
 
     /**
      * Login pertama mengunci akun ke HP tersebut; login dari HP lain ditolak sampai admin
-     * menyetujui pengajuan pindah perangkat. Mengembalikan respons penolakan, atau null bila boleh lanjut.
+     * mereset kunci perangkatnya. Mengembalikan respons penolakan, atau null bila boleh lanjut.
      */
     private function enforceDeviceLock(Request $request, User $user): ?JsonResponse
     {
@@ -137,26 +137,16 @@ class AuthController extends Controller
             return null;
         }
 
-        $user->refresh();
-        $changeRequest = $user->deviceChangeRequests()
-            ->where('device_id_hash', $deviceHash)
-            ->latest('id')
-            ->first();
-
-        $pending = $changeRequest?->status === 'pending';
-        $message = match (true) {
-            $pending => 'Pengajuan pindah perangkat Anda sedang menunggu persetujuan admin.',
-            $changeRequest?->status === 'rejected' => 'Pengajuan pindah perangkat sebelumnya ditolak admin. Anda dapat mengajukan kembali.',
-            default => 'Akun Anda terdaftar di perangkat lain. Ajukan pindah perangkat untuk login di HP ini.',
-        };
+        // Ganti HP hanya lewat admin (Reset kunci di halaman Perangkat), tidak ada pengajuan dari aplikasi.
+        $registeredModel = $user->refresh()->device_model;
 
         return response()->json([
             'status' => 'error',
-            'code' => $pending ? 'device_change_pending' : 'device_not_registered',
-            'message' => $message,
+            'code' => 'device_not_registered',
+            'message' => 'Akun Anda sudah terdaftar di HP lain'.($registeredModel ? " ({$registeredModel})" : '')
+                .'. Minta admin mereset kunci perangkat agar bisa login di HP ini.',
             'data' => [
-                'registered_device_model' => $user->device_model,
-                'device_change_request' => $changeRequest?->toApiArray(),
+                'registered_device_model' => $registeredModel,
             ],
         ], 403);
     }

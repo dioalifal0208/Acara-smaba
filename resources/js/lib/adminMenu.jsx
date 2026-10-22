@@ -36,7 +36,7 @@ export const adminMenu = [
     { route: 'report', match: 'report*', label: 'Laporan', desc: 'Rekap & ekspor', icon: icons.chart },
     { route: 'admin.master-qr', match: 'admin.master-qr', label: 'Master QR', desc: 'Self check-in', icon: icons.qr },
     { route: 'admin.leave.index', match: 'admin.leave.*', label: 'Perizinan', desc: 'Riwayat & verifikasi', icon: icons.document, badge: 'pendingLeaveCount' },
-    { route: 'admin.devices.index', match: 'admin.devices.*', label: 'Perangkat', desc: 'Pindah HP peserta', icon: icons.phone, badge: 'pendingDeviceCount' },
+    { route: 'admin.devices.index', match: 'admin.devices.*', label: 'Perangkat', desc: 'HP terdaftar peserta', icon: icons.phone },
     { route: 'admin.fake-gps.index', match: 'admin.fake-gps.*', label: 'Fake GPS', desc: 'Catatan lokasi palsu', icon: icons.gpsOff, badge: 'fakeGpsBlockedToday' },
 ];
 

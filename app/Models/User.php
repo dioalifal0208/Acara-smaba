@@ -88,8 +88,4 @@ class User extends Authenticatable
         return $this->belongsTo(Participant::class);
     }
 
-    public function deviceChangeRequests()
-    {
-        return $this->hasMany(DeviceChangeRequest::class);
-    }
 }

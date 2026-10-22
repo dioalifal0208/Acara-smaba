@@ -11,7 +11,6 @@ const TYPE_STYLES = {
     photo_change: { dot: 'bg-amber-500', chip: 'bg-amber-50 text-amber-700 border-amber-100' },
     face_registration: { dot: 'bg-emerald-500', chip: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
     leave: { dot: 'bg-blue-500', chip: 'bg-blue-50 text-blue-700 border-blue-100' },
-    device_change: { dot: 'bg-sky-500', chip: 'bg-sky-50 text-sky-700 border-sky-100' },
 };
 
 const storage = {

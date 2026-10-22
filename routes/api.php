@@ -5,7 +5,6 @@ use App\Http\Controllers\Api\V1\AttendanceDailyHistoryController;
 use App\Http\Controllers\Api\V1\AttendanceHistoryController;
 use App\Http\Controllers\Api\V1\AttendanceStateController;
 use App\Http\Controllers\Api\V1\AuthController;
-use App\Http\Controllers\Api\V1\DeviceChangeRequestController;
 use App\Http\Controllers\Api\V1\FaceEnrollmentController;
 use App\Http\Controllers\Api\V1\FcmTokenController;
 use App\Http\Controllers\Api\V1\LeaveRequestController;
@@ -20,11 +19,6 @@ Route::prefix('v1')->group(function () {
     Route::post('/auth/login', [AuthController::class, 'login'])
         ->middleware('throttle:api-login')
         ->name('api.v1.login');
-
-    // Dari HP baru yang belum bisa login (akun terkunci ke HP lama): diverifikasi dengan password.
-    Route::post('/auth/device-change-requests', [DeviceChangeRequestController::class, 'store'])
-        ->middleware('throttle:api-login')
-        ->name('api.v1.device-change-requests.store');
 
     Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::post('/auth/logout', [AuthController::class, 'logout'])
