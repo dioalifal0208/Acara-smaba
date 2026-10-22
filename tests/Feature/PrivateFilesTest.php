@@ -77,6 +77,93 @@ class PrivateFilesTest extends TestCase
         $this->get($url)->assertForbidden();
     }
 
+    public function test_file_route_is_stateless_and_cacheable(): void
+    {
+        $url = PrivateFile::url('participant-photo', $this->participantWithPhoto());
+
+        $response = $this->get($url)->assertOk();
+        // Tanpa session/cookie: puluhan foto sekaligus tidak menyentuh tabel sessions.
+        $this->assertSame([], $response->headers->getCookies());
+        $this->assertMatchesRegularExpression('/max-age=([1-9]\d+)/', $response->headers->get('Cache-Control'));
+        $etag = $response->headers->get('ETag');
+        $this->assertNotEmpty($etag);
+
+        // Browser yang sudah punya file mendapat 304 tanpa isi.
+        $this->get($url, ['If-None-Match' => $etag])->assertStatus(304)->assertNoContent(304);
+    }
+
+    public function test_signed_url_stays_identical_within_a_bucket_so_reloads_hit_browser_cache(): void
+    {
+        $participant = $this->participantWithPhoto();
+        Carbon::setTestNow(Carbon::parse('2026-10-22 08:00:05'));
+        $first = PrivateFile::url('participant-photo', $participant);
+
+        Carbon::setTestNow(Carbon::parse('2026-10-22 08:29:50'));
+        $this->assertSame($first, PrivateFile::url('participant-photo', $participant));
+
+        Carbon::setTestNow(Carbon::parse('2026-10-22 08:30:01'));
+        $this->assertNotSame($first, PrivateFile::url('participant-photo', $participant));
+
+        // File diganti: URL berubah agar cache browser tidak menampilkan file lama.
+        Carbon::setTestNow(Carbon::parse('2026-10-22 08:00:05'));
+        $participant->photo_path = 'faces/baru.jpg';
+        $this->assertNotSame($first, PrivateFile::url('participant-photo', $participant));
+    }
+
+    public function test_attendance_media_is_only_available_for_the_retention_period(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-10-22 08:00:00'));
+        $participant = Participant::create(['nama' => 'Peserta', 'nis_nip' => '777']);
+        $workcode = Workcode::create(['nama_workcode' => 'Harian', 'kategori' => 'harian', 'is_active' => true]);
+        $make = function (string $hadir, ?string $pulang = null) use ($participant, $workcode) {
+            $suffix = Str::random(6);
+            foreach (["faces-att/{$suffix}.jpg", "faces-att/{$suffix}-p.jpg", "sig/{$suffix}.png"] as $path) {
+                Storage::disk('private')->put($path, 'bytes');
+            }
+
+            $attendance = Attendance::create([
+                'workcode_id' => $workcode->id,
+                'participant_id' => $participant->id,
+                'tanggal' => substr($hadir, 0, 10),
+                'waktu_hadir' => $hadir,
+                'waktu_pulang' => $pulang,
+                'status' => 'hadir',
+                'face_capture_path' => "faces-att/{$suffix}.jpg",
+                'face_capture_pulang_path' => $pulang ? "faces-att/{$suffix}-p.jpg" : null,
+                'signature_path' => "sig/{$suffix}.png",
+            ]);
+            $attendance->forceFill(['created_at' => $hadir])->saveQuietly();
+
+            return $attendance;
+        };
+
+        $old = $make('2026-09-21 07:00:00', '2026-09-21 15:00:00');       // 31 hari lalu
+        $recent = $make('2026-09-23 07:00:00', '2026-09-23 15:00:00');    // 29 hari lalu
+
+        $this->assertNull(PrivateFile::url('attendance-face', $old));
+        $this->assertNull(PrivateFile::url('attendance-signature', $old));
+        $this->assertNotNull(PrivateFile::url('attendance-face', $recent));
+        $this->get(PrivateFile::url('attendance-face-pulang', $recent))->assertOk();
+
+        // URL yang dibuat sebelum masa simpan habis pun ditolak setelahnya.
+        $signed = URL::temporarySignedRoute('files.show', now()->addHour(), ['type' => 'attendance-face', 'id' => $old->id]);
+        $this->get($signed)->assertNotFound();
+
+        $oldFiles = [$old->face_capture_path, $old->face_capture_pulang_path, $old->signature_path];
+        $this->artisan('attendance:prune-media')->assertSuccessful();
+
+        foreach ($oldFiles as $path) {
+            Storage::disk('private')->assertMissing($path);
+        }
+        $this->assertNull($old->fresh()->face_capture_path);
+        $this->assertNull($old->fresh()->signature_path);
+        $this->assertNull($old->fresh()->face_capture_pulang_path);
+        // Data presensinya tetap; file yang masih dalam masa simpan tidak disentuh.
+        $this->assertSame('hadir', $old->fresh()->status);
+        Storage::disk('private')->assertExists($recent->face_capture_path);
+        $this->assertNotNull($recent->fresh()->signature_path);
+    }
+
     public function test_unsafe_stored_path_is_never_served(): void
     {
         $participant = Participant::create(['nama' => 'X', 'nis_nip' => '2', 'photo_path' => '../.env']);

@@ -8,6 +8,7 @@ use App\Models\Participant;
 use App\Models\PhotoChangeRequest;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\URL;
@@ -25,6 +26,25 @@ final class PrivateFile
     public const DISK = 'private';
 
     public const TTL_MINUTES = 60;
+
+    /**
+     * Masa berlaku URL dibulatkan ke blok ini, jadi URL file yang sama tetap identik selama satu
+     * blok (berlaku TTL s.d. TTL + blok menit). Halaman yang memuat ulang data di latar belakang
+     * (mis. Laporan tiap 20 detik) memakai gambar dari cache browser, tidak mengunduh ulang.
+     */
+    public const URL_BUCKET_MINUTES = 30;
+
+    /**
+     * Foto/tanda tangan presensi yang dibatasi masa simpan (config attendance.media_retention_days)
+     * => kolom waktu penyimpanannya (urutan fallback).
+     *
+     * @var array<string, list<string>>
+     */
+    public const ATTENDANCE_MEDIA = [
+        'attendance-face' => ['waktu_hadir', 'created_at'],
+        'attendance-face-pulang' => ['waktu_pulang', 'updated_at'],
+        'attendance-signature' => ['waktu_hadir', 'created_at'],
+    ];
 
     /**
      * Jenis file => [kelas model, kolom path].
@@ -55,25 +75,52 @@ final class PrivateFile
     }
 
     /**
-     * URL bertanda tangan untuk file milik model, atau null bila model tidak punya file.
+     * URL bertanda tangan untuk file milik model, atau null bila model tidak punya file atau
+     * masa simpan foto/tanda tangan presensinya sudah habis.
      */
     public static function url(string $type, ?Model $model): ?string
     {
         [, $column] = self::TYPES[$type];
 
-        if (! $model || ! $model->{$column}) {
+        if (! $model || ! $model->{$column} || self::isExpired($type, $model)) {
             return null;
         }
 
-        return URL::temporarySignedRoute(
-            'files.show',
-            now()->addMinutes(self::TTL_MINUTES),
-            ['type' => $type, 'id' => $model->getKey()],
-        );
+        $bucket = self::URL_BUCKET_MINUTES * 60;
+        $expiresAt = Carbon::createFromTimestamp((intdiv(now()->timestamp, $bucket) + 1) * $bucket)
+            ->addMinutes(self::TTL_MINUTES - self::URL_BUCKET_MINUTES);
+
+        return URL::temporarySignedRoute('files.show', $expiresAt, [
+            'type' => $type,
+            'id' => $model->getKey(),
+            // Berubah bila file diganti, agar cache browser tidak menampilkan file lama.
+            'v' => substr(sha1($model->{$column}), 0, 10),
+        ]);
+    }
+
+    /** Apakah foto/tanda tangan presensi sudah melewati masa simpan (jenis lain tidak pernah). */
+    public static function isExpired(string $type, Model $model): bool
+    {
+        $storedAt = self::storedAt($type, $model);
+
+        return $storedAt !== null
+            && $storedAt->lt(now()->subDays(config('attendance.media_retention_days', 30)));
+    }
+
+    /** Waktu penyimpanan foto/tanda tangan presensi (null untuk jenis file tanpa masa simpan). */
+    public static function storedAt(string $type, Model $model): ?Carbon
+    {
+        foreach (self::ATTENDANCE_MEDIA[$type] ?? [] as $column) {
+            if ($model->{$column}) {
+                return Carbon::parse($model->{$column});
+            }
+        }
+
+        return null;
     }
 
     /**
-     * Path file untuk jenis + id, atau null bila tidak ada.
+     * Path file untuk jenis + id, atau null bila tidak ada atau masa simpannya habis.
      */
     public static function pathFor(string $type, int|string $id): ?string
     {
@@ -82,9 +129,10 @@ final class PrivateFile
         }
 
         [$modelClass, $column] = self::TYPES[$type];
-        $path = $modelClass::query()->whereKey($id)->value($column);
+        $model = $modelClass::query()->whereKey($id)->first();
+        $path = $model?->{$column};
 
-        return $path && self::isSafePath($path) ? $path : null;
+        return $path && self::isSafePath($path) && ! self::isExpired($type, $model) ? $path : null;
     }
 
     /**

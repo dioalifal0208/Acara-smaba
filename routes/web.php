@@ -9,7 +9,6 @@ use App\Http\Controllers\LeaveRequestController;
 use App\Http\Controllers\LocationIntegrityLogController;
 use App\Http\Controllers\ParticipantController;
 use App\Http\Controllers\PhotoChangeRequestController;
-use App\Http\Controllers\PrivateFileController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SelfCheckInController;
 use App\Http\Controllers\SettingController;
@@ -234,13 +233,7 @@ Route::get('/api/holidays', [HolidayController::class, 'index'])->middleware('th
 // Presensi wajah hanya lewat aplikasi Android (POST /api/v1/attendance); website tidak lagi
 // menyediakan presensi wajah. Presensi web: scan QR workcode (self check-in) & scan QR peserta.
 
-// File pribadi peserta (foto wajah, foto presensi, tanda tangan, dokumen izin).
-// Hanya bisa dibuka lewat URL bertanda tangan sementara buatan server (App\Support\PrivateFile).
-Route::get('/files/{type}/{id}', [PrivateFileController::class, 'show'])
-    ->whereIn('type', array_keys(PrivateFile::TYPES))
-    ->whereNumber('id')
-    ->middleware(['signed', 'throttle:600,1']) // halaman admin bisa memuat ratusan foto sekaligus
-    ->name('files.show');
+// File pribadi (/files/{type}/{id}) ada di routes/files.php: tanpa session, lihat bootstrap/app.php.
 
 // Fallback untuk file publik non-sensitif bila symlink storage tidak tersedia di hosting.
 // Hanya prefix yang di-whitelist; data peserta TIDAK PERNAH disimpan di disk publik.

@@ -17,6 +17,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Masa Simpan Foto & Tanda Tangan Presensi
+    |--------------------------------------------------------------------------
+    |
+    | Foto wajah presensi (datang/pulang) dan tanda tangan hanya bisa dibuka admin sampai
+    | sekian hari setelah disimpan; setelah itu filenya dihapus oleh attendance:prune-media
+    | (terjadwal harian). Data presensinya sendiri (jam, status) tetap tersimpan.
+    |
+    */
+
+    'media_retention_days' => (int) env('ATTENDANCE_MEDIA_RETENTION_DAYS', 30),
+
+    /*
+    |--------------------------------------------------------------------------
     | Pencocokan Wajah
     |--------------------------------------------------------------------------
     |

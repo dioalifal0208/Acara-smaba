@@ -8,8 +8,22 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
+// Hosting (Hostinger) mematikan proc_open, sedangkan Schedule::command menjalankan artisan di proses
+// terpisah dan selalu gagal di sana. Karena itu setiap tugas dijalankan di proses yang sama lewat
+// Artisan::call. Cukup satu cron: `php artisan schedule:run` tiap 5 menit (atau tiap menit).
+
 // Hapus token API yang sudah kedaluwarsa lebih dari 24 jam (masa berlaku: config/sanctum.php).
-Schedule::command('sanctum:prune-expired --hours=24')->daily();
+Schedule::call(fn () => Artisan::call('sanctum:prune-expired', ['--hours' => 24]))
+    ->name('sanctum:prune-expired')
+    ->daily();
 
 // Jadwalkan pengecekan status absensi secara rutin (setiap 5 menit)
-Schedule::command('attendance:calculate-alpha')->everyFiveMinutes()->withoutOverlapping();
+Schedule::call(fn () => Artisan::call('attendance:calculate-alpha'))
+    ->name('attendance:calculate-alpha')
+    ->everyFiveMinutes()
+    ->withoutOverlapping();
+
+// Foto & tanda tangan presensi hanya disimpan attendance.media_retention_days (bawaan 30 hari).
+Schedule::call(fn () => Artisan::call('attendance:prune-media'))
+    ->name('attendance:prune-media')
+    ->dailyAt('01:00');

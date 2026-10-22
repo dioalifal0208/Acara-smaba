@@ -268,6 +268,7 @@ class AttendanceController extends Controller
                         'waktu_pulang' => $att?->waktu_pulang?->format('H:i:s') ?? '-',
                         'signature_url' => PrivateFile::url('attendance-signature', $att),
                         'face_capture_url' => PrivateFile::url('attendance-face', $att),
+                        'media_expired' => $att !== null && PrivateFile::isExpired('attendance-face', $att),
                         'attendance_method' => $this->attendanceMethodLabel($att),
                         'status' => $att ? ($att->status ?? 'hadir') : 'alpha',
                     ];
@@ -287,6 +288,7 @@ class AttendanceController extends Controller
             'activeWorkcodes' => $activeWorkcodes,
             'selectedWorkcodeId' => $selectedWorkcode?->id,
             'selectedWorkcode' => $selectedWorkcode,
+            'mediaRetentionDays' => config('attendance.media_retention_days', 30),
             'stats' => $stats,
             'attendances' => $attendances,
             'participants' => $participants,
@@ -324,6 +326,7 @@ class AttendanceController extends Controller
                     'signature_url' => PrivateFile::url('attendance-signature', $att),
                     'face_capture_url' => PrivateFile::url('attendance-face', $att),
                     'face_capture_pulang_url' => PrivateFile::url('attendance-face-pulang', $att),
+                    'media_expired' => PrivateFile::isExpired('attendance-face', $att),
                     'attendance_method' => $this->attendanceMethodLabel($att),
                     'status' => $att->status ?? 'hadir',
                     'is_late' => $late,

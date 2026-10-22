@@ -1494,6 +1494,7 @@ export default function ReportIndex({
                                                                     key={shot.label}
                                                                     url={shot.url}
                                                                     label={shot.label}
+                                                                    expired={att.media_expired}
                                                                     onOpen={() => setFacePreview({ ...shot, tanggal: att.tanggal_formatted || att.tanggal })}
                                                                 />
                                                             ))}
@@ -1635,17 +1636,19 @@ function DetailAction({ icon, label, desc, onClick }) {
     );
 }
 
-function FaceThumb({ url, label, onOpen }) {
+function FaceThumb({ url, label, expired = false, onOpen }) {
     const [failed, setFailed] = useState(false);
+    const { mediaRetentionDays = 30 } = usePage().props;
 
     if (!url || failed) {
         return (
             <span
                 className="flex h-12 w-10 flex-col items-center justify-center rounded-md border border-dashed border-slate-200 text-center text-[8px] font-semibold uppercase leading-3 text-slate-300"
-                title={failed ? `File foto ${label.toLowerCase()} tidak ditemukan` : `Tidak ada foto ${label.toLowerCase()}`}
+                title={failed ? `File foto ${label.toLowerCase()} tidak ditemukan` : (expired ? `Foto presensi hanya disimpan ${mediaRetentionDays} hari` : `Tidak ada foto ${label.toLowerCase()}`)}
             >
                 {label}
                 {failed && <span className="normal-case text-rose-300">hilang</span>}
+                {!failed && expired && <span className="normal-case text-amber-400">kedaluwarsa</span>}
             </span>
         );
     }
@@ -1664,8 +1667,14 @@ function FaceThumb({ url, label, onOpen }) {
 }
 
 function ProofThumb({ attendance, onOpen }) {
+    const { mediaRetentionDays = 30 } = usePage().props;
+
     if (!attendance.signature_url && !attendance.face_capture_url) {
-        return null;
+        return attendance.media_expired ? (
+            <span className="text-[10px] font-semibold text-amber-500" title={`Foto & tanda tangan presensi hanya disimpan ${mediaRetentionDays} hari`}>
+                Bukti kedaluwarsa
+            </span>
+        ) : null;
     }
 
     return (
@@ -1675,7 +1684,7 @@ function ProofThumb({ attendance, onOpen }) {
             title="Lihat detail presensi dan bukti kehadiran"
             className="inline-flex rounded-md border border-neutral-200 transition-shadow hover:shadow-soft-lg focus:outline-none focus:ring-2 focus:ring-brand-500"
         >
-            <img src={attendance.face_capture_url || attendance.signature_url} alt={`Bukti presensi ${attendance.nama}`} className="h-9 w-24 rounded-md bg-white object-contain" />
+            <img src={attendance.face_capture_url || attendance.signature_url} alt={`Bukti presensi ${attendance.nama}`} loading="lazy" decoding="async" className="h-9 w-24 rounded-md bg-white object-contain" />
         </button>
     );
 }
