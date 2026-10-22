@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\AdminMiddleware;
+use App\Http\Middleware\BumpWebSyncOnWrite;
 use App\Http\Middleware\EnsureSupportedAppVersion;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\RoleMiddleware;
@@ -20,11 +21,15 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
         // File pribadi di luar grup `web`: tanpa session/cookie/Inertia (lihat routes/files.php).
-        then: fn () => Route::group([], __DIR__.'/../routes/files.php'),
+        then: function () {
+            Route::group([], __DIR__.'/../routes/files.php');
+            Route::group([], __DIR__.'/../routes/signal.php');
+        },
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->api(append: [
             EnsureSupportedAppVersion::class,
+            BumpWebSyncOnWrite::class,
         ]);
 
         $middleware->web(append: [

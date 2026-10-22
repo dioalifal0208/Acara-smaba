@@ -629,3 +629,13 @@ FCM hanya **pemicu**: payload tidak berisi data pribadi maupun state. Aplikasi s
 - Perhitungan alpha otomatis (cron) tidak mengirim push.
 - Untuk pesan topic, aplikasi menunda acak 0–15 detik sebelum memuat ulang agar satu sekolah tidak memuat ulang bersamaan.
 - Cadangan bila push gagal: muat ulang saat aplikasi ke depan, polling adaptif di dashboard (15 detik saat jendela presensi buka/wajah `pending`, selain itu 60 detik), dan pemuatan ulang pada jam buka/tutup `effective_schedule`.
+
+## 8. Sinkronisasi Android → Web (sejak Okt 2026)
+
+Kebalikan dari tombol Sync web (bagian 7): data baru dari aplikasi langsung tampil di halaman admin web yang sedang terbuka.
+
+**URL**: `POST /api/v1/sync` (token peserta, tanpa body) → `{"status":"success","message":"Data tersinkron ke web."}`. Dipanggil aplikasi saat peserta **menarik layar ke bawah** di Beranda, Riwayat, Izin, atau Profil (aplikasi membatasi satu kali per 5 detik). Token non-peserta → 403.
+
+Server menaikkan sinyal `App\Support\WebSync` (cache **file**, bukan database). Sinyal yang sama juga dinaikkan otomatis oleh setiap request API non-GET yang berhasil (2xx), mis. presensi, izin, pendaftaran wajah, login.
+
+Halaman admin web (`AuthenticatedLayout`) memanggil `GET /sync/signal` tiap ±5 detik selama tab terlihat. Endpoint ini tanpa session/cookie/database dan hanya berisi `{"v": <versi>, "at": "<ISO 8601>"}`. Bila `v` berubah, halaman memuat ulang datanya di latar belakang (`router.reload`, scroll dan isian form tetap).

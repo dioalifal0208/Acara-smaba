@@ -3,6 +3,7 @@ import SyncButton from '@/Components/SyncButton';
 import { Link, router, usePage } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
 import { accountMenu, adminMenu, currentMenuLabel, icons } from '@/lib/adminMenu';
+import { useWebSyncSignal } from '@/lib/webSyncSignal';
 
 export default function AuthenticatedLayout({ header, children }) {
     const { auth } = usePage().props;
@@ -18,6 +19,9 @@ function AdminShell({ header, children }) {
 
     // Tutup drawer HP setiap kali pindah halaman.
     useEffect(() => router.on('navigate', () => setDrawerOpen(false)), []);
+
+    // Data baru dari aplikasi Android (tarik ke bawah / presensi / izin) langsung tampil di halaman ini.
+    useWebSyncSignal();
 
     const title = currentMenuLabel();
 

@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\V1\LeaveRequestController;
 use App\Http\Controllers\Api\V1\PhotoController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\WorkcodeController;
+use App\Http\Controllers\WebSyncController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -28,6 +29,10 @@ Route::prefix('v1')->group(function () {
     Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
         Route::post('/auth/logout', [AuthController::class, 'logout'])
             ->name('api.v1.logout');
+
+        // Tarik ke bawah di aplikasi Android: halaman admin web memuat ulang datanya (App\Support\WebSync).
+        Route::post('/sync', [WebSyncController::class, 'trigger'])
+            ->name('api.v1.sync');
 
         Route::get('/me', [ProfileController::class, 'me'])
             ->name('api.v1.me');
