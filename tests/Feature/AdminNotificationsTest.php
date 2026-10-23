@@ -44,10 +44,10 @@ class AdminNotificationsTest extends TestCase
         $this->assertCount(3, $items);
         $this->assertSame('Budi mengajukan foto wajah baru.', $items["photo_change:{$photo->id}"]['body']);
         $this->assertSame(
-            route('participants.index', ['review' => 'photo', 'participant' => $budi->id]),
+            route('participants.show', ['participant' => $budi->id, 'review' => 'photo']),
             $items["photo_change:{$photo->id}"]['url'],
         );
-        $this->assertSame(route('participants.index', ['review' => 'face', 'participant' => $sari->id]), $items["face_registration:{$sari->id}"]['url']);
+        $this->assertSame(route('participants.show', ['participant' => $sari->id, 'review' => 'face']), $items["face_registration:{$sari->id}"]['url']);
 
         // Notifikasi tidak membawa data wajah, path file, atau hash perangkat.
         foreach (['face_descriptor', 'photo_path', 'budi.jpg'] as $secret) {

@@ -1,1 +1,0 @@
-import{b as o}from"./app-DO-_-_Ee.js";function r(n={}){if(typeof document<"u"&&document.visibilityState==="hidden")return;const t=o.on("invalid",e=>e.preventDefault());o.reload({...n,onFinish:e=>{t(),n.onFinish?.(e)}})}function a(n,t=n/2){return n+Math.floor(Math.random()*t)}export{r as b,a as j};

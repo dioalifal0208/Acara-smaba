@@ -69,7 +69,7 @@ class ParticipantEmploymentStatusTest extends TestCase
             'nama' => 'Guru Lama',
             'nis_nip' => '-',
             'status' => 'GTT',
-        ])->assertRedirect(route('participants.index'))
+        ])->assertRedirect(route('participants.show', $participant))
             ->assertSessionHasNoErrors();
 
         $participant->refresh();
@@ -97,6 +97,30 @@ class ParticipantEmploymentStatusTest extends TestCase
                 ->has('participants', 1)
                 ->where('participants.0.nis_nip', '-')
                 ->where('participants.0.status', 'PTT'));
+    }
+
+    public function test_participant_detail_page_shows_the_participant_and_login_account(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin']);
+        $participant = Participant::create([
+            'nama' => 'Guru Detail',
+            'nis_nip' => '198001012000011009',
+            'status' => 'PNS',
+        ]);
+        User::factory()->create([
+            'username' => $participant->nis_nip,
+            'role' => 'participant',
+            'participant_id' => $participant->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->get(route('participants.show', $participant))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Participants/Show')
+                ->where('participant.id', $participant->id)
+                ->where('participant.attendances_count', 0)
+                ->where('participant.account.username', '198001012000011009'));
     }
 
     public function test_import_accepts_multiple_gtt_and_ptt_rows_with_dash_or_blank_nip(): void

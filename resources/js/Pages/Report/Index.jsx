@@ -209,12 +209,21 @@ export default function ReportIndex({
         if (!selectedWorkcode) return;
 
         const printWindow = window.open('', '_blank', 'width=800,height=900');
-        const rowsHtml = filteredAttendances.map((a, i) => `
+        // Urutan cetak: PNS, PPPK, PPPK Paruh Waktu, lalu status lain; di dalam tiap status nama A-Z.
+        const statusOrder = ['pns', 'pppk', 'pppk paruh waktu'];
+        const statusRank = (status) => {
+            const index = statusOrder.indexOf((status || '').trim().toLowerCase().replace(/\s+/g, ' '));
+            return index === -1 ? statusOrder.length : index;
+        };
+        const printedAttendances = [...filteredAttendances].sort((a, b) =>
+            statusRank(a.status_pegawai) - statusRank(b.status_pegawai)
+            || a.nama.localeCompare(b.nama, 'id', { sensitivity: 'base' }));
+        const rowsHtml = printedAttendances.map((a, i) => `
             <tr>
                 <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${i + 1}</td>
                 <td style="padding: 7px 8px; border: 1px solid #cbd5e1; font-weight: bold; font-size: 11px;">${a.nama}</td>
-                <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-family: monospace; font-size: 11px;">${a.nis_nip}</td>
-                <td style="padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.status_pegawai || '-'}</td>
+                <td style="text-align: center; padding: 7px 6px; border: 1px solid #cbd5e1; font-family: monospace; font-size: 10.5px; white-space: nowrap;">${a.nis_nip && a.nis_nip !== 'null' ? a.nis_nip : '-'}</td>
+                <td style="padding: 7px 6px; border: 1px solid #cbd5e1; font-size: 11px; white-space: nowrap;">${a.status_pegawai || '-'}</td>
                 ${selectedWorkcode.kategori === 'harian' 
                     ? `
                         <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.total_alpha || '0'}</td>
@@ -224,12 +233,8 @@ export default function ReportIndex({
                         <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.total_menit_terlambat ? a.total_menit_terlambat + ' Menit' : '0 Menit'}</td>
                     ` 
                     : `
-                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-size: 11px;">${a.waktu_hadir}</td>
-                        <td style="text-align: center; padding: 7px 8px; border: 1px solid #cbd5e1; font-weight: bold; font-size: 11px;">${a.status ? a.status.replace('_', ' ').toUpperCase() : '-'}</td>
-                        <td style="text-align: center; padding: 4px 8px; border: 1px solid #cbd5e1;">
-                            <div style="font-weight: bold; font-size: 10px;">${a.attendance_method || '-'}</div>
-                            ${a.signature_url ? `<img src="${a.signature_url}" alt="Tanda tangan ${a.nama}" style="display: block; width: 90px; height: 34px; object-fit: contain; margin: 2px auto 0;" />` : ''}
-                        </td>
+                        <td style="text-align: center; padding: 7px 6px; border: 1px solid #cbd5e1; font-size: 11px; white-space: nowrap;">${a.waktu_hadir}</td>
+                        <td style="text-align: center; padding: 7px 6px; border: 1px solid #cbd5e1; font-weight: bold; font-size: 11px; white-space: nowrap;">${a.status ? a.status.replace('_', ' ').toUpperCase() : '-'}</td>
                     `
                 }
             </tr>
@@ -248,14 +253,34 @@ export default function ReportIndex({
                 <th style="width: 90px;">Total Terlambat</th>
             `
             : `
-                <th style="width: 35px;">No</th>
+                <th style="width: 5%;">No</th>
                 <th>Nama Lengkap</th>
-                <th style="width: 150px;">NIP</th>
-                <th>Status Pegawai</th>
-                <th style="width: 130px;">Waktu Presensi</th>
-                <th style="width: 70px;">Status</th>
-                <th style="width: 110px;">Metode</th>
+                <th style="width: 22%;">NIP</th>
+                <th style="width: 17%;">Status Pegawai</th>
+                <th style="width: 11%;">Jam Hadir</th>
+                <th style="width: 10%;">Status</th>
             `;
+        const columnCount = selectedWorkcode.kategori === 'harian' ? 9 : 6;
+
+        // Tanggal kegiatan: tanggal jadwal workcode, atau tanggal presensi pertama bila tidak terjadwal.
+        // Presensi harian tidak punya satu tanggal, jadi ditampilkan hari aktifnya.
+        const formatTanggal = (value, options = { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) =>
+            new Date(`${String(value).slice(0, 10)}T00:00:00`).toLocaleDateString('id-ID', options);
+        const namaHari = ['', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+        let tanggalKegiatan = '-';
+        // Tanggal tanda tangan ikut tanggal kegiatan; presensi harian (tanpa satu tanggal) memakai tanggal cetak.
+        let tanggalTtd = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
+        if (selectedWorkcode.kategori === 'harian') {
+            const hari = [...(selectedWorkcode.hari_aktif || [])].map(Number).sort((a, b) => a - b);
+            if (hari.length) tanggalKegiatan = `Setiap ${hari.map(d => namaHari[d]).join(', ')}`;
+        } else {
+            const firstAttendanceDate = filteredAttendances.map(a => a.tanggal).filter(Boolean).sort()[0];
+            const tanggal = selectedWorkcode.tanggal || firstAttendanceDate;
+            if (tanggal) {
+                tanggalKegiatan = formatTanggal(tanggal);
+                tanggalTtd = formatTanggal(tanggal, { day: 'numeric', month: 'long', year: 'numeric' });
+            }
+        }
 
         printWindow.document.write(`
             <!DOCTYPE html>
@@ -444,30 +469,30 @@ export default function ReportIndex({
                                 : 'Presensi Sekali / Event'}</td>
                         </tr>
                         <tr>
-                            <td style="font-weight: bold;">Waktu Cetak</td>
+                            <td style="font-weight: bold;">Tanggal Kegiatan</td>
                             <td>:</td>
-                            <td>${new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })} WIB</td>
+                            <td>${tanggalKegiatan}</td>
                         </tr>
                     </table>
                 </div>
 
-                <table class="data-table">
+                <table class="data-table"${selectedWorkcode.kategori === 'harian' ? '' : ' style="table-layout: fixed;"'}>
                     <thead>
                         <tr>
                             ${tableHeadersHtml}
                         </tr>
                     </thead>
                     <tbody>
-                        ${rowsHtml || '<tr><td colspan="9" style="text-align:center; padding: 10px;">Belum ada data kehadiran</td></tr>'}
+                        ${rowsHtml || `<tr><td colspan="${columnCount}" style="text-align:center; padding: 10px;">Belum ada data kehadiran</td></tr>`}
                     </tbody>
                 </table>
 
                 <div class="ttd-section">
                     <div class="ttd-box">
-                        <p>Babat, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                        <p>Babat, ${tanggalTtd}</p>
                         <p style="margin-bottom: 5px;">Kepala Sekolah,</p>
                         <div class="ttd-qr-wrap" style="display: flex; justify-content: center; margin: 10px 0;">
-                            <img src="${window.location.origin}/workcodes/${selectedWorkcode.id}/qr-signature" style="width: 80px; height: 80px;" alt="QR TTD" />
+                            <img src="${window.location.origin}/workcodes/${selectedWorkcode.id}/qr-signature?logo=1" style="width: 90px; height: 90px;" alt="QR TTD" />
                         </div>
                         <p style="font-weight: bold; text-decoration: underline; font-size: 13px;">${kepalaSekolahNama}</p>
                         <p style="font-size: 11px; color: #475569; font-family: Arial, sans-serif;">NIP. ${kepalaSekolahNip}</p>
@@ -837,7 +862,7 @@ export default function ReportIndex({
                             <p>Babat, ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                             <p style="margin-bottom: 5px;">Kepala Sekolah,</p>
                             <div class="ttd-qr-wrap" style="display: flex; justify-content: center; margin: 10px 0;">
-                                <img src="${window.location.origin}/workcodes/${selectedWorkcode.id}/qr-signature" style="width: 80px; height: 80px;" alt="QR TTD" />
+                                <img src="${window.location.origin}/workcodes/${selectedWorkcode.id}/qr-signature?logo=1" style="width: 90px; height: 90px;" alt="QR TTD" />
                             </div>
                             <p style="font-weight: bold; text-decoration: underline; font-size: 13px;">${kepalaSekolahNama}</p>
                             <p style="font-size: 11px; color: #475569; font-family: Arial, sans-serif;">NIP. ${kepalaSekolahNip}</p>
@@ -967,8 +992,8 @@ export default function ReportIndex({
                                 <span className="font-bold text-neutral-700">{filteredAttendances.length}</span> baris ditampilkan
                             </p>
                         </div>
-                        <div className="flex flex-col gap-2 sm:flex-row">
-                            <div className="relative sm:w-72">
+                        <div className="flex flex-col gap-2 sm:flex-row lg:flex-1 lg:justify-end lg:pl-8">
+                            <div className="relative min-w-0 sm:flex-1 lg:max-w-2xl">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                 </svg>
@@ -980,7 +1005,7 @@ export default function ReportIndex({
                                     className="input-soft pl-9"
                                 />
                             </div>
-                            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="input-soft sm:w-48" aria-label="Filter status pegawai">
+                            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="input-soft sm:w-48 sm:shrink-0" aria-label="Filter status pegawai">
                                 <option value="">Semua status pegawai</option>
                                 {uniqueStatuses.map((status, idx) => (
                                     <option key={idx} value={status}>{status}</option>

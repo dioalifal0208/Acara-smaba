@@ -874,7 +874,7 @@ export default function WorkcodesIndex({ workcodes, participants, lateToleranceM
                                     Centang seluruh peserta
                                     <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px]">{data.participant_ids.length}/{participants.length}</span>
                                 </label>
-                                <input value={participantSearch} onChange={(event) => setParticipantSearch(event.target.value)} placeholder="Cari nama atau NIP..." className="w-full rounded-md border border-slate-200 px-3 py-2 text-xs font-semibold focus:border-emerald-500 focus:ring-emerald-500 sm:w-60" />
+                                <input value={participantSearch} onChange={(event) => setParticipantSearch(event.target.value)} placeholder="Cari nama atau NIP..." className="w-full rounded-md border border-slate-200 px-3 py-2 text-xs font-semibold focus:border-emerald-500 focus:ring-emerald-500 sm:w-96" />
                             </div>
                             <p className="mt-2 text-[11px] text-slate-500">Kosongkan semua centang jika workcode ini terbuka untuk seluruh peserta.</p>
                         </div>

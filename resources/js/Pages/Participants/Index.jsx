@@ -1,15 +1,11 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, useForm, router, usePage } from '@inertiajs/react';
+import { Head, Link, useForm, router, usePage } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 import { useToast } from '@/Components/Toast';
 import KpiCard from '@/Components/KpiCard';
 import { icons } from '@/lib/adminMenu';
 import { useConfirm } from '@/Components/ConfirmDialog';
 import ImportModal from '@/Components/ImportModal';
-import FaceRegistrationModal from '@/Components/FaceRegistrationModal';
-import ApproveFaceModal from '@/Components/ApproveFaceModal';
-import ApprovePhotoChangeRequestModal from '@/Components/ApprovePhotoChangeRequestModal';
-import FaceHistoryModal from '@/Components/FaceHistoryModal';
 
 const NON_PERMANENT_STATUSES = ['GTT', 'PTT'];
 
@@ -21,45 +17,31 @@ export default function ParticipantsIndex({ participants }) {
     const confirm = useConfirm();
     const [showModal, setShowModal] = useState(false);
     const [showImportModal, setShowImportModal] = useState(false);
-    const [historyParticipant, setHistoryParticipant] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [sortBy, setSortBy] = useState('latest');
     const [selectedIds, setSelectedIds] = useState([]);
-    const [editParticipant, setEditParticipant] = useState(null);
-    const [faceRegistrationParticipant, setFaceRegistrationParticipant] = useState(null);
-    const [approveFaceParticipant, setApproveFaceParticipant] = useState(null);
-    const [approvePhotoChangeRequestParticipant, setApprovePhotoChangeRequestParticipant] = useState(null);
     const [reviewOnly, setReviewOnly] = useState(false);
     const { url: pageUrl } = usePage();
 
     const needsReview = (participant) => Boolean(participant.pending_photo_change_request) || participant.face_status === 'pending';
     const reviewCount = participants.filter(needsReview).length;
 
-    // Tautan dari notifikasi admin: ?review=pending (filter) atau ?review=photo|face&participant=ID (buka modal verifikasi).
+    // Tautan dari notifikasi admin: ?review=pending memfilter yang perlu verifikasi. Tautan lama
+    // ?review=photo|face&participant=ID diteruskan ke halaman detail peserta.
     useEffect(() => {
         const params = new URLSearchParams(pageUrl.split('?')[1] ?? '');
         const review = params.get('review');
         if (!review) return;
 
-        setReviewOnly(true);
-        const target = participants.find((participant) => String(participant.id) === params.get('participant'));
-        if (review === 'photo' && target?.pending_photo_change_request) {
-            setApprovePhotoChangeRequestParticipant(target);
-        } else if (review === 'face' && target?.face_status === 'pending') {
-            setApproveFaceParticipant(target);
-        } else if (review !== 'pending' && target) {
-            toast.info(`Pengajuan ${target.nama} sudah diproses.`);
+        if (review !== 'pending' && params.get('participant')) {
+            router.visit(route('participants.show', { participant: params.get('participant'), review }), { replace: true });
+            return;
         }
+        setReviewOnly(true);
     }, [pageUrl]);
 
     const { data, setData, post, processing, errors, reset } = useForm({
-        nama: '',
-        nis_nip: '',
-        status: '',
-    });
-
-    const editForm = useForm({
         nama: '',
         nis_nip: '',
         status: '',
@@ -92,73 +74,6 @@ export default function ParticipantsIndex({ participants }) {
                 ? '-'
                 : data.nis_nip === '-' ? '' : data.nis_nip,
         });
-    };
-
-    const handleEditStatusChange = (status) => {
-        editForm.setData({
-            ...editForm.data,
-            status,
-            nis_nip: isNonPermanentStatus(status)
-                ? '-'
-                : editForm.data.nis_nip === '-' ? '' : editForm.data.nis_nip,
-        });
-    };
-
-    const handleEditClick = (participant) => {
-        setEditParticipant(participant);
-        let statusVal = participant.status || '';
-        const validStatuses = ['PNS', 'PPPK', 'PPPK Paruh Waktu', 'GTT', 'PTT'];
-        const found = validStatuses.find(s => s.toLowerCase() === statusVal.trim().toLowerCase());
-        if (found) statusVal = found;
-
-        editForm.setData({
-            nama: participant.nama,
-            nis_nip: participant.nis_nip,
-            status: statusVal,
-        });
-    };
-
-    const handleEditSubmit = (e) => {
-        e.preventDefault();
-        editForm.put(route('participants.update', editParticipant.id), {
-            onSuccess: () => {
-                setEditParticipant(null);
-                editForm.reset();
-            },
-        });
-    };
-
-    const handleResetQr = async (participant) => {
-        const confirmed = await confirm({
-            title: 'Reset QR Peserta',
-            message: `QR lama milik "${participant.nama}" tidak akan berlaku lagi di scanner. Gunakan bila QR diduga dipakai orang lain. Lanjutkan?`,
-            type: 'danger',
-            confirmText: 'Ya, Reset QR',
-            cancelText: 'Batal',
-        });
-        if (confirmed) {
-            router.post(route('participants.qr.regenerate', participant.id), {}, {
-                preserveScroll: true,
-                preserveState: true,
-            });
-        }
-    };
-
-    const handleDelete = async (id, nama) => {
-        const confirmed = await confirm({
-            title: 'Hapus Peserta',
-            message: `Apakah Anda yakin ingin menghapus peserta "${nama}"? Data yang dihapus tidak dapat dikembalikan.`,
-            type: 'danger',
-            confirmText: 'Ya, Hapus',
-            cancelText: 'Batal',
-        });
-        if (confirmed) {
-            router.delete(route('participants.destroy', id), {
-                onSuccess: () => {
-                    setSelectedIds(prev => prev.filter(item => item !== id));
-                }
-            });
-        }
     };
 
     const handleSelectAll = (e) => {
@@ -199,50 +114,6 @@ export default function ParticipantsIndex({ participants }) {
                 },
             });
         }
-    };
-
-    const handleDownloadSvg = (participant) => {
-        window.open(route('participants.download.svg', participant.id), '_blank');
-    };
-
-    const handlePrint = (participant) => {
-        const printWindow = window.open('', '_blank', 'width=500,height=600');
-        printWindow.document.write(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>QR Code - ${participant.nama}</title>
-                <style>
-                    * { margin: 0; padding: 0; box-sizing: border-box; }
-                    body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #fff; }
-                    .card { text-align: center; padding: 40px; border: 2px solid #e5e7eb; border-radius: 16px; max-width: 400px; }
-                    .card h2 { font-size: 20px; color: #1e1b4b; margin-bottom: 4px; }
-                    .card p { font-size: 14px; color: #2f9338; margin-bottom: 20px; font-weight: 600; }
-                    .card img { width: 280px; height: 280px; margin: 0 auto 16px; display: block; }
-                    .card .school { font-size: 11px; color: #9ca3af; margin-top: 12px; }
-                    @media print {
-                        body { background: #fff; }
-                        .card { border: none; }
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="card">
-                    <h2>${participant.nama}</h2>
-                    <p>${participant.nis_nip}</p>
-                    <img src="${route('participants.qr', participant.id)}" alt="QR Code" />
-                    <div class="school">E-Presensi SMABA</div>
-                </div>
-                <script>
-                    window.onload = function() {
-                        setTimeout(function() { window.close(); }, 1500);
-                        window.print();
-                    };
-                </script>
-            </body>
-            </html>
-        `);
-        printWindow.document.close();
     };
 
     const normalizeStatus = (str) => (str || '').toString().trim().toLowerCase().replace(/\s+/g, ' ');
@@ -336,8 +207,8 @@ export default function ParticipantsIndex({ participants }) {
                                 <span className="font-bold text-neutral-700">{filteredParticipants.length}</span> dari {participants.length} peserta ditampilkan
                             </p>
                         </div>
-                        <div className="flex flex-col gap-2 sm:flex-row">
-                            <div className="relative sm:w-64">
+                        <div className="flex flex-col gap-2 sm:flex-row lg:flex-1 lg:justify-end lg:pl-8">
+                            <div className="relative min-w-0 sm:flex-1 lg:max-w-2xl">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                     <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                 </svg>
@@ -349,13 +220,13 @@ export default function ParticipantsIndex({ participants }) {
                                     className="input-soft pl-9"
                                 />
                             </div>
-                            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="input-soft sm:w-40" aria-label="Urutkan">
+                            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} className="input-soft sm:w-40 sm:shrink-0" aria-label="Urutkan">
                                 <option value="latest">Data terbaru</option>
                                 <option value="oldest">Data terlama</option>
                                 <option value="alpha-asc">Nama A–Z</option>
                                 <option value="alpha-desc">Nama Z–A</option>
                             </select>
-                            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="input-soft sm:w-44" aria-label="Filter status pegawai">
+                            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="input-soft sm:w-44 sm:shrink-0" aria-label="Filter status pegawai">
                                 <option value="">Semua status</option>
                                 <option value="PNS">PNS</option>
                                 <option value="PPPK">PPPK</option>
@@ -414,14 +285,7 @@ export default function ParticipantsIndex({ participants }) {
                                             aria-label={`Pilih ${participant.nama}`}
                                         />
                                     </div>
-                                    <RowActions
-                                        participant={participant}
-                                        onPhoto={() => setApprovePhotoChangeRequestParticipant(participant)}
-                                        onFace={() => setApproveFaceParticipant(participant)}
-                                        onHistory={() => setHistoryParticipant(participant)}
-                                        onEdit={() => handleEditClick(participant)}
-                                        onDelete={() => handleDelete(participant.id, participant.nama)}
-                                    />
+                                    <DetailLink participant={participant} />
                                 </li>
                             ))
                         )}
@@ -493,15 +357,7 @@ export default function ParticipantsIndex({ participants }) {
                                                 )}
                                             </td>
                                             <td className="whitespace-nowrap px-6 py-2.5">
-                                                <RowActions
-                                                    compact
-                                                    participant={participant}
-                                                    onPhoto={() => setApprovePhotoChangeRequestParticipant(participant)}
-                                                    onFace={() => setApproveFaceParticipant(participant)}
-                                                    onHistory={() => setHistoryParticipant(participant)}
-                                                    onEdit={() => handleEditClick(participant)}
-                                                    onDelete={() => handleDelete(participant.id, participant.nama)}
-                                                />
+                                                <DetailLink compact participant={participant} />
                                             </td>
                                         </tr>
                                     ))
@@ -614,213 +470,6 @@ export default function ParticipantsIndex({ participants }) {
                 </div>
             )}
 
-            {/* Edit Participant Modal */}
-            {editParticipant && (() => {
-                // Ambil versi terbaru dari daftar (mis. token QR baru setelah Reset QR).
-                const editTarget = participants.find((p) => p.id === editParticipant.id) ?? editParticipant;
-
-                return (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-sm" onClick={() => { setEditParticipant(null); editForm.reset(); }}>
-                    <div className="max-h-[92vh] w-full max-w-md animate-[fadeIn_0.2s_ease-out] overflow-y-auto rounded-lg bg-white border border-slate-100 p-6 shadow-soft-lg" onClick={(e) => e.stopPropagation()}>
-                        <div className="mb-6 flex items-center justify-between border-b border-slate-100 pb-3">
-                            <h3 className="text-lg font-bold text-slate-800">Edit Data Peserta</h3>
-                            <button onClick={() => { setEditParticipant(null); editForm.reset(); }} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors">
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                                </svg>
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleEditSubmit}>
-                            <div className="space-y-4">
-                                <div>
-                                    <label htmlFor="edit_nama" className="mb-1 block text-sm font-bold text-slate-600">
-                                        Nama Lengkap
-                                    </label>
-                                    <input
-                                        id="edit_nama"
-                                        type="text"
-                                        value={editForm.data.nama}
-                                        onChange={(e) => editForm.setData('nama', e.target.value)}
-                                        className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-semibold"
-                                        placeholder="Masukkan nama lengkap"
-                                        autoFocus
-                                        required
-                                    />
-                                    {editForm.errors.nama && <p className="mt-1 text-xs text-red-600 font-bold">{editForm.errors.nama}</p>}
-                                    {editForm.data.nama.trim() && !editForm.errors.nama && participants.some(p => p.id !== editParticipant.id && p.nama.trim().toLowerCase() === editForm.data.nama.trim().toLowerCase()) && (
-                                        <p className="mt-1 text-[11px] font-semibold text-amber-600 flex items-center gap-1">
-                                            <span>⚠</span> Nama ini sudah digunakan peserta lain (NIP: {participants.find(p => p.id !== editParticipant.id && p.nama.trim().toLowerCase() === editForm.data.nama.trim().toLowerCase())?.nis_nip})
-                                        </p>
-                                    )}
-                                </div>
-                                <div>
-                                    <label htmlFor="edit_nis_nip" className="mb-1 block text-sm font-bold text-slate-600">
-                                        NIP
-                                    </label>
-                                    <input
-                                        id="edit_nis_nip"
-                                        type="text"
-                                        value={editForm.data.nis_nip}
-                                        onChange={(e) => editForm.setData('nis_nip', e.target.value)}
-                                        readOnly={isNonPermanentStatus(editForm.data.status)}
-                                        className={`w-full rounded-md border border-neutral-300 px-3 py-2 text-sm text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-semibold ${isNonPermanentStatus(editForm.data.status) ? 'bg-slate-100 cursor-not-allowed' : 'bg-white'}`}
-                                        placeholder="Masukkan NIP"
-                                        required={!isNonPermanentStatus(editForm.data.status)}
-                                    />
-                                    {editForm.errors.nis_nip && <p className="mt-1 text-xs text-red-600 font-bold">{editForm.errors.nis_nip}</p>}
-                                    {isNonPermanentStatus(editForm.data.status) && (
-                                        <p className="mt-1 text-[11px] font-semibold text-slate-500">NIP otomatis diisi "-" untuk GTT/PTT.</p>
-                                    )}
-                                    {editForm.data.nis_nip.trim() && editForm.data.nis_nip !== '-' && !editForm.errors.nis_nip && participants.some(p => p.id !== editParticipant.id && p.nis_nip === editForm.data.nis_nip.trim().replace(/^['"]+/, '').replace(/\.0+$/, '')) && (
-                                        <p className="mt-1 text-[11px] font-semibold text-amber-600 flex items-center gap-1">
-                                            <span>⚠</span> NIP ini sudah digunakan oleh: {participants.find(p => p.id !== editParticipant.id && p.nis_nip === editForm.data.nis_nip.trim().replace(/^['"]+/, '').replace(/\.0+$/, ''))?.nama}
-                                        </p>
-                                    )}
-                                </div>
-                                <div>
-                                    <label htmlFor="edit_status" className="mb-1 block text-sm font-bold text-slate-600">
-                                        Status Pegawai
-                                    </label>
-                                    <select
-                                        id="edit_status"
-                                        value={editForm.data.status}
-                                        onChange={(e) => handleEditStatusChange(e.target.value)}
-                                        className="w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-semibold"
-                                    >
-                                        <option value="">-- Pilih Status --</option>
-                                        <option value="PNS">PNS</option>
-                                        <option value="PPPK">PPPK</option>
-                                        <option value="PPPK Paruh Waktu">PPPK Paruh Waktu</option>
-                                        <option value="GTT">GTT</option>
-                                        <option value="PTT">PTT</option>
-                                    </select>
-                                    {editForm.errors.status && <p className="mt-1 text-xs text-red-600 font-bold">{editForm.errors.status}</p>}
-                                </div>
-
-                                <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                                    <p className="mb-3 text-sm font-bold text-slate-600">QR Code Presensi</p>
-                                    <div className="flex items-center gap-4">
-                                        <img
-                                            src={`${route('participants.qr', editTarget.id)}?v=${encodeURIComponent(editTarget.qr_token ?? '')}`}
-                                            alt={`QR Code - ${editTarget.nama}`}
-                                            className="h-28 w-28 shrink-0 rounded-md border border-slate-200 bg-white p-1.5"
-                                        />
-                                        <div className="min-w-0 flex-1 space-y-2">
-                                            <p className="text-xs text-slate-500">Dipakai untuk presensi scan QR.</p>
-                                            <div className="flex gap-2">
-                                                <button type="button" onClick={() => handleDownloadSvg(editTarget)} className="flex-1 rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs font-bold text-slate-700 transition-colors hover:bg-slate-100">
-                                                    Download
-                                                </button>
-                                                <button type="button" onClick={() => handlePrint(editTarget)} className="flex-1 rounded-md bg-brand-gradient px-2 py-1.5 text-xs font-bold text-white shadow-dark-sm">
-                                                    Cetak
-                                                </button>
-                                            </div>
-                                            <button type="button" onClick={() => handleResetQr(editTarget)} className="w-full rounded-md border border-rose-200 bg-white px-2 py-1.5 text-[11px] font-bold text-rose-600 transition-colors hover:bg-rose-50">
-                                                Reset QR (QR lama tidak berlaku)
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="mt-6 flex items-center gap-3 border-t border-slate-100 pt-4">
-                                {editParticipant.face_status === 'pending' ? (
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            const participant = editParticipant;
-                                            setEditParticipant(null);
-                                            editForm.reset();
-                                            setApproveFaceParticipant(participant);
-                                        }}
-                                        className="mr-auto inline-flex items-center gap-2 rounded-md bg-amber-500 px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-amber-600 shadow-md shadow-amber-500/20 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                        </svg>
-                                        Review Wajah (Pending)
-                                    </button>
-                                ) : (
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            const participant = editParticipant;
-                                            setEditParticipant(null);
-                                            editForm.reset();
-                                            setFaceRegistrationParticipant(participant);
-                                        }}
-                                        className="mr-auto inline-flex items-center gap-2 rounded-md border border-neutral-200 bg-neutral-100 px-4 py-2.5 text-sm font-bold text-neutral-800 hover:bg-neutral-200 transition-colors focus:outline-none focus:ring-2 focus:ring-neutral-500/20"
-                                    >
-                                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                                        </svg>
-                                        {editParticipant.face_status === 'approved' ? 'Perbarui Wajah' : 'Registrasi Wajah'}
-                                    </button>
-                                )}
-                                
-                                <button
-                                    type="button"
-                                    onClick={() => { setEditParticipant(null); editForm.reset(); }}
-                                    className="rounded-md border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-100 transition-colors"
-                                >
-                                    Batal
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={editForm.processing}
-                                    className="rounded-md bg-brand-gradient px-5 py-2.5 text-sm font-bold text-white shadow-dark-sm hover:bg-brand-gradient transition-all disabled:opacity-50"
-                                >
-                                    {editForm.processing ? 'Menyimpan...' : 'Simpan'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-                );
-            })()}
-
-            {/* Face Registration Modal */}
-            {faceRegistrationParticipant && (
-                <FaceRegistrationModal
-                    participant={faceRegistrationParticipant}
-                    onClose={() => setFaceRegistrationParticipant(null)}
-                    onSuccess={() => {
-                        setFaceRegistrationParticipant(null);
-                        router.reload({ only: ['participants'] });
-                    }}
-                />
-            )}
-
-            {/* Approve Face Modal */}
-            {approveFaceParticipant && (
-                <ApproveFaceModal
-                    participant={approveFaceParticipant}
-                    onClose={() => setApproveFaceParticipant(null)}
-                    onSuccess={() => {
-                        setApproveFaceParticipant(null);
-                        router.reload({ only: ['participants'] });
-                    }}
-                />
-            )}
-
-            {approvePhotoChangeRequestParticipant && (
-                <ApprovePhotoChangeRequestModal
-                    participant={approvePhotoChangeRequestParticipant}
-                    onClose={() => setApprovePhotoChangeRequestParticipant(null)}
-                    onSuccess={() => {
-                        setApprovePhotoChangeRequestParticipant(null);
-                        router.reload({ only: ['participants'] });
-                    }}
-                />
-            )}
-
-            {historyParticipant && (
-                <FaceHistoryModal participant={historyParticipant} onClose={() => setHistoryParticipant(null)} />
-            )}
-
             {/* Import Excel Modal */}
             <ImportModal
                 isOpen={showImportModal}
@@ -847,8 +496,6 @@ const actionIcons = {
     upload: iconSvg(['M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12']),
     plus: iconSvg(['M12 4v16m8-8H4']),
     eye: iconSvg(['M15 12a3 3 0 11-6 0 3 3 0 016 0z', 'M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z']),
-    edit: iconSvg(['M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z']),
-    trash: iconSvg(['M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16']),
 };
 
 function Avatar({ participant }) {
@@ -893,31 +540,21 @@ function FaceStatus({ participant }) {
     );
 }
 
-/** Aksi baris: verifikasi (bila ada) sebagai tombol gradien, sisanya tombol ikon tenang dengan tooltip. */
-function RowActions({ participant, compact = false, onPhoto, onFace, onHistory, onEdit, onDelete }) {
-    const review = 'inline-flex items-center gap-1 rounded-md bg-gradient-to-b from-amber-400 to-orange-500 px-2.5 py-1 text-xs font-medium text-white shadow-dark-sm transition-shadow hover:shadow-dark-hover';
-    const ghost = 'inline-flex h-8 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900';
+/** Satu-satunya aksi baris: buka halaman detail peserta. Titik oranye menandai foto/wajah yang menunggu verifikasi. */
+function DetailLink({ participant, compact = false }) {
+    const needsReview = Boolean(participant.pending_photo_change_request) || participant.face_status === 'pending';
 
     return (
-        <div className={`flex flex-wrap items-center gap-1 ${compact ? 'justify-end' : ''}`}>
-            {participant.pending_photo_change_request && (
-                <button type="button" onClick={onPhoto} className={review} title="Verifikasi foto baru">Verifikasi foto</button>
-            )}
-            {participant.face_status === 'pending' && (
-                <button type="button" onClick={onFace} className={review} title="Tinjau pendaftaran wajah">Tinjau wajah</button>
-            )}
-            <button type="button" onClick={onHistory} className={ghost} title="Riwayat wajah yang disetujui">
-                <span className="h-4 w-4">{icons.clock}</span>
-                {!compact && 'Riwayat'}
-            </button>
-            <button type="button" onClick={onEdit} className={ghost} title="Edit peserta">
-                <span className="h-4 w-4">{actionIcons.edit}</span>
-                {!compact && 'Edit'}
-            </button>
-            <button type="button" onClick={onDelete} className={`${ghost} hover:!bg-rose-50 hover:!text-rose-600`} title="Hapus peserta">
-                <span className="h-4 w-4">{actionIcons.trash}</span>
-                {!compact && 'Hapus'}
-            </button>
+        <div className={`flex ${compact ? 'justify-end' : ''}`}>
+            <Link
+                href={route('participants.show', participant.id)}
+                className="relative inline-flex h-8 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
+                title={needsReview ? 'Detail peserta (perlu verifikasi)' : 'Detail peserta'}
+            >
+                <span className="h-4 w-4">{actionIcons.eye}</span>
+                {!compact && 'Detail'}
+                {needsReview && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-amber-500 ring-2 ring-white" />}
+            </Link>
         </div>
     );
 }

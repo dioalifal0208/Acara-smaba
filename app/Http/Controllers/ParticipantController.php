@@ -38,31 +38,56 @@ class ParticipantController extends Controller
             ->with(['photoChangeRequests' => fn ($query) => $query->where('status', 'pending')->latest()])
             ->orderBy('created_at', 'desc')
             ->get()
-            ->map(function ($participant) {
-                $pendingPhotoChangeRequest = $participant->photoChangeRequests->first();
-
-                return [
-                    'id' => $participant->id,
-                    'nama' => $participant->nama,
-                    'nis_nip' => $participant->nis_nip ?? '-',
-                    'status' => $participant->status,
-                    'qr_token' => $participant->qr_token,
-                    'has_face' => $participant->face_descriptor !== null,
-                    'face_status' => $participant->face_status,
-                    'photo_url' => $participant->photo_url,
-                    'pending_photo_change_request' => $pendingPhotoChangeRequest ? [
-                        'id' => $pendingPhotoChangeRequest->id,
-                        'photo_url' => PrivateFile::url('photo-change-request', $pendingPhotoChangeRequest),
-                        'created_at' => $pendingPhotoChangeRequest->created_at->toIso8601String(),
-                    ] : null,
-                    'has_attended' => $participant->attendances_count > 0,
-                    'created_at' => $participant->created_at->format('d M Y H:i'),
-                ];
-            });
+            ->map(fn (Participant $participant) => $this->participantPayload($participant));
 
         return Inertia::render('Participants/Index', [
             'participants' => $participants,
         ]);
+    }
+
+    /**
+     * Halaman detail peserta: edit data, QR, wajah, verifikasi, riwayat wajah, dan hapus.
+     */
+    public function show(Participant $participant)
+    {
+        $participant->loadCount('attendances')
+            ->load(['photoChangeRequests' => fn ($query) => $query->where('status', 'pending')->latest()]);
+        $account = User::where('participant_id', $participant->id)->first(['id', 'username', 'device_model', 'app_version_name']);
+
+        return Inertia::render('Participants/Show', [
+            'participant' => $this->participantPayload($participant) + [
+                'attendances_count' => $participant->attendances_count,
+                'account' => $account ? [
+                    'username' => $account->username,
+                    'device_model' => $account->device_model,
+                    'app_version_name' => $account->app_version_name,
+                ] : null,
+            ],
+        ]);
+    }
+
+    /** Data peserta untuk halaman admin; butuh attendances_count dan photoChangeRequests pending. */
+    private function participantPayload(Participant $participant): array
+    {
+        $pendingPhotoChangeRequest = $participant->photoChangeRequests->first();
+
+        return [
+            'id' => $participant->id,
+            'nama' => $participant->nama,
+            'nis_nip' => $participant->nis_nip ?? '-',
+            'status' => $participant->status,
+            'qr_token' => $participant->qr_token,
+            'has_face' => $participant->face_descriptor !== null,
+            'face_status' => $participant->face_status,
+            'photo_url' => $participant->photo_url,
+            'pending_photo_change_request' => $pendingPhotoChangeRequest ? [
+                'id' => $pendingPhotoChangeRequest->id,
+                'photo_url' => PrivateFile::url('photo-change-request', $pendingPhotoChangeRequest),
+                'created_at' => $pendingPhotoChangeRequest->created_at->toIso8601String(),
+            ] : null,
+            'has_attended' => $participant->attendances_count > 0,
+            'created_at' => $participant->created_at->format('d M Y H:i'),
+        ];
     }
 
     /**
@@ -257,7 +282,7 @@ class ParticipantController extends Controller
 
         $this->syncParticipantUser($participant, $oldNip);
 
-        return redirect()->route('participants.index')
+        return redirect()->route('participants.show', $participant)
             ->with('success', 'Data peserta berhasil diperbarui!');
     }
 

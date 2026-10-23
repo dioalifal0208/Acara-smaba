@@ -514,7 +514,7 @@ class AttendanceController extends Controller
         // URL bertanda tangan permanen (QR tercetak di laporan): ID workcode berurutan tidak bisa
         // ditebak untuk membuka laporan lain.
         $verifyUrl = URL::signedRoute('signature.verify', ['workcode' => $workcode->id]);
-        $svg = $qrCodeService->generate($verifyUrl, 200);
+        $svg = $qrCodeService->generateWithLogo($verifyUrl, 200);
 
         return response($svg, 200, [
             'Content-Type' => 'image/svg+xml',

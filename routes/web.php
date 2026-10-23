@@ -128,6 +128,7 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::post('/participants/import/preview', [ParticipantController::class, 'importPreview'])->name('participants.import.preview');
     Route::post('/participants/import/confirm', [ParticipantController::class, 'importConfirm'])->name('participants.import.confirm');
     Route::delete('/participants/bulk-delete', [ParticipantController::class, 'bulkDestroy'])->name('participants.bulk-destroy');
+    Route::get('/participants/{participant}', [ParticipantController::class, 'show'])->whereNumber('participant')->name('participants.show');
     Route::put('/participants/{participant}', [ParticipantController::class, 'update'])->name('participants.update');
     Route::post('/participants/{participant}/qr/regenerate', [ParticipantController::class, 'regenerateQrToken'])->name('participants.qr.regenerate');
     Route::get('/participants/{participant}/face-history', [ParticipantController::class, 'faceHistory'])->name('participants.face-history');

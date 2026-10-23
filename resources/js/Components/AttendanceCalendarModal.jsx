@@ -370,7 +370,7 @@ export default function AttendanceCalendarModal({
                 <div className="mt-3.5 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3 bg-slate-50 p-2.5 rounded-2xl border border-slate-200/80">
                     {/* Participant Search & Active Badge */}
                     <div className="flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center flex-1">
-                        <div className="relative flex-1 sm:max-w-xs">
+                        <div className="relative flex-1 sm:max-w-md">
                             <div className="relative">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />

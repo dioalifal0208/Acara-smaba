@@ -66,7 +66,7 @@ final class AdminNotifications
                     'Pengajuan ganti foto',
                     ($request->participant?->nama ?? 'Peserta').' mengajukan foto wajah baru.',
                     $request->created_at,
-                    route('participants.index', ['review' => 'photo', 'participant' => $request->participant_id]),
+                    route('participants.show', ['participant' => $request->participant_id, 'review' => 'photo']),
                 )),
         );
     }
@@ -87,7 +87,7 @@ final class AdminNotifications
                     'Pendaftaran wajah',
                     "{$participant->nama} mendaftarkan wajah dan menunggu persetujuan.",
                     $participant->updated_at,
-                    route('participants.index', ['review' => 'face', 'participant' => $participant->id]),
+                    route('participants.show', ['participant' => $participant->id, 'review' => 'face']),
                 )),
         );
     }
