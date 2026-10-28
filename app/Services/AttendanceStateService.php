@@ -31,7 +31,8 @@ class AttendanceStateService
             ];
         }
 
-        $attendanceQuery = Attendance::where('workcode_id', $activeWorkcode->id)
+        // Catatan otomatis stakeholder tidak menutup tombol presensi: scan peserta menimpanya.
+        $attendanceQuery = Attendance::recorded()->where('workcode_id', $activeWorkcode->id)
             ->where('participant_id', $participant->id);
 
         // Presensi harian hanya melihat catatan pada tanggal berjalan (kolom tanggal, bagian unique key;

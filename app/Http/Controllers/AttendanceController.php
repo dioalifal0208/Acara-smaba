@@ -111,7 +111,7 @@ class AttendanceController extends Controller
         }
 
         // Tentukan apakah workcode harian & sudah ada attendance hari ini
-        $existingAttendance = Attendance::where('workcode_id', $activeWorkcode->id)
+        $existingAttendance = Attendance::recorded()->where('workcode_id', $activeWorkcode->id)
             ->where('participant_id', $participant->id)
             ->when(
                 $activeWorkcode->kategori === 'harian',
@@ -159,8 +159,8 @@ class AttendanceController extends Controller
             $lateFormatted = Workcode::formatLateDuration($lateMinutes);
         }
 
-        // Catat presensi datang
-        $attendance = Attendance::create([
+        // Catat presensi datang (menimpa catatan otomatis stakeholder bila ada)
+        $attendance = Attendance::createOrReplaceAutomatic([
             'workcode_id' => $activeWorkcode->id,
             'participant_id' => $participant->id,
             'tanggal' => now()->toDateString(),
@@ -664,6 +664,7 @@ class AttendanceController extends Controller
             'wajah' => 'Wajah',
             'qr_peserta' => 'QR Peserta',
             'manual' => 'Manual',
+            Attendance::METHOD_AUTO => 'Otomatis',
             default => $attendance->signature_path ? 'Tanda Tangan' : 'Wajah',
         };
     }

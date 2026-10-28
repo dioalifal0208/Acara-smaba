@@ -201,7 +201,7 @@ class AttendanceValidationService
 
     public function checkAlreadyAttended(Workcode $workcode, Participant $participant): bool
     {
-        $attendanceQuery = Attendance::where('workcode_id', $workcode->id)
+        $attendanceQuery = Attendance::recorded()->where('workcode_id', $workcode->id)
             ->where('participant_id', $participant->id)
             ->when(
                 $workcode->kategori === 'harian',

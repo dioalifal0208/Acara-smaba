@@ -235,7 +235,7 @@ class SelfCheckInController extends Controller
 
         // Catat kehadiran untuk workcode aktif (beserta device_hash, IP, dan tanda tangan)
         try {
-            $attendance = Attendance::create([
+            $attendance = Attendance::createOrReplaceAutomatic([
                 'workcode_id' => $activeWorkcode->id,
                 'participant_id' => $participant->id,
                 'tanggal' => now()->toDateString(),

@@ -142,9 +142,7 @@ function WorkcodeCard({ workcode, tolerance, onEdit, onDelete, onMap }) {
                                 : <StatusPill tone="netral" icon={PowerOff} label="Nonaktif" />}
                             <StatusPill tone="netral" icon={daily ? Clock : CalendarDays} label={daily ? 'Harian' : 'Kegiatan'} />
                         </div>
-                        <h3 className="line-clamp-2 text-base font-semibold text-ink">{workcode.nama_workcode}</h3>
-                        {workcode.deskripsi && <p className="mt-0.5 line-clamp-2 text-sm text-ink-2">{workcode.deskripsi}</p>}
-                    </div>
+                        <h3 className="line-clamp-2 text-base font-semibold text-ink">{workcode.nama_workcode}</h3>                    </div>
                     <CardMenu workcode={workcode} onEdit={onEdit} onDelete={onDelete} />
                 </div>
 
@@ -170,8 +168,9 @@ function WorkcodeCard({ workcode, tolerance, onEdit, onDelete, onMap }) {
                     {!daily && workcode.tanggal && <Row label="Tanggal">{formatDate(workcode.tanggal)}</Row>}
                     {autoManaged && <Row label="Aktif otomatis">{hhmm(workcode.jam_aktif_mulai)}–{hhmm(workcode.jam_aktif_selesai)} WIB</Row>}
                     <Row label="Peserta">
-                        <span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5 text-ink-2" aria-hidden="true" />{restricted ? `${workcode.participants_count} dipilih` : 'Semua'}</span>
+                        <span className="inline-flex items-center gap-1"><Users className="h-3.5 w-3.5 text-ink-2" aria-hidden="true" />{restricted ? `${workcode.participants_count - (workcode.auto_attendees?.length ?? 0)} dipilih` : 'Semua'}</span>
                     </Row>
+                    {!daily && workcode.auto_attendees?.length > 0 && <Row label="Auto hadir">{workcode.auto_attendees.length} stakeholder</Row>}
                     <Row label="Lokasi">
                         {hasLocation ? (
                             <button type="button" onClick={() => onMap(workcode)} className="inline-flex items-center gap-1 font-medium text-accent hover:underline">

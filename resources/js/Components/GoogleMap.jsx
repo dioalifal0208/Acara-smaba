@@ -3,7 +3,20 @@ import React, { useEffect, useRef, useState } from 'react';
 const GOOGLE_MAPS_SCRIPT_ID = 'google-maps-javascript-api';
 const LOCATION_TIMEOUT_MS = 20000;
 
+const AUTH_FAILURE_MESSAGE = `Google Maps menolak API key untuk alamat ${typeof window !== 'undefined' ? window.location.origin : 'situs ini'}. `
+    + 'Tambahkan alamat ini ke daftar HTTP referrer key di Google Cloud Console (dan pastikan Maps JavaScript API aktif), lalu muat ulang halaman.';
+
 let googleMapsPromise;
+let authFailed = false;
+const authFailureListeners = new Set();
+
+// Google memanggil gm_authFailure saat key ditolak (referrer tidak diizinkan, API belum aktif, billing).
+// Tanpa ini peta hanya menampilkan halaman galat bawaan Google yang tidak menyebut penyebabnya.
+const onAuthFailure = (listener) => {
+    if (authFailed) listener();
+    authFailureListeners.add(listener);
+    return () => authFailureListeners.delete(listener);
+};
 
 const loadGoogleMaps = () => {
     if (window.google?.maps) {
@@ -28,6 +41,11 @@ const loadGoogleMaps = () => {
             existingScript.addEventListener('error', () => reject(new Error('Google Maps JavaScript API gagal dimuat.')), { once: true });
             return;
         }
+
+        window.gm_authFailure = () => {
+            authFailed = true;
+            authFailureListeners.forEach((listener) => listener());
+        };
 
         const script = document.createElement('script');
         script.id = GOOGLE_MAPS_SCRIPT_ID;
@@ -81,6 +99,8 @@ export default function GoogleMap({
     const [loadError, setLoadError] = useState('');
     const [locationState, setLocationState] = useState('idle');
     const [mapReady, setMapReady] = useState(false);
+
+    useEffect(() => onAuthFailure(() => setLoadError(AUTH_FAILURE_MESSAGE)), []);
 
     onPositionChangeRef.current = onPositionChange;
     onLocationStatusChangeRef.current = onLocationStatusChange;

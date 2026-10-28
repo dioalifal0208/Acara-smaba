@@ -60,6 +60,13 @@ class AutoActivateWorkcode extends Command
             $this->info('Tidak ada perubahan status workcode terjadwal.');
         }
 
+        // Stakeholder kegiatan hari ini otomatis tercatat hadir begitu jam aktif mulai tercapai.
+        Workcode::where('kategori', 'workcode')
+            ->whereDate('tanggal', $now->toDateString())
+            ->whereHas('autoAttendees')
+            ->get()
+            ->each(fn (Workcode $workcode) => $workcode->syncAutoAttendance($now));
+
         return self::SUCCESS;
     }
 }

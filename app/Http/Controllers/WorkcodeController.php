@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Participant;
 use App\Models\Workcode;
+use App\Observers\AttendanceObserver;
 use App\Services\FcmService;
 use App\Support\AdminDashboardStats;
 use Carbon\Carbon;
@@ -18,7 +19,7 @@ class WorkcodeController extends Controller
      */
     public function index()
     {
-        $workcodes = Workcode::with('participants:id')->withCount(['attendances', 'participants'])
+        $workcodes = Workcode::with(['participants:id', 'autoAttendees:id'])->withCount(['attendances', 'participants'])
             ->orderBy('is_active', 'desc')
             ->orderBy('created_at', 'desc')
             ->get();
@@ -45,7 +46,6 @@ class WorkcodeController extends Controller
     {
         $validated = $request->validate([
             'nama_workcode' => $this->namaWorkcodeRules($request),
-            'deskripsi' => 'nullable|string|max:1000',
             'kategori' => 'required|in:workcode,harian',
             'tanggal' => 'required_if:kategori,workcode|nullable|date',
             'jam_aktif_mulai' => 'required_if:kategori,workcode|nullable|date_format:H:i,H:i:s',
@@ -62,6 +62,8 @@ class WorkcodeController extends Controller
             'jadwal_per_hari' => 'nullable|array',
             'participant_ids' => 'nullable|array',
             'participant_ids.*' => 'integer|exists:participants,id',
+            'auto_participant_ids' => 'nullable|array',
+            'auto_participant_ids.*' => 'integer|exists:participants,id',
         ]);
 
         $isActivity = $validated['kategori'] === 'workcode';
@@ -77,7 +79,6 @@ class WorkcodeController extends Controller
 
         $workcode = Workcode::create([
             'nama_workcode' => $validated['nama_workcode'],
-            'deskripsi' => $validated['deskripsi'] ?? null,
             'kategori' => $validated['kategori'] ?? 'workcode',
             'tanggal' => $isActivity ? $validated['tanggal'] : null,
             'jam_aktif_mulai' => $isActivity ? $validated['jam_aktif_mulai'] : null,
@@ -93,7 +94,7 @@ class WorkcodeController extends Controller
             'is_active' => $setActive,
             'jadwal_per_hari' => $isDaily ? ($validated['jadwal_per_hari'] ?? null) : null,
         ]);
-        $workcode->participants()->sync($validated['participant_ids'] ?? []);
+        $this->syncParticipants($workcode, $validated, $isActivity);
 
         // Kirim FCM notification ke semua subscriber
         $fcmService->sendWorkcodeUpdate('created', $workcode);
@@ -162,7 +163,6 @@ class WorkcodeController extends Controller
     {
         $validated = $request->validate([
             'nama_workcode' => $this->namaWorkcodeRules($request),
-            'deskripsi' => 'nullable|string|max:1000',
             'kategori' => 'required|in:workcode,harian',
             'tanggal' => 'required_if:kategori,workcode|nullable|date',
             'jam_aktif_mulai' => 'required_if:kategori,workcode|nullable|date_format:H:i,H:i:s',
@@ -178,6 +178,8 @@ class WorkcodeController extends Controller
             'jadwal_per_hari' => 'nullable|array',
             'participant_ids' => 'nullable|array',
             'participant_ids.*' => 'integer|exists:participants,id',
+            'auto_participant_ids' => 'nullable|array',
+            'auto_participant_ids.*' => 'integer|exists:participants,id',
         ]);
 
         $isActivity = $validated['kategori'] === 'workcode';
@@ -190,7 +192,6 @@ class WorkcodeController extends Controller
 
         $updates = [
             'nama_workcode' => $validated['nama_workcode'],
-            'deskripsi' => $validated['deskripsi'] ?? null,
             'kategori' => $validated['kategori'] ?? 'workcode',
             'tanggal' => $isActivity ? $validated['tanggal'] : null,
             'jam_aktif_mulai' => $isActivity ? $validated['jam_aktif_mulai'] : null,
@@ -211,12 +212,28 @@ class WorkcodeController extends Controller
         }
 
         $workcode->update($updates);
-        $workcode->participants()->sync($validated['participant_ids'] ?? []);
+        $this->syncParticipants($workcode, $validated, $isActivity);
 
         // Kirim FCM notification ke semua subscriber
         $fcmService->sendWorkcodeUpdate('updated', $workcode);
 
         return redirect()->back()->with('success', "Workcode '{$workcode->nama_workcode}' berhasil diperbarui.");
+    }
+
+    /**
+     * Simpan peserta terpilih dan stakeholder auto presensi (hanya kegiatan sekali), lalu samakan catatan
+     * otomatisnya. Admin memilih stakeholder terpisah dari peserta; bila workcode membatasi peserta,
+     * stakeholder tetap ikut boleh presensi agar scan mereka bisa menimpa catatan otomatis.
+     * Tanpa push FCM per peserta: push 'created'/'updated' workcode sudah memuat ulang aplikasi.
+     */
+    private function syncParticipants(Workcode $workcode, array $validated, bool $isActivity): void
+    {
+        $participantIds = $validated['participant_ids'] ?? [];
+        $autoIds = $isActivity ? ($validated['auto_participant_ids'] ?? []) : [];
+
+        $workcode->participants()->sync($participantIds === [] ? [] : array_unique([...$participantIds, ...$autoIds]));
+        $workcode->autoAttendees()->sync($autoIds);
+        AttendanceObserver::withoutStatePush(fn () => $workcode->syncAutoAttendance());
     }
 
     /**

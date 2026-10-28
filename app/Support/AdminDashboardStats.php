@@ -19,6 +19,7 @@ class AdminDashboardStats
         'qr_peserta' => 'QR Peserta',
         'tanda_tangan' => 'Tanda Tangan',
         'manual' => 'Manual',
+        'otomatis' => 'Otomatis',
     ];
 
     /**

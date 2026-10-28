@@ -147,7 +147,7 @@ class AttendanceController extends Controller
                     ]);
                 }
 
-                $existingAttendance = Attendance::where('workcode_id', $activeWorkcode->id)
+                $existingAttendance = Attendance::recorded()->where('workcode_id', $activeWorkcode->id)
                     ->where('participant_id', $user->participant_id)
                     ->whereDate('tanggal', now()->toDateString())
                     ->first();
@@ -252,7 +252,7 @@ class AttendanceController extends Controller
                     ->where('tipe_izin', 'tidak_absen_pulang')
                     ->first();
 
-                $attendance = AttendanceObserver::withoutStatePush(fn () => Attendance::create([
+                $attendance = AttendanceObserver::withoutStatePush(fn () => Attendance::createOrReplaceAutomatic([
                     'workcode_id' => $activeWorkcode->id,
                     'participant_id' => $user->participant_id,
                     'tanggal' => now()->toDateString(),

@@ -3,8 +3,14 @@ import { useState } from 'react';
 
 /**
  * Pilih peserta yang boleh presensi di workcode ini. Tanpa centang = terbuka untuk semua peserta.
+ * Dipakai juga untuk memilih stakeholder auto presensi (judul & teks lewat props).
  */
-export default function ParticipantPicker({ open, onClose, participants, selected, onChange }) {
+export default function ParticipantPicker({
+    open, onClose, participants, selected, onChange,
+    title = 'Peserta workcode',
+    description = 'Hanya peserta yang dicentang yang bisa presensi. Tanpa centang, semua peserta boleh.',
+    emptyLabel = 'Terbuka untuk semua peserta',
+}) {
     const [query, setQuery] = useState('');
     const q = query.trim().toLowerCase();
     const visible = participants.filter((p) => !q || `${p.nama} ${p.nis_nip || ''}`.toLowerCase().includes(q));
@@ -20,13 +26,13 @@ export default function ParticipantPicker({ open, onClose, participants, selecte
         <Dialog
             open={open}
             onClose={onClose}
-            title="Peserta workcode"
-            description="Hanya peserta yang dicentang yang bisa presensi. Tanpa centang, semua peserta boleh."
+            title={title}
+            description={description}
             size="2xl"
             footer={
                 <>
                     <p className="text-sm text-ink-2 sm:mr-auto">
-                        {selected.length === 0 ? 'Terbuka untuk semua peserta' : `${selected.length} dari ${participants.length} peserta dipilih`}
+                        {selected.length === 0 ? emptyLabel : `${selected.length} dari ${participants.length} peserta dipilih`}
                     </p>
                     {selected.length > 0 && <Button onClick={() => onChange([])}>Kosongkan</Button>}
                     <Button variant="primary" onClick={onClose}>Selesai</Button>

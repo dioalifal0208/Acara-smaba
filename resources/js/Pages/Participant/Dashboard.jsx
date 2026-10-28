@@ -50,7 +50,7 @@ export default function ParticipantDashboard({ activeWorkcode, participant }) {
                         <>
                             <p className="mt-1 font-display text-xl font-semibold text-ink">{activeWorkcode.nama_workcode}</p>
                             <p className="mt-1 text-sm text-ink-2">
-                                {activeWorkcode.deskripsi || 'Presensi lewat aplikasi Android dengan wajah, atau pindai QR kegiatan yang ditampilkan panitia.'}
+                                Presensi lewat aplikasi Android dengan wajah, atau pindai QR kegiatan yang ditampilkan panitia.
                             </p>
                         </>
                     ) : (

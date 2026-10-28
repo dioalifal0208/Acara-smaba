@@ -70,6 +70,47 @@ class Workcode extends Model
         return $this->belongsToMany(Participant::class)->withTimestamps();
     }
 
+    /** Stakeholder yang otomatis tercatat hadir saat kegiatan dimulai (hanya kegiatan sekali). */
+    public function autoAttendees()
+    {
+        return $this->belongsToMany(Participant::class, 'workcode_auto_attendees')->withTimestamps();
+    }
+
+    /**
+     * Samakan presensi otomatis stakeholder dengan jadwal kegiatan: setelah jam aktif mulai, setiap
+     * stakeholder tercatat hadir pada jam mulai itu. Presensi yang sudah ada (scan, izin, manual) tidak
+     * disentuh; catatan otomatis yang tidak berlaku lagi (centang dilepas, jadwal diubah, belum mulai)
+     * dihapus. Dipanggil saat workcode disimpan dan tiap menit oleh workcode:auto-activate.
+     */
+    public function syncAutoAttendance(?CarbonInterface $moment = null): void
+    {
+        $moment ??= now();
+        $startsAt = $this->activeWindowStartsAt();
+        $ids = $startsAt && $moment->greaterThanOrEqualTo($startsAt)
+            ? $this->autoAttendees()->pluck('participants.id')
+            : collect();
+
+        $this->attendances()
+            ->where('attendance_method', Attendance::METHOD_AUTO)
+            ->where(fn (Builder $query) => $query->whereNotIn('participant_id', $ids)
+                ->orWhereDate('tanggal', '!=', $this->tanggal)
+                ->orWhere('waktu_hadir', '!=', $startsAt))
+            ->get()
+            ->each->delete();
+
+        foreach ($ids as $participantId) {
+            Attendance::firstOrCreate([
+                'workcode_id' => $this->id,
+                'participant_id' => $participantId,
+                'tanggal' => $this->tanggal,
+            ], [
+                'waktu_hadir' => $startsAt,
+                'status' => 'hadir',
+                'attendance_method' => Attendance::METHOD_AUTO,
+            ]);
+        }
+    }
+
     /**
      * Peserta yang wajib presensi di workcode ini: peserta terpilih, atau semua peserta bila
      * workcode tidak membatasi. Dipakai rekap dashboard dan attendance:calculate-alpha.
