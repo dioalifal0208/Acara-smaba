@@ -2,8 +2,10 @@ import { appUrl } from '@/lib/appUrl';
 import { cx } from '@/ui';
 import ThemeMenu from '@/ui/ThemeMenu';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
+import MyQrDialog from '@/Components/MyQrDialog';
 import { Link, usePage } from '@inertiajs/react';
-import { FileClock, Home, LogOut, UserRound } from 'lucide-react';
+import { FileClock, Home, LogOut, QrCode, UserRound } from 'lucide-react';
+import { useState } from 'react';
 
 const NAV = [
     { route: 'participant.dashboard', label: 'Beranda', icon: Home },
@@ -17,6 +19,7 @@ const NAV = [
 export default function ParticipantShell({ header, children }) {
     const { auth } = usePage().props;
     const user = auth.user;
+    const [qrOpen, setQrOpen] = useState(false);
 
     return (
         <div className="flex min-h-dvh flex-col bg-app text-ink">
@@ -27,7 +30,7 @@ export default function ParticipantShell({ header, children }) {
             <header className="sticky top-0 z-30 border-b border-line bg-app/95 backdrop-blur supports-[backdrop-filter]:bg-app/80">
                 <div className="mx-auto flex h-16 max-w-4xl items-center gap-3 px-4 sm:px-6">
                     <Link href={route('participant.dashboard')} className="flex min-w-0 items-center gap-3">
-                        <img src={appUrl('images/logo.png')} alt="" className="h-8 w-8 shrink-0 object-contain" />
+                        <img src={appUrl('images/logo-96.png')} alt="" width="32" height="32" className="h-8 w-8 shrink-0 object-contain" />
                         <span className="hidden leading-tight sm:block">
                             <span className="block text-sm font-semibold text-ink">E-Presensi</span>
                             <span className="block text-xs text-ink-2">SMA Negeri 1 Babat</span>
@@ -54,8 +57,11 @@ export default function ParticipantShell({ header, children }) {
                 &copy; {new Date().getFullYear()} E-Presensi SMA Negeri 1 Babat
             </footer>
 
-            {/* HP: menu utama di bawah, terjangkau ibu jari */}
-            <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-2 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] sm:hidden" aria-label="Menu peserta">
+            {/* HP: menu utama di bawah, terjangkau ibu jari. QR pribadi ikut di sini karena paling sering dibuka di meja scanner. */}
+            <nav
+                className={cx('fixed inset-x-0 bottom-0 z-30 grid border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] sm:hidden', user.participant_id ? 'grid-cols-3' : 'grid-cols-2')}
+                aria-label="Menu peserta"
+            >
                 {NAV.map((item) => {
                     const active = route().current(item.route);
                     const Icon = item.icon;
@@ -71,7 +77,15 @@ export default function ParticipantShell({ header, children }) {
                         </Link>
                     );
                 })}
+                {user.participant_id && (
+                    <button type="button" onClick={() => setQrOpen(true)} className="flex h-16 flex-col items-center justify-center gap-1 text-xs text-ink-2">
+                        <QrCode className="h-5 w-5" aria-hidden="true" />
+                        QR saya
+                    </button>
+                )}
             </nav>
+
+            {user.participant_id && <MyQrDialog open={qrOpen} onClose={() => setQrOpen(false)} participantId={user.participant_id} name={user.name} />}
         </div>
     );
 }

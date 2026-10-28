@@ -57,7 +57,7 @@ export function ParticipantAvatar({ participant, size = 'md' }) {
     const box = { md: 'h-10 w-10 text-sm', lg: 'h-16 w-16 text-xl' }[size];
 
     return participant.photo_url && !failed ? (
-        <img src={participant.photo_url} alt="" className={cx('shrink-0 rounded-full object-cover', box)} onError={() => setFailed(true)} />
+        <img src={participant.photo_url} alt="" loading="lazy" decoding="async" className={cx('shrink-0 rounded-full object-cover', box)} onError={() => setFailed(true)} />
     ) : (
         <span className={cx('flex shrink-0 items-center justify-center rounded-full bg-surface-2 font-semibold text-ink-2', box)} aria-hidden="true">
             {participant.nama.charAt(0).toUpperCase()}

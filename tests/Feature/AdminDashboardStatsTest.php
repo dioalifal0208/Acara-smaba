@@ -155,6 +155,54 @@ class AdminDashboardStatsTest extends TestCase
             ->assertJsonPath('stats.belum', 2);
     }
 
+    public function test_dashboard_board_carries_todays_schedule(): void
+    {
+        Carbon::setTestNow('2026-10-20 10:30:00'); // Selasa
+        Workcode::create([
+            'nama_workcode' => 'Harian',
+            'kategori' => 'harian',
+            'is_active' => true,
+            'hari_aktif' => [1, 2, 3, 4, 5],
+            'jam_datang_mulai' => '06:00:00',
+            'jam_datang_selesai' => '07:00:00',
+            'jam_pulang_mulai' => '15:30:00',
+            'jam_pulang_selesai' => '22:00:00',
+        ]);
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $this->actingAs($admin)
+            ->get(route('dashboard'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('boards.0.jadwal.datang_mulai', '06:00')
+                ->where('boards.0.jadwal.datang_selesai', '07:00')
+                ->where('boards.0.jadwal.ditutup', '08:00')
+                ->where('boards.0.jadwal.pulang_mulai', '15:30'));
+    }
+
+    public function test_scanner_accepts_a_typed_nip_when_the_qr_cannot_be_read(): void
+    {
+        Carbon::setTestNow('2026-10-20 10:30:00');
+        $workcode = Workcode::create(['nama_workcode' => 'Harian', 'kategori' => 'harian', 'is_active' => true]);
+        $andi = $this->participant('Andi');
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $this->actingAs($admin)
+            ->postJson(route('scan'), ['nis_nip' => '  '.$andi->nis_nip.' '])
+            ->assertOk()
+            ->assertJsonPath('participant.id', $andi->id)
+            ->assertJsonPath('board.total', 1)
+            ->assertJsonPath('stats.hadir', 1);
+
+        $this->assertSame('manual', Attendance::where('participant_id', $andi->id)->value('attendance_method'));
+
+        $this->actingAs($admin)
+            ->postJson(route('scan'), ['nis_nip' => 'tidak-ada'])
+            ->assertNotFound()
+            ->assertJsonPath('status', 'error');
+
+        $this->actingAs($admin)->postJson(route('scan'), [])->assertUnprocessable();
+    }
+
     private function participant(string $name): Participant
     {
         return Participant::create([

@@ -1,8 +1,11 @@
-import { Button, Dialog, Field, Input, Select, Textarea, useToast } from '@/ui';
+import { Button, Checkbox, Dialog, Field, Input, Select, Textarea, useToast } from '@/ui';
 import { useForm } from '@inertiajs/react';
 
-/** Formulir pengajuan izin/sakit oleh peserta; disetujui admin sebelum status presensi berubah. */
-export default function LeaveRequestModal({ show, onClose, workcodeId, tanggal }) {
+/**
+ * Formulir pengajuan izin/sakit oleh peserta; disetujui admin sebelum status presensi berubah.
+ * `workcodes`: presensi yang bisa diajukan izin (harian dan/atau kegiatan yang sedang dibuka).
+ */
+export default function LeaveRequestModal({ show, onClose, workcodes, tanggal }) {
     const { toast } = useToast();
     const { data, setData, post, processing, errors, reset } = useForm({
         tipe_izin: '',
@@ -10,7 +13,7 @@ export default function LeaveRequestModal({ show, onClose, workcodeId, tanggal }
         keterangan: '',
         izin_lebih_dari_satu_hari: false,
         dokumen: null,
-        workcode_id: workcodeId,
+        workcode_id: workcodes[0]?.id ?? null,
         tanggal: tanggal,
         tanggal_selesai: '',
     });
@@ -49,18 +52,18 @@ export default function LeaveRequestModal({ show, onClose, workcodeId, tanggal }
             }
         >
             <form id="leave-request" onSubmit={submit} className="space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                    <Field label="Tipe izin" required error={errors.tipe_izin}>
-                        <Select value={data.tipe_izin} onChange={(e) => setData('tipe_izin', e.target.value)}>
-                            <option value="" disabled>Pilih tipe</option>
-                            <option value="izin_penuh">Izin penuh</option>
-                            <option value="tidak_absen_datang">Tidak absen datang</option>
-                            <option value="tidak_absen_pulang">Tidak absen pulang</option>
+                {workcodes.length > 1 && (
+                    <Field label="Izin untuk presensi" required error={errors.workcode_id}>
+                        <Select value={data.workcode_id ?? ''} onChange={(e) => setData('workcode_id', Number(e.target.value))}>
+                            {workcodes.map((workcode) => <option key={workcode.id} value={workcode.id}>{workcode.nama_workcode}</option>)}
                         </Select>
                     </Field>
-                    <Field label="Jenis izin" required error={errors.jenis_izin}>
+                )}
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="Alasan" required error={errors.jenis_izin}>
                         <Select value={data.jenis_izin} onChange={(e) => setData('jenis_izin', e.target.value)}>
-                            <option value="" disabled>Pilih jenis</option>
+                            <option value="" disabled>Pilih alasan</option>
                             <option value="izin_sakit">Sakit</option>
                             <option value="force_majeure">Force majeure</option>
                             <option value="tidak_masuk_kerja_dengan_keterangan">Tidak masuk dengan keterangan</option>
@@ -68,6 +71,14 @@ export default function LeaveRequestModal({ show, onClose, workcodeId, tanggal }
                             <option value="perjalanan_dinas_luar_kota">Dinas luar kota</option>
                             <option value="cuti">Cuti</option>
                             <option value="diklat_dan_pelatihan">Diklat dan pelatihan</option>
+                        </Select>
+                    </Field>
+                    <Field label="Presensi yang diizinkan" required error={errors.tipe_izin}>
+                        <Select value={data.tipe_izin} onChange={(e) => setData('tipe_izin', e.target.value)}>
+                            <option value="" disabled>Pilih bagian</option>
+                            <option value="izin_penuh">Seharian (datang & pulang)</option>
+                            <option value="tidak_absen_datang">Hanya presensi datang</option>
+                            <option value="tidak_absen_pulang">Hanya presensi pulang</option>
                         </Select>
                     </Field>
                 </div>
@@ -87,18 +98,15 @@ export default function LeaveRequestModal({ show, onClose, workcodeId, tanggal }
                     )}
                 </div>
 
-                <label className="flex cursor-pointer items-center gap-3 text-sm text-ink">
-                    <input
-                        type="checkbox"
-                        checked={data.izin_lebih_dari_satu_hari}
-                        onChange={(e) => {
-                            setData('izin_lebih_dari_satu_hari', e.target.checked);
-                            if (!e.target.checked) setData('tanggal_selesai', '');
-                        }}
-                        className="h-[18px] w-[18px] rounded border-line-strong bg-surface text-accent focus:ring-accent"
-                    />
+                <Checkbox
+                    checked={data.izin_lebih_dari_satu_hari}
+                    onChange={(e) => {
+                        setData('izin_lebih_dari_satu_hari', e.target.checked);
+                        if (!e.target.checked) setData('tanggal_selesai', '');
+                    }}
+                >
                     Izin lebih dari satu hari
-                </label>
+                </Checkbox>
 
                 <Field label="Dokumen pendukung" required hint="Foto atau PDF, maksimal 5 MB. Contoh: surat dokter atau surat tugas." error={errors.dokumen}>
                     <input

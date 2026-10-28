@@ -1,4 +1,4 @@
-import FaceEnrollmentCamera from '@/Components/FaceEnrollmentCamera';
+import FaceEnrollmentCamera from '@/Components/LazyFaceEnrollmentCamera';
 import { Dialog } from '@/ui';
 import { router } from '@inertiajs/react';
 import axios from 'axios';

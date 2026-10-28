@@ -1,12 +1,12 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { backgroundReload, jitteredInterval } from '@/lib/backgroundReload';
 import {
-    AttendanceBoard, Button, Card, DataTable, EmptyState, PageHeader, Section, StatusPill,
+    AttendanceBoard, Button, Card, DataTable, EmptyState, PageHeader, Section, StatusPill, cx,
 } from '@/ui';
 import TrendChart from '@/ui/TrendChart';
 import { Head, Link, usePage } from '@inertiajs/react';
 import { Camera, CalendarClock, CheckCircle2, ChevronRight, FileCheck, MapPinOff, ScanFace, ImageUp } from 'lucide-react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 const RELOAD_PROPS = ['boards', 'activeWorkcodes', 'fakeGpsBlockedToday', 'weekly', 'lateness', 'methods', 'recentAttendances', 'adminNotifications'];
 
@@ -15,9 +15,30 @@ const ACTION_ICONS = { leave: FileCheck, face_registration: ScanFace, photo_chan
 /** Papan Hadir memakai kunci hadir/terlambat/izin/belum; backend mengirim tepat_waktu untuk "hadir". */
 const boardCounts = (counts) => ({ hadir: counts.tepat_waktu, terlambat: counts.terlambat, izin: counts.izin, belum: counts.belum });
 
+const clock = (date) => date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }).replace('.', ':');
+const minutes = (hhmm) => {
+    const [h, m] = (hhmm || '').split(':').map(Number);
+    return Number.isNaN(h) || Number.isNaN(m) ? null : h * 60 + m;
+};
+
+/** Jam sekarang (menit sejak tengah malam), diperbarui tiap 30 detik untuk strip jadwal. */
+function useNowMinutes() {
+    const read = () => { const d = new Date(); return d.getHours() * 60 + d.getMinutes(); };
+    const [now, setNow] = useState(read);
+    useEffect(() => {
+        const id = window.setInterval(() => setNow(read()), 30000);
+        return () => window.clearInterval(id);
+    }, []);
+    return now;
+}
+
 export default function Dashboard({ boards = [], fakeGpsBlockedToday = 0, weekly = [], lateness = [], methods = [], recentAttendances = [] }) {
     const { adminNotifications } = usePage().props;
     const [primary, ...others] = boards;
+
+    // Waktu data terakhir diterima (muat awal & setiap penyegaran latar belakang).
+    const [updatedAt, setUpdatedAt] = useState(() => new Date());
+    useEffect(() => setUpdatedAt(new Date()), [boards, recentAttendances]);
 
     // Presensi dari aplikasi Android/scanner masuk terus: segarkan data di latar belakang.
     useEffect(() => {
@@ -58,11 +79,13 @@ export default function Dashboard({ boards = [], fakeGpsBlockedToday = 0, weekly
                     title="Dashboard"
                     description={
                         primary
-                            ? `Presensi ${primary.nama}${others.length ? ` dan ${others.length} workcode aktif lainnya` : ''}, diperbarui otomatis.`
+                            ? `Presensi ${primary.nama}${others.length ? ` dan ${others.length} workcode aktif lainnya` : ''} · diperbarui ${clock(updatedAt)}`
                             : 'Belum ada workcode aktif hari ini.'
                     }
                     actions={<Button variant="primary" icon={Camera} href={route('scanner')}>Buka Scanner</Button>}
                 />
+
+                {primary?.jadwal && <ScheduleStrip daily={primary.kategori === 'harian'} jadwal={primary.jadwal} />}
 
                 {primary ? (
                     <AttendanceBoard
@@ -168,5 +191,47 @@ export default function Dashboard({ boards = [], fakeGpsBlockedToday = 0, weekly
                 </Section>
             </div>
         </AuthenticatedLayout>
+    );
+}
+
+/**
+ * Jadwal hari ini dalam satu baris: harian = datang · terlambat · pulang; kegiatan = berlangsung.
+ * Fase yang sedang berjalan ditandai agar admin tahu presensi apa yang sedang diterima.
+ */
+function ScheduleStrip({ daily, jadwal }) {
+    const now = useNowMinutes();
+    const steps = daily
+        ? [
+            { label: 'Datang', from: jadwal.datang_mulai, to: jadwal.datang_selesai },
+            { label: 'Terlambat', from: jadwal.datang_selesai, to: jadwal.ditutup },
+            { label: 'Pulang', from: jadwal.pulang_mulai, to: jadwal.pulang_selesai },
+        ]
+        : [{ label: 'Berlangsung', from: jadwal.mulai, to: jadwal.selesai }];
+    const isCurrent = (step) => minutes(step.from) !== null && minutes(step.to) !== null && now >= minutes(step.from) && now < minutes(step.to);
+    const current = steps.find(isCurrent);
+    const last = minutes(steps[steps.length - 1].to);
+    const status = current
+        ? `Sekarang: ${current.label.toLowerCase()}`
+        : now < (minutes(steps[0].from) ?? 0) ? 'Belum dibuka' : last !== null && now >= last ? 'Sudah ditutup' : 'Di luar jam presensi';
+
+    return (
+        <section aria-label="Jadwal presensi hari ini" className="flex flex-col gap-3 rounded-xl border border-line bg-surface p-3 sm:flex-row sm:items-center">
+            <p className="px-2 text-sm font-medium text-ink sm:w-44 sm:shrink-0">{status}</p>
+            <ol className={cx('grid flex-1 gap-2', daily ? 'grid-cols-3' : 'grid-cols-1')}>
+                {steps.map((step) => {
+                    const active = step === current;
+                    return (
+                        <li
+                            key={step.label}
+                            aria-current={active ? 'step' : undefined}
+                            className={cx('rounded-lg px-3 py-2', active ? 'bg-accent-soft' : 'bg-surface-2/60')}
+                        >
+                            <p className={cx('text-xs', active ? 'font-semibold text-accent' : 'text-ink-2')}>{step.label}</p>
+                            <p className="text-sm font-medium tabular-nums text-ink">{step.from ?? '–'}–{step.to ?? '–'}</p>
+                        </li>
+                    );
+                })}
+            </ol>
+        </section>
     );
 }

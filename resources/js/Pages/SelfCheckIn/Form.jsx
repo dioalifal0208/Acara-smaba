@@ -2,7 +2,7 @@ import PublicShell from '@/Layouts/PublicShell';
 import { backgroundReload, jitteredInterval } from '@/lib/backgroundReload';
 import { Button, Card, Select, Spinner, cx } from '@/ui';
 import { Head, router, useForm } from '@inertiajs/react';
-import { AlertCircle, CalendarClock, CheckCircle2, Eraser, Info, Search } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CalendarClock, CheckCircle2, Eraser, LocateFixed, Search, Smartphone, UserCheck } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 // ── Helper: Simple Lightweight Device Fingerprint (tanpa library eksternal) ──
@@ -48,28 +48,95 @@ function setLocalLock(workcodeId, participant, timestamp) {
 
 const participantId = (p) => p?.nis_nip || `${p?.status || 'GTT/PTT'} · tanpa NIP`;
 
-// ── Layar setelah presensi berhasil: perangkat ini terkunci untuk workcode ini ──
-function LockedScreen({ lock, activeWorkcode }) {
+// Pemeriksaan GPS yang sama untuk cek awal dan saat kirim. Mengembalikan pesan masalah, atau null bila layak.
+function locationProblem({ accuracy }) {
+    if (accuracy === 0) return 'Lokasi palsu terdeteksi. Matikan aplikasi Fake GPS di HP Anda, lalu coba lagi.';
+    if (accuracy > 100) return `Sinyal GPS kurang tepat (±${Math.round(accuracy)} m). Nyalakan GPS mode akurasi tinggi, pindah ke area terbuka, lalu coba lagi.`;
+    return null;
+}
+
+function geolocationMessage(error) {
+    if (error?.code === 1) return 'Izin lokasi ditolak. Izinkan lokasi untuk situs ini di pengaturan browser, lalu coba lagi.';
+    if (error?.code === 2) return 'Sinyal GPS tidak ditemukan. Pindah ke area terbuka lalu coba lagi.';
+    if (error?.code === 3) return 'Mencari lokasi terlalu lama. Coba lagi.';
+    return 'Lokasi HP tidak bisa didapat. Nyalakan GPS lalu coba lagi.';
+}
+
+/** Hasil cek lokasi awal di bawah nama terpilih; saat bermasalah ada tombol coba lagi. */
+function LocationStatus({ location, onRetry, disabled }) {
+    if (location.status === 'idle') return null;
+
     return (
-        <div className="space-y-4 text-center" role="status">
-            <CheckCircle2 className="mx-auto h-16 w-16 text-status-hadir" strokeWidth={1.75} aria-hidden="true" />
+        <div
+            className={cx(
+                'mt-3 flex items-start gap-2.5 rounded-xl border p-3 text-sm',
+                location.status === 'error' ? 'border-danger/30 bg-danger-soft text-ink' : 'border-line text-ink-2',
+            )}
+            role="status"
+        >
+            {location.status === 'checking' && <Spinner className="mt-0.5 h-4 w-4 shrink-0" />}
+            {location.status === 'ok' && <LocateFixed className="mt-0.5 h-4 w-4 shrink-0 text-status-hadir" aria-hidden="true" />}
+            {location.status === 'error' && <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-danger" aria-hidden="true" />}
+            <p className="min-w-0 flex-1">
+                {location.status === 'checking' && 'Memeriksa lokasi HP… Izinkan akses lokasi bila browser bertanya.'}
+                {location.status === 'ok' && <>Lokasi terdeteksi <span className="tabular-nums">(±{location.accuracy} m)</span>.</>}
+                {location.status === 'error' && location.message}
+            </p>
+            {location.status === 'error' && (
+                <Button onClick={onRetry} disabled={disabled} className="-my-1.5 shrink-0">Coba lagi</Button>
+            )}
+        </div>
+    );
+}
+
+const SELF_SERVICE_FALLBACK ='minta panitia memindai QR pribadi Anda di meja presensi';
+
+/**
+ * Layar saat HP ini terkunci untuk workcode ini.
+ * - success: presensi orang ini baru saja berhasil.
+ * - stored: halaman dibuka ulang; yang memegang HP belum tentu orang yang tercatat.
+ * - blocked: server menolak karena HP ini sudah dipakai orang lain.
+ * Hanya `success` yang memakai tanda berhasil, agar orang lain tidak mengira presensinya tercatat.
+ */
+function LockedScreen({ lock, activeWorkcode }) {
+    const kind = lock.kind || 'stored';
+    const nama = lock.participant?.nama;
+    const title = {
+        success: 'Presensi tercatat',
+        stored: 'Presensi dari HP ini sudah tercatat',
+        blocked: 'HP ini sudah dipakai untuk presensi',
+    }[kind];
+
+    return (
+        <div className="space-y-4 text-center" role={kind === 'blocked' ? 'alert' : 'status'}>
+            {kind === 'success' && <CheckCircle2 className="mx-auto h-16 w-16 text-status-hadir" strokeWidth={1.75} aria-hidden="true" />}
+            {kind === 'stored' && <Smartphone className="mx-auto h-14 w-14 text-ink-2" strokeWidth={1.5} aria-hidden="true" />}
+            {kind === 'blocked' && <AlertTriangle className="mx-auto h-14 w-14 text-status-telat" strokeWidth={1.75} aria-hidden="true" />}
             <div>
-                <h1 className="font-display text-2xl font-semibold text-ink">Presensi tercatat</h1>
-                <p className="mt-1 text-sm text-ink-2">{activeWorkcode?.nama_workcode || 'Workcode aktif'}</p>
+                <h1 className="font-display text-2xl font-semibold text-ink">{title}</h1>
+                <p className="mt-1 text-sm text-ink-2">{activeWorkcode?.nama_workcode || 'Presensi kegiatan'}</p>
             </div>
 
             <Card className="p-5 text-left">
-                <p className="text-lg font-semibold leading-tight text-ink">{lock.participant?.nama}</p>
+                {kind !== 'success' && <p className="mb-1 text-sm text-ink-2">Tercatat atas nama</p>}
+                <p className="text-lg font-semibold leading-tight text-ink">{nama}</p>
                 <p className="mt-0.5 text-sm tabular-nums text-ink-2">{participantId(lock.participant)}</p>
                 <p className="mt-3 text-sm text-ink-2">
                     Pukul <span className="font-semibold tabular-nums text-ink">{lock.timestamp}</span>
                 </p>
             </Card>
 
-            <p className="flex items-start gap-2 text-left text-sm text-ink-2">
-                <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                HP ini sudah dipakai untuk presensi kegiatan ini. Satu HP hanya untuk satu kali presensi, jadi peserta lain memakai HP masing-masing.
-            </p>
+            {kind === 'success' ? (
+                <p className="text-sm text-ink-2">Anda bisa menutup halaman ini. Tunjukkan layar ini bila panitia meminta bukti.</p>
+            ) : (
+                <div className="rounded-xl border border-line bg-surface-2 p-4 text-left text-sm text-ink-2">
+                    <p className="font-medium text-ink">Bukan {nama}?</p>
+                    <p className="mt-1">
+                        Satu HP hanya bisa dipakai satu orang per kegiatan, jadi presensi Anda <span className="font-medium text-ink">belum tercatat</span>.
+                        Pindai QR kegiatan dengan HP Anda sendiri, atau {SELF_SERVICE_FALLBACK}.
+                    </p>
+                </div>
+            )}
         </div>
     );
 }
@@ -90,6 +157,8 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
     const signatureCanvasRef = useRef(null);
     const isSigningRef = useRef(false);
     const [signatureData, setSignatureData] = useState('');
+    const [activeIndex, setActiveIndex] = useState(-1);
+    const [location, setLocation] = useState({ status: 'idle' });
 
     const { data, setData, processing, reset } = useForm({
         nis_nip: '',
@@ -235,6 +304,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                 })
                 .then((d) => {
                     setSuggestions(Array.isArray(d) ? d : []);
+                    setActiveIndex(-1);
                     setIsSearchingSuggestions(false);
                 })
                 .catch(() => {
@@ -247,6 +317,26 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
         }
     };
 
+    // Cek izin & akurasi lokasi lebih awal (saat nama dipilih), agar masalah GPS diketahui
+    // sebelum tanda tangan, bukan sesudahnya. Saat kirim, lokasi tetap diambil ulang.
+    const checkLocation = useCallback(() => {
+        if (!navigator.geolocation) {
+            setLocation({ status: 'error', message: 'Browser Anda tidak mendukung deteksi lokasi. Coba buka dengan Chrome.' });
+            return;
+        }
+        setLocation({ status: 'checking' });
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const problem = locationProblem(position.coords);
+                setLocation(problem
+                    ? { status: 'error', message: problem }
+                    : { status: 'ok', accuracy: Math.round(position.coords.accuracy) });
+            },
+            (error) => setLocation({ status: 'error', message: geolocationMessage(error) }),
+            { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 },
+        );
+    }, []);
+
     const handleSelectSuggestion = (participant) => {
         setData({
             nis_nip: participant.nis_nip || participant.nama,
@@ -257,6 +347,27 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
         clearSignature();
         setSuggestions([]);
         setShowSuggestions(false);
+        setActiveIndex(-1);
+        if (location.status !== 'ok') checkLocation();
+    };
+
+    // Navigasi daftar nama dengan keyboard (pola combobox + aria-activedescendant).
+    const handleSearchKeyDown = (event) => {
+        if (!showSuggestions || suggestions.length === 0) {
+            if (event.key === 'Escape') setShowSuggestions(false);
+            return;
+        }
+        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            const step = event.key === 'ArrowDown' ? 1 : -1;
+            setActiveIndex((index) => (index + step + suggestions.length) % suggestions.length);
+        } else if (event.key === 'Enter' && activeIndex >= 0) {
+            event.preventDefault();
+            handleSelectSuggestion(suggestions[activeIndex]);
+        } else if (event.key === 'Escape') {
+            setShowSuggestions(false);
+            setActiveIndex(-1);
+        }
     };
 
     // "Ganti": kembali ke pencarian nama.
@@ -302,19 +413,16 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                 const { latitude, longitude, accuracy, altitude, heading, speed } = position.coords;
                 const deviceTimestamp = position.timestamp || Date.now();
 
-                // Anti-Mock Check: Akurasi 0 = injector
-                if (accuracy === 0) {
+                // Anti-Mock (akurasi 0 = injector) dan akurasi terlalu kasar.
+                const problem = locationProblem(position.coords);
+                if (problem) {
                     setIsLocating(false);
-                    setErrorMsg('Lokasi palsu terdeteksi. Matikan aplikasi Fake GPS di HP Anda, lalu coba lagi.');
+                    setErrorMsg(problem);
+                    setLocation({ status: 'error', message: problem });
                     playAudio('error');
                     return;
                 }
-                if (accuracy > 100) {
-                    setIsLocating(false);
-                    setErrorMsg(`Sinyal GPS kurang tepat (±${Math.round(accuracy)} m). Nyalakan GPS mode akurasi tinggi, pindah ke area terbuka, lalu coba lagi.`);
-                    playAudio('error');
-                    return;
-                }
+                setLocation({ status: 'ok', accuracy: Math.round(accuracy) });
 
                 try {
                     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
@@ -356,7 +464,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                             // Kunci browser secara lokal - permanen untuk workcode ini
                             setLocalLock(data.workcode_id, resData.participant, resData.timestamp);
                             // Tampilkan layar terkunci permanen
-                            setDeviceLock({ participant: resData.participant, timestamp: resData.timestamp });
+                            setDeviceLock({ kind: 'success', participant: resData.participant, timestamp: resData.timestamp });
                             playAudio('success');
                             reset();
                             setSelectedParticipant(null);
@@ -377,7 +485,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                             // Kunci juga secara lokal menggunakan data dari server
                             const lp = resData.locked_participant;
                             setLocalLock(data.workcode_id, { nama: lp.nama, nis_nip: lp.nis_nip, status: lp.status }, lp.waktu_hadir);
-                            setDeviceLock({ participant: { nama: lp.nama, nis_nip: lp.nis_nip, status: lp.status }, timestamp: lp.waktu_hadir });
+                            setDeviceLock({ kind: 'blocked', participant: { nama: lp.nama, nis_nip: lp.nis_nip, status: lp.status }, timestamp: lp.waktu_hadir });
                             playAudio('error');
                         } else {
                             setErrorMsg(resData.message || 'Terjadi kesalahan sistem.');
@@ -393,11 +501,9 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
             },
             (error) => {
                 setIsLocating(false);
-                let msg = 'Lokasi HP tidak bisa didapat. Nyalakan GPS lalu coba lagi.';
-                if (error.code === 1) msg = 'Izin lokasi ditolak. Izinkan lokasi untuk situs ini di pengaturan browser, lalu coba lagi.';
-                else if (error.code === 2) msg = 'Sinyal GPS tidak ditemukan. Pindah ke area terbuka lalu coba lagi.';
-                else if (error.code === 3) msg = 'Mencari lokasi terlalu lama. Coba lagi.';
+                const msg = geolocationMessage(error);
                 setErrorMsg(msg);
+                setLocation({ status: 'error', message: msg });
                 playAudio('error');
             },
             { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
@@ -430,7 +536,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                 </div>
             ) : result ? (
                 <div className="space-y-4 py-6 text-center" role="status">
-                    <Info className="mx-auto h-12 w-12 text-status-izin" strokeWidth={1.5} aria-hidden="true" />
+                    <UserCheck className="mx-auto h-12 w-12 text-ink-2" strokeWidth={1.5} aria-hidden="true" />
                     <div>
                         <h1 className="font-display text-2xl font-semibold text-ink">Sudah presensi</h1>
                         <p className="mt-2 text-sm text-ink-2">
@@ -457,7 +563,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                                     <p className="truncate text-base font-semibold text-ink">{selectedParticipant.nama}</p>
                                     <p className="text-sm tabular-nums text-ink-2">{participantId(selectedParticipant)}</p>
                                 </div>
-                                <Button size="sm" variant="ghost" onClick={changeParticipant} disabled={busy}>Ganti</Button>
+                                <Button variant="ghost" onClick={changeParticipant} disabled={busy} className="-mr-2">Ganti</Button>
                             </Card>
                         ) : (
                             <div className="relative" ref={suggestionsRef}>
@@ -471,6 +577,8 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                                     value={data.nis_nip}
                                     onChange={(e) => handleInputChange(e.target.value)}
                                     onFocus={() => { if (data.nis_nip.trim().length >= 2) setShowSuggestions(true); }}
+                                    onKeyDown={handleSearchKeyDown}
+                                    aria-activedescendant={showSuggestions && activeIndex >= 0 ? `suggestion-${suggestions[activeIndex]?.id}` : undefined}
                                     className="h-12 w-full rounded-xl border border-line-strong bg-surface pl-12 pr-4 text-base text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25"
                                     disabled={busy}
                                     autoComplete="off"
@@ -486,28 +594,30 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                                 <p id="name-hint" className="mt-1.5 text-sm text-ink-2">Ketik minimal 2 huruf, lalu pilih dari daftar.</p>
 
                                 {showSuggestions && (
-                                    <div id="suggestions-list" role="listbox" aria-label="Hasil pencarian peserta" className="absolute inset-x-0 top-12 z-20 mt-1 max-h-72 overflow-y-auto rounded-xl border border-line bg-surface shadow-xl">
+                                    <div className="absolute inset-x-0 top-12 z-20 mt-1 max-h-72 overflow-y-auto rounded-xl border border-line bg-surface shadow-xl">
                                         {isSearchingSuggestions ? (
-                                            <p className="flex items-center justify-center gap-2 px-4 py-5 text-sm text-ink-2"><Spinner className="h-4 w-4" />Mencari…</p>
+                                            <p className="flex items-center justify-center gap-2 px-4 py-5 text-sm text-ink-2" role="status"><Spinner className="h-4 w-4" />Mencari…</p>
                                         ) : suggestions.length > 0 ? (
-                                            <ul className="divide-y divide-line">
-                                                {suggestions.map((p) => (
-                                                    <li key={p.id}>
-                                                        <button
-                                                            type="button"
-                                                            role="option"
-                                                            aria-selected={false}
-                                                            onClick={() => handleSelectSuggestion(p)}
-                                                            className="flex min-h-14 w-full flex-col justify-center px-4 py-2.5 text-left hover:bg-surface-2 focus-visible:bg-surface-2"
-                                                        >
-                                                            <span className="text-base font-medium text-ink">{p.nama}</span>
-                                                            <span className="text-sm tabular-nums text-ink-2">{participantId(p)}</span>
-                                                        </button>
+                                            <ul id="suggestions-list" role="listbox" aria-label="Hasil pencarian peserta" className="divide-y divide-line">
+                                                {suggestions.map((p, index) => (
+                                                    // Fokus tetap di kolom ketik; opsi aktif ditandai lewat aria-activedescendant.
+                                                    <li
+                                                        key={p.id}
+                                                        id={`suggestion-${p.id}`}
+                                                        role="option"
+                                                        aria-selected={index === activeIndex}
+                                                        onMouseDown={(event) => event.preventDefault()}
+                                                        onClick={() => handleSelectSuggestion(p)}
+                                                        onMouseEnter={() => setActiveIndex(index)}
+                                                        className={cx('flex min-h-14 cursor-pointer flex-col justify-center px-4 py-2.5 text-left', index === activeIndex && 'bg-surface-2')}
+                                                    >
+                                                        <span className="text-base font-medium text-ink">{p.nama}</span>
+                                                        <span className="text-sm tabular-nums text-ink-2">{participantId(p)}</span>
                                                     </li>
                                                 ))}
                                             </ul>
                                         ) : (
-                                            <p className="px-4 py-5 text-center text-sm text-ink-2">Nama tidak ditemukan. Periksa ejaan atau coba ketik NIP.</p>
+                                            <p className="px-4 py-5 text-center text-sm text-ink-2" role="status">Nama tidak ditemukan. Periksa ejaan atau coba ketik NIP.</p>
                                         )}
                                     </div>
                                 )}
@@ -522,6 +632,8 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                                 </Select>
                             </div>
                         )}
+
+                        {selectedParticipant && <LocationStatus location={location} onRetry={checkLocation} disabled={busy} />}
                     </section>
 
                     {/* Langkah 2: tanda tangan (terbuka setelah nama dipilih) */}
@@ -529,7 +641,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                         <div className="mb-2 flex items-center justify-between gap-3">
                             <h2 id="step-sign" className={cx('text-sm font-medium', selectedParticipant ? 'text-ink' : 'text-ink-2')}>2. Tanda tangan</h2>
                             {selectedParticipant && signatureData && (
-                                <Button size="sm" variant="ghost" icon={Eraser} onClick={clearSignature} disabled={busy} className="-mr-3">Ulangi</Button>
+                                <Button variant="ghost" icon={Eraser} onClick={clearSignature} disabled={busy} className="-mr-3">Ulangi</Button>
                             )}
                         </div>
                         {selectedParticipant ? (
@@ -550,6 +662,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                                 <p className="mt-1.5 text-sm text-ink-2" aria-live="polite">
                                     {signatureData ? 'Tanda tangan siap dikirim.' : 'Tanda tangani dengan jari di kotak putih.'}
                                 </p>
+                                <p className="mt-1 text-sm text-ink-2">Tidak bisa tanda tangan di layar? Lewati halaman ini dan {SELF_SERVICE_FALLBACK}.</p>
                             </>
                         ) : (
                             <p className="rounded-xl border border-dashed border-line-strong px-4 py-8 text-center text-sm text-ink-2">Pilih nama dulu, lalu tanda tangan di sini.</p>
@@ -567,7 +680,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                         <Button variant="primary" type="submit" size="lg" loading={busy} disabled={!selectedParticipant || !signatureData} className="w-full">
                             {isLocating ? 'Memeriksa lokasi…' : processing ? 'Mengirim…' : 'Kirim kehadiran'}
                         </Button>
-                        <p className="mt-2 text-center text-xs text-ink-2">Lokasi HP diperiksa saat mengirim. Izinkan akses lokasi bila browser bertanya.</p>
+                        <p className="mt-2 text-center text-sm text-ink-2">Lokasi HP diperiksa ulang saat mengirim.</p>
                     </div>
                 </form>
             )}

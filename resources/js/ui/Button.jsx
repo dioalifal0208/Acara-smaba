@@ -7,6 +7,8 @@ const variants = {
     secondary: 'border border-line-strong bg-surface text-ink hover:bg-surface-2',
     ghost: 'text-ink-2 hover:bg-surface-2 hover:text-ink',
     danger: 'bg-danger text-surface hover:bg-danger/90',
+    // Aksi berisiko yang bukan aksi utama (mis. Tolak di samping Setujui): tidak sekuat tombol utama.
+    'danger-outline': 'border border-line-strong bg-surface text-danger hover:bg-danger-soft',
 };
 
 const sizes = {

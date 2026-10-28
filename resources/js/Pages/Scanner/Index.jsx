@@ -1,11 +1,14 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { AttendanceBoard, Button, Card, EmptyState, IconButton, PageHeader, Section, StatusPill, cx } from '@/ui';
+import { AttendanceBoard, Button, Card, EmptyState, Field, IconButton, Input, PageHeader, Section, StatusPill, cx } from '@/ui';
 import { Head, usePage } from '@inertiajs/react';
-import { Html5Qrcode } from 'html5-qrcode';
 import {
     AlertCircle, Camera, CameraOff, CheckCircle2, Clock, Copy, History, Lock, Maximize, Minimize, QrCode, Volume2, VolumeX, XCircle,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
+
+// Pustaka pemindai (±100 kB gzip) dimuat terpisah dari halaman; diunduh di latar setelah halaman tampil.
+let scannerModule;
+const loadScanner = () => (scannerModule ??= import('html5-qrcode'));
 
 const SOUND_KEY = 'scanner-sound';
 const HISTORY_LIMIT = 30;
@@ -45,11 +48,12 @@ function cameraErrorMessage(err) {
     return 'Kamera gagal dinyalakan. Muat ulang halaman lalu coba lagi.';
 }
 
-export default function ScannerIndex({ initialStats, activeWorkcode: propActiveWorkcode }) {
+export default function ScannerIndex({ initialStats, initialBoard = null, activeWorkcode: propActiveWorkcode }) {
     const { activeWorkcode: globalActiveWorkcode } = usePage().props;
     const activeWorkcode = propActiveWorkcode || globalActiveWorkcode;
 
     const [stats, setStats] = useState(initialStats);
+    const [board, setBoard] = useState(initialBoard);
     const [isScanning, setIsScanning] = useState(false);
     const [isCameraLoading, setIsCameraLoading] = useState(false);
     const [cameraError, setCameraError] = useState(null);
@@ -70,6 +74,11 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
     const gpsDataRef = useRef(null);
     const soundRef = useRef(soundOn);
     soundRef.current = soundOn;
+
+    // Unduh pustaka pemindai di latar agar tombol "Mulai" tidak menunggu.
+    useEffect(() => {
+        loadScanner().catch(() => { scannerModule = undefined; });
+    }, []);
 
     // Workcode dengan lokasi: posisi perangkat scanner ikut dikirim untuk cek radius.
     useEffect(() => {
@@ -162,7 +171,8 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
         playSound(RESULT[entry.kind].sound);
     }, [playSound]);
 
-    const handleScan = useCallback(async (decodedText, decodedResult = null) => {
+    // `field`: qr_token dari kamera, atau nis_nip saat admin mengetik NIP peserta.
+    const handleScan = useCallback(async (decodedText, decodedResult = null, field = 'qr_token') => {
         if (isProcessingRef.current || !activeWorkcode) return;
 
         // QR yang sama dalam 3 detik dianggap pindaian ganda dari kamera.
@@ -175,7 +185,7 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
         lastScanRef.current = { text: decodedText, at: now };
 
         try {
-            let body = { qr_token: decodedText };
+            let body = { [field]: decodedText };
             if (activeWorkcode.latitude && activeWorkcode.longitude) {
                 if (!gpsDataRef.current) throw new Error('Lokasi perangkat belum didapat. Izinkan akses lokasi, tunggu sebentar, lalu scan lagi.');
                 body = { ...body, ...gpsDataRef.current };
@@ -196,6 +206,7 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
 
             if (response.ok && ['success', 'warning', 'already'].includes(data.status)) {
                 if (data.stats) setStats(data.stats);
+                if (data.board) setBoard(data.board);
                 record({
                     kind: kindOf(data.status, data.is_late),
                     nama: data.participant?.nama || 'Peserta',
@@ -207,7 +218,7 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
             } else {
                 record({
                     kind: 'error',
-                    nama: data.participant?.nama || 'QR tidak dikenali',
+                    nama: data.participant?.nama || (field === 'nis_nip' ? 'NIP tidak dikenali' : 'QR tidak dikenali'),
                     nis_nip: data.participant?.nis_nip || '',
                     message: response.status === 419
                         ? 'Sesi scanner kedaluwarsa. Muat ulang halaman, lalu login lagi bila diminta.'
@@ -236,6 +247,7 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
             if (!window.isSecureContext) throw new Error('InsecureContext');
             if (!navigator.mediaDevices?.getUserMedia) throw new Error('UnsupportedBrowser');
 
+            const { Html5Qrcode } = await loadScanner();
             const scanner = new Html5Qrcode('qr-reader');
             html5QrCodeRef.current = scanner;
             await scanner.start({ facingMode: 'environment' }, { fps: 10 }, (text, result) => handleScan(text, result), () => {});
@@ -349,7 +361,11 @@ export default function ScannerIndex({ initialStats, activeWorkcode: propActiveW
                                 </div>
                             )}
 
-                            <AttendanceBoard compact counts={{ hadir: stats.hadir, terlambat: 0, izin: 0, belum: stats.belum }} className="rounded-xl border border-line bg-surface p-4" />
+                            <ManualEntry onSubmit={(nip) => handleScan(nip, null, 'nis_nip')} disabled={processing} />
+
+                            <AttendanceBoard compact counts={board
+                                ? { hadir: board.tepat_waktu, terlambat: board.terlambat, izin: board.izin, belum: board.belum }
+                                : { hadir: stats.hadir, terlambat: 0, izin: 0, belum: stats.belum }} className="rounded-xl border border-line bg-surface p-4" />
                         </div>
 
                         {/* Hasil */}
@@ -451,4 +467,26 @@ function ResultPill({ item }) {
     return item.kind === 'late'
         ? <StatusPill status="terlambat" label={item.late ? `Terlambat ${item.late}` : 'Terlambat'} />
         : <StatusPill {...pill} />;
+}
+
+/** Cadangan saat QR tidak terbaca (layar retak, HP mati): admin mengetik NIP peserta. */
+function ManualEntry({ onSubmit, disabled }) {
+    const [nip, setNip] = useState('');
+
+    const submit = (e) => {
+        e.preventDefault();
+        const value = nip.trim();
+        if (!value || disabled) return;
+        onSubmit(value);
+        setNip('');
+    };
+
+    return (
+        <form onSubmit={submit} className="flex items-end gap-2">
+            <Field label="QR tidak terbaca? Ketik NIP peserta" className="min-w-0 flex-1">
+                <Input value={nip} onChange={(e) => setNip(e.target.value)} autoComplete="off" spellCheck={false} placeholder="NIP atau ID pengganti NIP" />
+            </Field>
+            <Button type="submit" disabled={disabled || !nip.trim()}>Catat</Button>
+        </form>
+    );
 }

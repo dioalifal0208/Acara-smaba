@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import axios from 'axios';
 import { Button, Dialog, StatusPill, useConfirm, useToast } from '@/ui';
-import FaceEnrollmentCamera from '@/Components/FaceEnrollmentCamera';
+import FaceEnrollmentCamera from '@/Components/LazyFaceEnrollmentCamera';
 
 /** Daftarkan (ulang) wajah peserta oleh admin lewat kamera, atau hapus data wajahnya. */
 export default function FaceRegistrationModal({ participant, onClose, onSuccess }) {

@@ -126,10 +126,28 @@ class LeaveApprovalTest extends TestCase
 
         $this->actingAs($admin)->post(route('admin.leave.approve', $leaveRequest))->assertSessionHas('success');
         $this->actingAs($admin)->post(route('admin.leave.approve', $leaveRequest))->assertSessionHas('error');
-        $this->actingAs($admin)->post(route('admin.leave.reject', $leaveRequest))->assertSessionHas('error');
+        $this->actingAs($admin)->post(route('admin.leave.reject', $leaveRequest), ['alasan_penolakan' => 'Dokumen tidak terbaca'])->assertSessionHas('error');
 
         $this->assertSame('approved', $leaveRequest->fresh()->status_approval);
         $this->assertSame(1, Attendance::where('leave_request_id', $leaveRequest->id)->count());
+    }
+
+    public function test_reject_requires_a_reason_that_the_participant_can_see(): void
+    {
+        [$admin, $participant, $workcode] = $this->createApprovalContext();
+        $leaveRequest = $this->createLeaveRequest($participant, $workcode, 'izin_penuh');
+
+        $this->actingAs($admin)->post(route('admin.leave.reject', $leaveRequest))->assertSessionHasErrors('alasan_penolakan');
+        $this->assertSame('pending', $leaveRequest->fresh()->status_approval);
+
+        $this->actingAs($admin)
+            ->post(route('admin.leave.reject', $leaveRequest), ['alasan_penolakan' => '  Dokumen tidak terbaca  '])
+            ->assertSessionHas('success');
+
+        $leaveRequest->refresh();
+        $this->assertSame('rejected', $leaveRequest->status_approval);
+        $this->assertSame('Dokumen tidak terbaca', $leaveRequest->alasan_penolakan);
+        $this->assertSame(0, Attendance::where('leave_request_id', $leaveRequest->id)->count());
     }
 
     private function createApprovalContext(): array

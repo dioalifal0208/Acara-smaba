@@ -1,7 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Button, Field, Input, PageHeader, Section, useToast } from '@/ui';
 import { Head, useForm } from '@inertiajs/react';
-import { QrCode } from 'lucide-react';
+import { ExternalLink, QrCode } from 'lucide-react';
 import { useEffect } from 'react';
 
 export default function Settings({ settings, flash }) {
@@ -25,13 +25,13 @@ export default function Settings({ settings, flash }) {
 
     return (
         <AuthenticatedLayout>
-            <Head title="Tanda tangan" />
+            <Head title="Pengaturan" />
 
             <div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6">
-                <PageHeader title="Tanda tangan" description="Nama dan NIP kepala sekolah di bawah QR tanda tangan pada setiap laporan yang dicetak." />
+                <PageHeader title="Pengaturan" description="Tanda tangan laporan cetak dan link unduhan aplikasi Android." />
 
                 <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
-                    <Section title="Kepala sekolah" description="Tulis nama lengkap beserta gelar sesuai dokumen resmi.">
+                    <Section title="Kepala sekolah" description="Nama dan NIP di bawah QR tanda tangan pada setiap laporan yang dicetak. Tulis nama lengkap beserta gelar sesuai dokumen resmi.">
                         <form onSubmit={submit} className="space-y-4">
                             <Field label="Nama beserta gelar" error={errors.kepala_sekolah_nama}>
                                 <Input
@@ -69,7 +69,47 @@ export default function Settings({ settings, flash }) {
                         </div>
                     </Section>
                 </div>
+
+                <ApkLinkSection initialUrl={settings?.android_apk_url || ''} />
             </div>
         </AuthenticatedLayout>
+    );
+}
+
+/** Link unduhan aplikasi Android untuk tombol "Unduh aplikasi Android" di halaman depan. */
+function ApkLinkSection({ initialUrl }) {
+    const { data, setData, post, processing, errors, isDirty } = useForm({ android_apk_url: initialUrl });
+
+    const submit = (e) => {
+        e.preventDefault();
+        post(route('admin.settings.apk'), { preserveScroll: true });
+    };
+
+    return (
+        <Section
+            title="Aplikasi Android"
+            description="Tombol unduh di halaman depan membuka link ini. Untuk Google Drive, bagikan file atau foldernya sebagai “Siapa saja yang memiliki link”. Kosongkan untuk menyembunyikan tombol."
+        >
+            <form onSubmit={submit} className="space-y-4">
+                <Field label="Link unduhan APK" error={errors.android_apk_url}>
+                    <Input
+                        type="url"
+                        value={data.android_apk_url}
+                        onChange={(e) => setData('android_apk_url', e.target.value)}
+                        placeholder="https://drive.google.com/…"
+                        autoComplete="off"
+                        spellCheck={false}
+                    />
+                </Field>
+                <div className="flex flex-wrap items-center gap-3">
+                    <Button variant="primary" type="submit" loading={processing} disabled={!isDirty}>Simpan</Button>
+                    {data.android_apk_url && (
+                        <Button variant="ghost" icon={ExternalLink} href={data.android_apk_url} external target="_blank" rel="noopener noreferrer">
+                            Coba buka link
+                        </Button>
+                    )}
+                </div>
+            </form>
+        </Section>
     );
 }

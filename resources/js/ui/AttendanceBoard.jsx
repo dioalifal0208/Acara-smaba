@@ -48,7 +48,10 @@ export default function AttendanceBoard({ counts, title = 'Kehadiran hari ini', 
             <div className={cx('min-w-0', className)}>
                 <div className="mb-1 flex items-baseline justify-between gap-2 text-xs text-ink-2">
                     <span><span className="font-semibold tabular-nums text-ink">{present}</span>/{total} hadir</span>
-                    {(counts.terlambat ?? 0) > 0 && <span className="tabular-nums text-status-telat">{counts.terlambat} terlambat</span>}
+                    <span className="flex gap-2 tabular-nums">
+                        {(counts.terlambat ?? 0) > 0 && <span className="text-status-telat">{counts.terlambat} terlambat</span>}
+                        {(counts.izin ?? 0) > 0 && <span className="text-status-izin">{counts.izin} izin</span>}
+                    </span>
                 </div>
                 {bar}
             </div>

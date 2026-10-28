@@ -107,6 +107,7 @@ class LeaveRequestController extends Controller
             'jenis_izin' => $leaveRequest->jenis_izin,
             'keterangan' => $leaveRequest->keterangan ?? $leaveRequest->alasan,
             'status_approval' => $leaveRequest->status_approval,
+            'alasan_penolakan' => $leaveRequest->alasan_penolakan,
             'created_at' => $leaveRequest->created_at?->translatedFormat('d F Y H:i'),
         ];
     }

@@ -2,7 +2,7 @@ import LoginModal from '@/Components/LoginModal';
 import { appUrl } from '@/lib/appUrl';
 import { Button } from '@/ui';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { CheckCircle2, LogIn, MapPin, QrCode, ScanFace, Smartphone, UserSquare2 } from 'lucide-react';
+import { CheckCircle2, Download, LogIn, MapPin, QrCode, ScanFace, Smartphone, UserSquare2 } from 'lucide-react';
 import { useState } from 'react';
 
 const METHODS = [
@@ -40,7 +40,7 @@ const HELP = [
  * Halaman depan publik: informasi umum saja (cara presensi dan bantuan), tanpa data kehadiran.
  * Satu-satunya tombol masuk ada di bilah atas.
  */
-export default function Welcome() {
+export default function Welcome({ apkUrl = null }) {
     const { auth } = usePage().props;
     const user = auth.user;
     const [loginOpen, setLoginOpen] = useState(false);
@@ -53,7 +53,7 @@ export default function Welcome() {
             <div className="flex min-h-dvh flex-col bg-app text-ink">
                 <header className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between gap-3 px-4 sm:px-6">
                     <Link href="/" className="flex min-w-0 items-center gap-3">
-                        <img src={appUrl('images/logo.png')} alt="" className="h-9 w-9 shrink-0 object-contain" />
+                        <img src={appUrl('images/logo-96.png')} alt="" width="36" height="36" className="h-9 w-9 shrink-0 object-contain" />
                         <span className="min-w-0 leading-tight">
                             <span className="block truncate text-sm font-semibold text-ink">E-Presensi</span>
                             <span className="block truncate text-xs text-ink-2">SMA Negeri 1 Babat</span>
@@ -81,6 +81,12 @@ export default function Welcome() {
                         <p className="mt-5 max-w-2xl text-lg leading-relaxed text-ink-2">
                             Presensi lewat aplikasi Android dengan verifikasi wajah dan lokasi, atau lewat QR saat kegiatan sekolah. Kehadiran tercatat otomatis untuk rekap sekolah.
                         </p>
+                        {apkUrl && (
+                            <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-2">
+                                <ApkButton href={apkUrl} />
+                                <p className="text-sm text-ink-2">Untuk HP Android. Masuk memakai NIP.</p>
+                            </div>
+                        )}
                     </section>
 
                     <InfoSection title="Cara presensi" id="cara">
@@ -110,6 +116,12 @@ export default function Welcome() {
                                 </li>
                             ))}
                         </ol>
+                        {apkUrl && (
+                            <p className="mt-6 text-sm leading-relaxed text-ink-2">
+                                Belum punya aplikasinya? <a href={apkUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-accent underline underline-offset-2">Unduh APK PRESENSI SMABA</a>,
+                                lalu izinkan pemasangan dari sumber ini bila HP bertanya.
+                            </p>
+                        )}
                     </InfoSection>
 
                     <InfoSection title="Bantuan" id="bantuan">
@@ -142,5 +154,14 @@ function InfoSection({ title, id, children }) {
             <h2 id={`${id}-title`} className="text-sm font-medium text-ink-2">{title}</h2>
             <div>{children}</div>
         </section>
+    );
+}
+
+/** Tombol unduh APK (Google Drive), dibuka di tab baru. */
+function ApkButton({ href }) {
+    return (
+        <Button variant="primary" size="lg" icon={Download} href={href} external target="_blank" rel="noopener noreferrer">
+            Unduh aplikasi Android
+        </Button>
     );
 }

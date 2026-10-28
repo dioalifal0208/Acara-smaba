@@ -24,6 +24,18 @@ router.on('navigate', () => {
     window.requestAnimationFrame(() => AOS.refreshHard());
 });
 
+// Halaman admin bergulir di dalam <main id="konten">, bukan window, sedangkan AOS hanya mendengar
+// scroll window: tanpa ini elemen di bawah layar pertama tidak pernah muncul. Posisi dihitung ulang
+// (offset AOS sudah memperhitungkan scrollTop wadah) paling banyak sekali per frame.
+let aosFrame = 0;
+document.addEventListener('scroll', (event) => {
+    if (aosFrame || event.target?.id !== 'konten') return;
+    aosFrame = window.requestAnimationFrame(() => {
+        aosFrame = 0;
+        AOS.refresh();
+    });
+}, { capture: true, passive: true });
+
 const appName = import.meta.env.VITE_APP_NAME || 'E-Presensi SMABA';
 
 createInertiaApp({
@@ -45,6 +57,6 @@ createInertiaApp({
         );
     },
     progress: {
-        color: '#26742e', // Hijau aksi utama (token accent)
+        color: 'rgb(var(--accent))', // token accent: ikut mode terang/gelap
     },
 });

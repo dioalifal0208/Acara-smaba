@@ -14,13 +14,14 @@ const widths = { sm: 'sm:max-w-sm', md: 'sm:max-w-md', lg: 'sm:max-w-lg', xl: 's
 export default function Dialog({ open, onClose, title, description, footer, size = 'md', initialFocus, dismissible = true, children }) {
     return (
         <HDialog open={open} onClose={dismissible ? onClose : () => {}} initialFocus={initialFocus} className="relative z-50">
-            <DialogBackdrop transition className="fixed inset-0 bg-black/40 transition-opacity duration-200 data-[closed]:opacity-0" />
+            <DialogBackdrop transition className="fixed inset-0 bg-black/40 transition-opacity duration-200 data-[closed]:opacity-0 motion-reduce:transition-none" />
             <div className="fixed inset-0 flex items-end justify-center overflow-y-auto sm:items-center sm:p-4">
                 <DialogPanel
                     transition
                     className={cx(
                         'flex max-h-[92dvh] w-full flex-col rounded-t-2xl border border-line bg-surface shadow-xl transition duration-200 ease-out sm:rounded-2xl',
-                        'data-[closed]:translate-y-4 data-[closed]:opacity-0 motion-reduce:data-[closed]:translate-y-0 sm:data-[closed]:translate-y-0 sm:data-[closed]:scale-95',
+                        'data-[closed]:translate-y-4 data-[closed]:opacity-0 sm:data-[closed]:translate-y-0 sm:data-[closed]:scale-95',
+                        'motion-reduce:transition-opacity motion-reduce:data-[closed]:translate-y-0 motion-reduce:data-[closed]:scale-100',
                         widths[size],
                     )}
                 >

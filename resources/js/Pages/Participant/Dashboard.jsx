@@ -1,9 +1,10 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import LeaveRequestModal from '@/Components/LeaveRequestModal';
+import MyQrDialog from '@/Components/MyQrDialog';
 import SelfFaceRegistrationModal from '@/Components/SelfFaceRegistrationModal';
-import { Button, Card, Dialog, PageHeader, cx } from '@/ui';
+import { Button, Card, PageHeader, StatusPill, cx } from '@/ui';
 import { Head, Link, usePage } from '@inertiajs/react';
-import { AlertTriangle, CalendarClock, CheckCircle2, ChevronRight, Download, FileClock, FilePlus2, Hourglass, QrCode, ScanFace, XCircle } from 'lucide-react';
+import { AlertTriangle, CalendarClock, CheckCircle2, ChevronRight, FileClock, FilePlus2, Hourglass, QrCode, ScanFace, XCircle } from 'lucide-react';
 import { useState } from 'react';
 
 /** Isi kartu wajah per status: ikon, warna ikon, judul, penjelasan, dan tombol (bila perlu). */
@@ -14,14 +15,13 @@ const FACE = {
     none: { icon: ScanFace, tone: 'text-ink-2', title: 'Wajah belum terdaftar', body: 'Daftarkan wajah agar bisa presensi wajah lewat aplikasi Android.', action: 'Daftarkan wajah' },
 };
 
-export default function ParticipantDashboard({ activeWorkcode, participant }) {
+export default function ParticipantDashboard({ activeWorkcode, participant, today, todayAttendances = [], schedule, leaveWorkcodes = [] }) {
     const { auth } = usePage().props;
     const user = auth.user;
     const [leaveOpen, setLeaveOpen] = useState(false);
     const [faceOpen, setFaceOpen] = useState(false);
     const [qrOpen, setQrOpen] = useState(false);
 
-    const today = new Date().toISOString().split('T')[0];
     const face = FACE[participant?.face_status] ?? FACE.none;
     const FaceIcon = face.icon;
     const name = participant?.nama || user.name;
@@ -43,23 +43,7 @@ export default function ParticipantDashboard({ activeWorkcode, participant }) {
                     </p>
                 )}
 
-                {/* Presensi hari ini */}
-                <Card animate className="p-5">
-                    <p className="text-sm text-ink-2">Presensi hari ini</p>
-                    {activeWorkcode ? (
-                        <>
-                            <p className="mt-1 font-display text-xl font-semibold text-ink">{activeWorkcode.nama_workcode}</p>
-                            <p className="mt-1 text-sm text-ink-2">
-                                Presensi lewat aplikasi Android dengan wajah, atau pindai QR kegiatan yang ditampilkan panitia.
-                            </p>
-                        </>
-                    ) : (
-                        <p className="mt-1 flex items-center gap-2 text-base font-medium text-ink">
-                            <CalendarClock className="h-5 w-5 text-ink-3" aria-hidden="true" />
-                            Belum ada presensi yang dibuka
-                        </p>
-                    )}
-                </Card>
+                <TodayCard today={today} schedule={schedule} attendances={todayAttendances} activeWorkcode={activeWorkcode} />
 
                 {/* Status wajah */}
                 {participant && (
@@ -78,45 +62,22 @@ export default function ParticipantDashboard({ activeWorkcode, participant }) {
                     <ActionRow
                         icon={FilePlus2}
                         title="Ajukan izin"
-                        description={activeWorkcode ? 'Sakit, dinas, cuti, atau berhalangan lain' : 'Bisa diajukan saat ada presensi yang dibuka'}
+                        description={leaveWorkcodes.length ? 'Sakit, dinas, cuti, atau berhalangan lain' : 'Belum ada presensi yang bisa diajukan izin'}
                         onClick={() => setLeaveOpen(true)}
-                        disabled={!activeWorkcode}
+                        disabled={!leaveWorkcodes.length}
                     />
                     <ActionRow icon={FileClock} title="Riwayat izin" description="Status pengajuan Anda" href={route('leave.history')} />
                     {participant && <ActionRow icon={QrCode} title="QR presensi saya" description="Ditunjukkan ke petugas scanner" onClick={() => setQrOpen(true)} />}
                 </Card>
             </div>
 
-            {activeWorkcode && (
-                <LeaveRequestModal show={leaveOpen} onClose={() => setLeaveOpen(false)} workcodeId={activeWorkcode.id} tanggal={today} />
+            {leaveWorkcodes.length > 0 && (
+                <LeaveRequestModal show={leaveOpen} onClose={() => setLeaveOpen(false)} workcodes={leaveWorkcodes} tanggal={today} />
             )}
 
             {faceOpen && <SelfFaceRegistrationModal participant={participant} onClose={() => setFaceOpen(false)} />}
 
-            {/* QR presensi pribadi: hanya pemilik/admin yang bisa memuat gambarnya */}
-            {participant && (
-                <Dialog
-                    open={qrOpen}
-                    onClose={() => setQrOpen(false)}
-                    title="QR presensi saya"
-                    description={participant.nama}
-                    size="sm"
-                    footer={
-                        <>
-                            <Button onClick={() => setQrOpen(false)}>Tutup</Button>
-                            <Button variant="primary" icon={Download} href={route('participants.download.png', participant.id)} external>Unduh</Button>
-                        </>
-                    }
-                >
-                    {/* QR selalu di atas putih agar terbaca kamera di mode gelap. */}
-                    <div className="mx-auto w-fit rounded-xl bg-white p-4">
-                        <img src={route('participants.qr', participant.id)} alt="QR presensi" className="h-52 w-52" />
-                    </div>
-                    <p className="mt-4 text-sm text-ink-2">
-                        Tunjukkan QR ini ke petugas scanner. <span className="font-medium text-ink">Jangan dibagikan</span>: siapa pun yang memegang QR ini bisa dipresensikan atas nama Anda.
-                    </p>
-                </Dialog>
-            )}
+            {participant && <MyQrDialog open={qrOpen} onClose={() => setQrOpen(false)} participantId={participant.id} name={participant.nama} />}
         </AuthenticatedLayout>
     );
 }
@@ -139,4 +100,95 @@ function ActionRow({ icon: Icon, title, description, href, onClick, disabled = f
     return href
         ? <Link href={href} className={className}>{content}</Link>
         : <button type="button" onClick={onClick} disabled={disabled} className={className}>{content}</button>;
+}
+
+const dayLabel = (date) => new Date(`${date}T00:00:00`).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' });
+
+/**
+ * Kartu utama beranda: menjawab "apakah saya sudah tercatat hari ini?". Presensi harian tampil
+ * sebagai dua kotak Datang/Pulang beserta batas jamnya; presensi kegiatan hari ini di bawahnya.
+ */
+function TodayCard({ today, schedule, attendances, activeWorkcode }) {
+    const daily = attendances.find((attendance) => attendance.harian);
+    const events = attendances.filter((attendance) => !attendance.harian);
+    const leave = daily && ['izin', 'sakit'].includes(daily.status);
+
+    return (
+        <Card animate className="p-5">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <h2 className="font-display text-xl font-semibold text-ink">Hari ini</h2>
+                {today && <p className="text-sm text-ink-2">{dayLabel(today)}</p>}
+            </div>
+
+            {schedule ? (
+                <>
+                    <p className="mt-1 text-sm text-ink-2">{schedule.nama}</p>
+                    {leave ? (
+                        <div className="mt-4 flex items-center gap-3 rounded-xl bg-status-izin-soft p-4">
+                            <StatusPill status={daily.status} />
+                            <p className="text-sm text-ink">Izin Anda hari ini sudah disetujui. Tidak perlu presensi.</p>
+                        </div>
+                    ) : (
+                        <div className="mt-4 grid grid-cols-2 gap-3">
+                            <TimeTile
+                                label="Datang"
+                                time={daily?.datang}
+                                done={Boolean(daily?.datang)}
+                                late={daily?.terlambat}
+                                hint={schedule.datang_selesai && `Tepat waktu s.d. ${schedule.datang_selesai}${schedule.ditutup ? ` · tutup ${schedule.ditutup}` : ''}`}
+                            />
+                            <TimeTile
+                                label="Pulang"
+                                time={daily?.pulang}
+                                done={Boolean(daily?.pulang)}
+                                hint={schedule.pulang_mulai && `Mulai ${schedule.pulang_mulai}`}
+                            />
+                        </div>
+                    )}
+                </>
+            ) : (
+                <p className="mt-3 flex items-center gap-2 text-sm text-ink-2">
+                    <CalendarClock className="h-5 w-5 shrink-0 text-ink-3" aria-hidden="true" />
+                    Tidak ada jadwal presensi harian hari ini.
+                </p>
+            )}
+
+            {events.length > 0 && (
+                <ul className="mt-4 divide-y divide-line border-t border-line">
+                    {events.map((event) => (
+                        <li key={event.id} className="flex items-center justify-between gap-3 py-3 text-sm">
+                            <span className="min-w-0 truncate text-ink">{event.workcode}</span>
+                            <span className="flex shrink-0 items-center gap-2">
+                                {event.datang && <span className="tabular-nums text-ink-2">{event.datang}</span>}
+                                <StatusPill status={event.status} />
+                            </span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+
+            {activeWorkcode && activeWorkcode.kategori !== 'harian' && !events.some((event) => event.workcode === activeWorkcode.nama_workcode) && (
+                <p className="mt-4 rounded-xl border border-line p-3 text-sm text-ink-2">
+                    <span className="font-medium text-ink">{activeWorkcode.nama_workcode}</span> sedang dibuka. Presensi lewat aplikasi Android, atau pindai QR kegiatan dari panitia.
+                </p>
+            )}
+        </Card>
+    );
+}
+
+/** Satu kotak jam (Datang/Pulang): jam tercatat, atau "Belum" beserta batas waktunya. */
+function TimeTile({ label, time, done, late = 0, hint }) {
+    return (
+        <div className={cx('rounded-xl p-4', done ? (late > 0 ? 'bg-status-telat-soft' : 'bg-status-hadir-soft') : 'border border-dashed border-line-strong')}>
+            <p className="text-sm text-ink-2">{label}</p>
+            <p className={cx('mt-0.5 font-display text-2xl font-semibold tabular-nums', done ? 'text-ink' : 'text-ink-3')}>{done ? time : 'Belum'}</p>
+            {done && late > 0 ? (
+                <p className="mt-1 text-sm font-medium text-status-telat">Terlambat {late} menit</p>
+            ) : done ? (
+                <p className="mt-1 flex items-center gap-1 text-sm font-medium text-status-hadir"><CheckCircle2 className="h-4 w-4" aria-hidden="true" />Tercatat</p>
+            ) : (
+                hint && <p className="mt-1 text-sm text-ink-2">{hint}</p>
+            )}
+        </div>
+    );
 }

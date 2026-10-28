@@ -3,7 +3,7 @@ import GoogleMap from '@/Components/GoogleMap';
 import { addTolerance, DAYS } from '@/Components/Workcodes/WeekSchedule';
 import WorkcodeEditor from '@/Components/Workcodes/WorkcodeEditor';
 import {
-    AttendanceBoard, Button, Card, Dialog, EmptyState, IconButton, PageHeader, StatusPill, cx, useConfirm, useToast,
+    AttendanceBoard, Button, Card, Dialog, EmptyState, IconButton, PageHeader, SearchField, StatusPill, cx, useConfirm, useToast,
 } from '@/ui';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
 import { Head, router, usePage } from '@inertiajs/react';
@@ -40,8 +40,11 @@ export default function WorkcodesIndex({ workcodes, participants, lateToleranceM
         if (confirmed) router.delete(route('workcodes.destroy', workcode.id), { preserveScroll: true });
     };
 
-    const active = workcodes.filter((w) => w.is_effectively_active);
-    const inactive = workcodes.filter((w) => !w.is_effectively_active);
+    const [query, setQuery] = useState('');
+    const needle = query.trim().toLowerCase();
+    const shown = needle ? workcodes.filter((w) => w.nama_workcode.toLowerCase().includes(needle)) : workcodes;
+    const active = shown.filter((w) => w.is_effectively_active);
+    const inactive = shown.filter((w) => !w.is_effectively_active);
 
     return (
         <AuthenticatedLayout>
@@ -65,9 +68,12 @@ export default function WorkcodesIndex({ workcodes, participants, lateToleranceM
                     </Card>
                 ) : (
                     <>
+                        {workcodes.length > 6 && (
+                            <SearchField value={query} onChange={setQuery} label="Cari workcode" placeholder="Cari nama workcode" className="max-w-sm" />
+                        )}
                         <WorkcodeGroup
                             title="Sedang aktif"
-                            empty="Tidak ada workcode yang aktif. Presensi terkunci sampai ada yang diaktifkan."
+                            empty={needle ? `Tidak ada workcode aktif yang cocok dengan "${query.trim()}".` : 'Tidak ada workcode yang aktif. Presensi terkunci sampai ada yang diaktifkan.'}
                             workcodes={active}
                             tolerance={lateToleranceMinutes}
                             onEdit={openEditor}
@@ -129,7 +135,20 @@ function WorkcodeCard({ workcode, tolerance, onEdit, onDelete, onMap }) {
     const hasLocation = workcode.latitude && workcode.longitude;
     const restricted = workcode.participants_count > 0;
 
-    const toggleActive = () => router.post(route(workcode.is_active ? 'workcodes.deactivate' : 'workcodes.activate', workcode.id), {}, { preserveScroll: true });
+    const confirm = useConfirm();
+    const toggleActive = async () => {
+        if (workcode.is_active) {
+            const confirmed = await confirm({
+                title: `Nonaktifkan ${workcode.nama_workcode}?`,
+                message: daily
+                    ? 'Guru dan pegawai tidak bisa presensi datang maupun pulang sampai workcode ini diaktifkan lagi.'
+                    : 'Peserta tidak bisa presensi ke kegiatan ini sampai diaktifkan lagi. Data yang sudah tercatat tetap aman.',
+                confirmText: 'Nonaktifkan',
+            });
+            if (!confirmed) return;
+        }
+        router.post(route(workcode.is_active ? 'workcodes.deactivate' : 'workcodes.activate', workcode.id), {}, { preserveScroll: true });
+    };
 
     return (
         <li>

@@ -67,7 +67,7 @@ export const PasswordInput = forwardRef(function PasswordInput({ className, ...p
                 onClick={() => setVisible(!visible)}
                 aria-label={visible ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
                 aria-pressed={visible}
-                className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-ink-2 hover:bg-surface-2 hover:text-ink"
+                className="absolute right-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg text-ink-2 hover:bg-surface-2 hover:text-ink"
             >
                 {visible ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <Eye className="h-4 w-4" aria-hidden="true" />}
             </button>
@@ -92,7 +92,7 @@ export function SearchField({ value, onChange, label = 'Cari', placeholder, clas
                 <button
                     type="button"
                     onClick={() => onChange('')}
-                    className="absolute right-1 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-ink-3 hover:bg-surface-2 hover:text-ink"
+                    className="absolute right-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg text-ink-2 hover:bg-surface-2 hover:text-ink"
                     aria-label="Hapus pencarian"
                 >
                     <X className="h-4 w-4" aria-hidden="true" />
@@ -104,18 +104,20 @@ export function SearchField({ value, onChange, label = 'Cari', placeholder, clas
 
 /**
  * Kotak centang dengan area sentuh 40px (kotak terlihat 18px). `indeterminate` untuk
- * "pilih semua" yang terisi sebagian.
+ * "pilih semua" yang terisi sebagian. Dengan `children`, teksnya tampil di samping kotak dan
+ * seluruh baris bisa diklik; tanpa `children`, `label` menjadi nama untuk pembaca layar.
  */
-export function Checkbox({ checked, indeterminate = false, onChange, label, className }) {
-    return (
-        <label className={cx('relative inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center', className)}>
+export function Checkbox({ checked, indeterminate = false, onChange, label, children, className, ...props }) {
+    const box = (
+        <>
             <input
                 type="checkbox"
                 className="peer sr-only"
                 checked={checked}
                 ref={(el) => el && (el.indeterminate = indeterminate)}
                 onChange={onChange}
-                aria-label={label}
+                aria-label={children ? undefined : label}
+                {...props}
             />
             <span
                 className={cx(
@@ -126,6 +128,18 @@ export function Checkbox({ checked, indeterminate = false, onChange, label, clas
             >
                 {indeterminate ? <Minus className="h-3.5 w-3.5" strokeWidth={3} /> : checked && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
             </span>
+        </>
+    );
+
+    if (!children) {
+        return <label className={cx('relative inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center', className)}>{box}</label>;
+    }
+
+    // Teks panjang turun ke baris berikutnya; kotak tetap sejajar dengan baris pertama.
+    return (
+        <label className={cx('flex cursor-pointer items-start gap-3 text-sm text-ink', className)}>
+            <span className="relative flex h-10 shrink-0 items-center">{box}</span>
+            <span className="py-2.5">{children}</span>
         </label>
     );
 }

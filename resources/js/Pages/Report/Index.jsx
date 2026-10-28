@@ -15,6 +15,20 @@ import { useEffect, useMemo, useState } from 'react';
 
 const EMPLOYMENT_STATUSES = ['PNS', 'PPPK', 'PPPK Paruh Waktu', 'GTT', 'PTT'];
 
+/** 12 bulan terakhir ("YYYY-MM") untuk pilihan bulan rekap; bulan yang sedang dibuka selalu ikut. */
+function recentMonths(selected) {
+    const now = new Date();
+    const months = Array.from({ length: 12 }, (_, i) => {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    });
+    if (selected && !months.includes(selected)) months.push(selected);
+    return months.map((value) => {
+        const [year, month] = value.split('-').map(Number);
+        return { value, label: new Date(year, month - 1, 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }) };
+    });
+}
+
 export default function ReportIndex({
     workcodes = [],
     activeWorkcodes = [],
@@ -24,8 +38,8 @@ export default function ReportIndex({
     period = null,
     attendances = [],
     participants = [],
-    kepalaSekolahNama = 'Muhtarom, S.Pd., M.Si.',
-    kepalaSekolahNip = '197205172006041015',
+    kepalaSekolahNama = '',
+    kepalaSekolahNip = '',
 }) {
     const { flash } = usePage().props;
     const { toast } = useToast();
@@ -259,12 +273,20 @@ export default function ReportIndex({
                                             </Select>
                                         </div>
                                         {singleAttendance && stats && (
-                                            <AttendanceBoard compact counts={{ hadir: stats.hadir, terlambat: 0, izin: 0, belum: stats.belum }} className="md:w-72" />
+                                            <AttendanceBoard compact counts={{ hadir: stats.hadir, izin: stats.izin ?? 0, belum: stats.belum }} className="md:w-72" />
                                         )}
-                                        {isDaily && (
-                                            <p className="text-sm text-ink-2 md:text-right">
-                                                Rekap per peserta: alpha, izin, sakit, lupa absen, dan total menit terlambat.
-                                            </p>
+                                        {isDaily && period && (
+                                            <div className="md:text-right">
+                                                <label htmlFor="report-month" className="mb-1.5 block text-sm font-medium text-ink">Bulan rekap</label>
+                                                <Select
+                                                    id="report-month"
+                                                    value={period.month}
+                                                    onChange={(e) => router.get(route('report'), { workcode_id: selectedWorkcodeId, bulan: e.target.value }, { preserveState: true, preserveScroll: true })}
+                                                    className="md:w-56"
+                                                >
+                                                    {recentMonths(period.month).map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                                                </Select>
+                                            </div>
                                         )}
                                     </div>
                                     <div className="flex flex-col gap-2 sm:flex-row">
@@ -276,6 +298,7 @@ export default function ReportIndex({
                                     </div>
                                     <p className="text-sm text-ink-2" aria-live="polite">
                                         {filtered ? `${rows.length} dari ${attendances.length} baris cocok dengan filter` : `${attendances.length} baris`}
+                                        {isDaily && ' · alpha, izin, sakit, lupa absen, dan total menit terlambat per peserta'}
                                     </p>
                                 </div>
                             }

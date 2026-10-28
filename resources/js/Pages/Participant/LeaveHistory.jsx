@@ -32,6 +32,13 @@ export default function LeaveHistory({ leaveRequests }) {
                                         <StatusPill status={request.status_approval || 'pending'} />
                                     </div>
                                     <p className="mt-3 text-sm leading-relaxed text-ink">{request.keterangan}</p>
+                                    {request.status_approval === 'rejected' && request.alasan_penolakan && (
+                                        <div className="mt-3 rounded-xl bg-status-alpha-soft p-3">
+                                            <p className="text-sm font-medium text-status-alpha">Alasan ditolak</p>
+                                            <p className="mt-0.5 text-sm text-ink">{request.alasan_penolakan}</p>
+                                            <p className="mt-1 text-sm text-ink-2">Perbaiki sesuai alasan ini, lalu ajukan lagi.</p>
+                                        </div>
+                                    )}
                                     <p className="mt-3 text-xs text-ink-2">{formatLabel(request.tipe_izin)} · diajukan {request.created_at}</p>
                                 </Card>
                             </li>

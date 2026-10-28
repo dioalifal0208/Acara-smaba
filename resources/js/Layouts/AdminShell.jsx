@@ -1,5 +1,6 @@
 import AdminNotificationBell from '@/Components/AdminNotificationBell';
 import SyncButton from '@/Components/SyncButton';
+import { appUrl } from '@/lib/appUrl';
 import { useWebSyncSignal } from '@/lib/webSyncSignal';
 import { IconButton } from '@/ui/Button';
 import { adminNavigation, currentNavItem } from '@/ui/navigation';
@@ -83,7 +84,7 @@ function SidebarContent({ onClose }) {
     return (
         <>
             <div className="flex h-14 flex-none items-center gap-3 border-b border-line pl-5 pr-2">
-                <img src="/images/logo.png" alt="" className="h-8 w-8 object-contain" />
+                <img src={appUrl('images/logo-96.png')} alt="" width="32" height="32" className="h-8 w-8 object-contain" />
                 <div className="min-w-0 flex-1 leading-tight">
                     <p className="truncate text-sm font-semibold text-ink">E-Presensi</p>
                     <p className="truncate text-xs text-ink-2">SMA Negeri 1 Babat</p>

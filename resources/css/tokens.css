@@ -11,7 +11,7 @@
     --surface-2: 238 240 237;    /* #eef0ed isian lembut, hover */
     --ink: 27 31 28;             /* #1b1f1c teks utama, 15.5:1 di app */
     --ink-2: 75 84 78;           /* #4b544e teks sekunder, 7.3:1 di app */
-    --ink-3: 105 113 107;        /* #69716b placeholder/keterangan, 4.7:1 di app */
+    --ink-3: 102 110 104;        /* #666e68 placeholder/keterangan, 4.6:1 di surface-2 */
     --line: 223 227 223;         /* #dfe3df garis pemisah (dekoratif) */
     --line-strong: 128 137 130;  /* #808982 border kontrol, >=3:1 */
     --accent: 38 116 46;         /* #26742e aksi utama, 5.8:1 */

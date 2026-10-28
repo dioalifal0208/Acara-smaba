@@ -13,6 +13,12 @@ import {
     visibleRegion,
 } from '@/Utils/faceEnrollment';
 import { createLivenessChallenge } from '@/Utils/liveness';
+import { Button } from '@/ui';
+import { AlertTriangle, ShieldCheck } from 'lucide-react';
+
+// Tambahan waktu sekali tekan, dan kapan tombolnya muncul (WCAG 2.2.1: batas waktu bisa diperpanjang).
+const EXTEND_SECONDS = 30;
+const EXTEND_VISIBLE_BELOW = 20;
 
 const cameraErrorMessage = (error) => {
     switch (error?.name) {
@@ -302,38 +308,30 @@ export default function FaceEnrollmentCamera({ onComplete, className = '', subje
     useEffect(() => {
         if (phase !== 'camera') return undefined;
         if (timeLeft <= 0) {
-            fail('Waktu pendaftaran habis. Pastikan pencahayaan cukup dan ikuti instruksi di layar.');
+            fail(`Waktu habis sebelum wajah terekam lengkap (${captured} dari ${FRONT_SAMPLES} sampel). Cari tempat yang lebih terang, lepas masker atau kacamata gelap, pegang HP setinggi wajah, lalu coba lagi.`);
             return undefined;
         }
         const timer = setTimeout(() => setTimeLeft((t) => t - 1), 1000);
         return () => clearTimeout(timer);
-    }, [phase, timeLeft, fail]);
+    }, [phase, timeLeft, fail]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const progress = stage === 'liveness' ? 90 : Math.round((captured / FRONT_SAMPLES) * 80);
 
     return (
         <div className={`relative bg-black w-full aspect-[3/4] overflow-hidden ${className}`}>
-            {/* Persetujuan pemrosesan data wajah: kamera baru menyala setelah disetujui */}
+            {/* Persetujuan pemrosesan data wajah: kamera baru menyala setelah disetujui. Panel biasa (bukan
+                lapisan kamera), jadi memakai token tema seperti halaman lain. */}
             {!consented && (
-                <div className="absolute inset-0 z-40 flex flex-col justify-center bg-slate-900 px-5 text-white">
-                    <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-emerald-500/20">
-                        <svg className="h-6 w-6 text-emerald-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                        </svg>
-                    </div>
-                    <h3 className="text-center text-sm font-extrabold">Persetujuan Data Wajah</h3>
-                    <ul className="mt-3 space-y-1.5 text-xs leading-relaxed text-slate-300 list-disc pl-4">
-                        <li>Foto dan data titik wajah {subjectLabel} disimpan <strong className="text-white">hanya untuk presensi</strong> di SMA Negeri 1 Babat.</li>
+                <div className="absolute inset-0 z-40 flex flex-col justify-center overflow-y-auto bg-surface px-5 py-6 text-ink">
+                    <ShieldCheck className="mx-auto h-10 w-10 text-accent" strokeWidth={1.75} aria-hidden="true" />
+                    <h3 className="mt-3 text-center text-lg font-semibold">Persetujuan data wajah</h3>
+                    <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-relaxed text-ink-2">
+                        <li>Foto dan data titik wajah {subjectLabel} disimpan <strong className="font-semibold text-ink">hanya untuk presensi</strong> di SMA Negeri 1 Babat.</li>
                         <li>Data disimpan di server sekolah secara privat dan hanya bisa dilihat admin presensi{subjectLabel === 'Anda' ? ' dan Anda sendiri' : ''}.</li>
                         <li>Data wajah dihapus saat data peserta dihapus atau bila {subjectLabel === 'Anda' ? 'Anda' : 'peserta'} meminta penghapusan kepada admin.</li>
                     </ul>
-                    <button
-                        type="button"
-                        onClick={() => setConsented(true)}
-                        className="mt-5 w-full rounded-xl bg-emerald-500 py-2.5 text-sm font-extrabold text-white hover:bg-emerald-600"
-                    >
-                        Setuju &amp; Mulai
-                    </button>
+                    <p className="mt-3 text-sm text-ink-2">Pendaftaran butuh sekitar 1 menit. Waktunya bisa ditambah bila perlu.</p>
+                    <Button variant="primary" size="lg" onClick={() => setConsented(true)} className="mt-5 w-full">Setuju dan mulai</Button>
                 </div>
             )}
             <video
@@ -361,10 +359,10 @@ export default function FaceEnrollmentCamera({ onComplete, className = '', subje
                 <div className="absolute top-3 inset-x-3 z-20">
                     <div className="rounded-2xl bg-slate-900/75 backdrop-blur-md border border-white/10 px-3.5 py-2.5 text-white">
                         <div className="flex items-center justify-between gap-2">
-                            <p className="text-xs font-semibold text-white/75">{stage === 'samples' ? 'Langkah 1 dari 2 · Wajah menghadap depan' : 'Langkah 2 dari 2 · Verifikasi wajah hidup'}</p>
-                            <span className={`text-xs font-bold tabular-nums ${timeLeft <= 15 ? 'text-rose-300' : 'text-white/70'}`}>{timeLeft}s</span>
+                            <p className="text-xs font-medium text-white/80">{stage === 'samples' ? 'Langkah 1 dari 2 · Wajah menghadap depan' : 'Langkah 2 dari 2 · Verifikasi wajah hidup'}</p>
+                            <span className="text-xs font-medium tabular-nums text-white/80">Sisa {timeLeft} detik</span>
                         </div>
-                        <p className="text-sm font-extrabold leading-snug mt-0.5">{stage === 'samples' ? 'Lihat lurus ke kamera dan tahan posisi' : 'Wajah biasa dulu, lalu tersenyum saat diminta'}</p>
+                        <p className="mt-0.5 text-base font-semibold leading-snug">{stage === 'samples' ? 'Lihat lurus ke kamera dan tahan posisi' : 'Wajah biasa dulu, lalu tersenyum saat diminta'}</p>
                     </div>
                 </div>
             )}
@@ -372,39 +370,52 @@ export default function FaceEnrollmentCamera({ onComplete, className = '', subje
             {/* Petunjuk + progres */}
             {phase === 'camera' && (
                 <div className="absolute bottom-3 inset-x-3 z-20">
-                    <div className={`rounded-xl px-3 py-2 text-center text-xs font-bold backdrop-blur-md border ${faceOk ? 'bg-emerald-500/25 border-emerald-300/40 text-emerald-50' : 'bg-amber-500/25 border-amber-300/40 text-amber-50'}`}>
+                    {timeLeft <= EXTEND_VISIBLE_BELOW && (
+                        <button
+                            type="button"
+                            onClick={() => setTimeLeft((t) => t + EXTEND_SECONDS)}
+                            className="mx-auto mb-2 flex h-10 items-center rounded-full bg-white/90 px-4 text-sm font-semibold text-slate-900 hover:bg-white"
+                        >
+                            Tambah {EXTEND_SECONDS} detik
+                        </button>
+                    )}
+                    <div className={`rounded-xl px-3 py-2 text-center text-sm font-semibold backdrop-blur-md border ${faceOk ? 'bg-emerald-500/25 border-emerald-300/40 text-emerald-50' : 'bg-amber-500/25 border-amber-300/40 text-amber-50'}`}>
                         {hint}
                     </div>
-                    <div className="mt-2 h-1.5 rounded-full bg-white/20 overflow-hidden">
-                        <div className="h-full bg-emerald-400 transition-all duration-300" style={{ width: `${progress}%` }} />
+                    <div
+                        className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/20"
+                        role="progressbar"
+                        aria-label="Progres pendaftaran wajah"
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                        aria-valuenow={progress}
+                    >
+                        <div className="h-full bg-emerald-400 transition-[width] duration-300 motion-reduce:transition-none" style={{ width: `${progress}%` }} />
                     </div>
-                    <p className="mt-1 text-center text-xs font-medium text-white/80">
-                        {stage === 'samples' ? `${captured} / ${FRONT_SAMPLES} sampel wajah terekam` : 'Sampel wajah terekam · memverifikasi wajah hidup'}
+                    {/* Hanya langkah & jumlah sampel yang diumumkan; petunjuk per frame terlalu sering berganti. */}
+                    <p className="mt-1 text-center text-xs font-medium text-white/80" aria-live="polite">
+                        {stage === 'samples' ? `${captured} dari ${FRONT_SAMPLES} sampel wajah terekam` : 'Sampel wajah terekam · memverifikasi wajah hidup'}
                     </p>
                 </div>
             )}
 
             {(phase === 'loading' || phase === 'uploading') && (
                 <div className="absolute inset-0 z-30 flex flex-col items-center justify-center text-white">
-                    <div className="h-10 w-10 rounded-full border-4 border-emerald-400 border-t-transparent animate-spin mb-3" />
-                    <p className="text-xs font-semibold">{hint}</p>
+                    <div className="mb-3 h-10 w-10 animate-spin rounded-full border-4 border-emerald-400 border-t-transparent motion-reduce:animate-none" aria-hidden="true" />
+                    <p className="text-sm font-medium" role="status">{hint}</p>
                 </div>
             )}
 
             {phase === 'error' && (
-                <div className="absolute inset-0 z-30 flex flex-col items-center justify-center px-6 text-center bg-black/70">
-                    <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-red-500/20">
-                        <svg className="h-6 w-6 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
-                    </div>
-                    <p className="text-sm font-bold text-white mb-4">{errorMsg}</p>
+                <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-black/75 px-6 text-center" role="alert">
+                    <AlertTriangle className="mb-3 h-10 w-10 text-amber-300" strokeWidth={1.75} aria-hidden="true" />
+                    <p className="mb-5 text-base font-medium leading-snug text-white">{errorMsg}</p>
                     <button
                         type="button"
                         onClick={() => setAttempt((n) => n + 1)}
-                        className="w-full rounded-xl bg-white/20 px-6 py-2.5 text-sm font-bold text-white hover:bg-white/30"
+                        className="h-12 w-full rounded-xl bg-white px-6 text-base font-semibold text-slate-900 hover:bg-white/90"
                     >
-                        Coba Lagi
+                        Coba lagi
                     </button>
                 </div>
             )}

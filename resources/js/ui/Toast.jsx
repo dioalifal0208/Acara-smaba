@@ -57,7 +57,7 @@ function ToastItem({ toast, onRemove }) {
             <button
                 type="button"
                 onClick={() => onRemove(toast.id)}
-                className="-m-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-ink-3 hover:bg-surface-2 hover:text-ink"
+                className="-m-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-ink-2 hover:bg-surface-2 hover:text-ink"
                 aria-label="Tutup notifikasi"
             >
                 <X className="h-4 w-4" aria-hidden="true" />

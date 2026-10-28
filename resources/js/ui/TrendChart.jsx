@@ -53,6 +53,7 @@ export default function TrendChart({ days, caption }) {
                         <div
                             key={day.date}
                             tabIndex={0}
+                            role="img"
                             aria-label={`${title}: ${total} hadir, ${day.tepat} tepat waktu, ${day.telat} terlambat`}
                             className="group relative flex flex-1 flex-col items-center justify-end rounded-md outline-none hover:bg-surface-2/60 focus-visible:ring-2 focus-visible:ring-accent"
                         >

@@ -14,7 +14,7 @@ const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
 // [teks/elemen, latar, minimum]
 const pairs = [
     ['ink', 'app', 4.5], ['ink', 'surface', 4.5], ['ink-2', 'app', 4.5], ['ink-2', 'surface', 4.5], ['ink-2', 'surface-2', 4.5],
-    ['ink-3', 'app', 4.5], ['ink-3', 'surface', 4.5], ['accent-ink', 'accent', 4.5], ['accent', 'surface', 4.5], ['accent', 'accent-soft', 4.5],
+    ['ink-3', 'app', 4.5], ['ink-3', 'surface', 4.5], ['ink-3', 'surface-2', 4.5], ['accent-ink', 'accent', 4.5], ['accent', 'surface', 4.5], ['accent', 'accent-soft', 4.5],
     ['hadir', 'hadir-soft', 4.5], ['telat', 'telat-soft', 4.5], ['izin', 'izin-soft', 4.5], ['alpha', 'alpha-soft', 4.5],
     ['hadir', 'surface', 4.5], ['telat', 'surface', 4.5], ['izin', 'surface', 4.5], ['alpha', 'surface', 4.5],
     ['line-strong', 'surface', 3], ['line-strong', 'app', 3],

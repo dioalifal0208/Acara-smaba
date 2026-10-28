@@ -41,6 +41,7 @@ class LeaveRequest extends Model
         'alasan',
         'bukti_path',
         'status_approval',
+        'alasan_penolakan',
     ];
 
     protected $casts = [

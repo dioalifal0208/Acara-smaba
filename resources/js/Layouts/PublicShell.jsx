@@ -9,7 +9,7 @@ export default function PublicShell({ children, footer = 'Presensi mandiri' }) {
     return (
         <div className="flex min-h-dvh flex-col bg-app text-ink">
             <header className="mx-auto flex w-full max-w-md items-center gap-3 px-4 pb-2 pt-5">
-                <img src={appUrl('images/logo.png')} alt="" className="h-9 w-9 shrink-0 object-contain" />
+                <img src={appUrl('images/logo-96.png')} alt="" width="36" height="36" className="h-9 w-9 shrink-0 object-contain" />
                 <span className="leading-tight">
                     <span className="block text-sm font-semibold text-ink">E-Presensi</span>
                     <span className="block text-xs text-ink-2">SMA Negeri 1 Babat</span>

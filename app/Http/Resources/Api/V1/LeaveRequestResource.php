@@ -24,6 +24,7 @@ class LeaveRequestResource extends JsonResource
             'tanggal_selesai' => $this->tanggal_selesai ? $this->tanggal_selesai->format('Y-m-d') : null,
             'keterangan' => $this->keterangan ?? $this->alasan,
             'status_approval' => $this->status_approval,
+            'alasan_penolakan' => $this->alasan_penolakan,
             'has_dokumen' => ! empty($this->bukti_path),
             'participant' => $this->when($this->relationLoaded('participant') && $this->participant, [
                 'id' => $this->participant->id,

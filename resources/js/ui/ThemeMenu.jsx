@@ -29,7 +29,7 @@ export default function ThemeMenu() {
             <MenuItems
                 anchor={{ to: 'bottom end', gap: 8 }}
                 transition
-                className="z-[60] w-48 rounded-xl border border-line bg-surface p-1 shadow-xl transition duration-100 ease-out focus:outline-none data-[closed]:scale-95 data-[closed]:opacity-0"
+                className="z-[60] w-48 rounded-xl border border-line bg-surface p-1 shadow-xl transition duration-100 ease-out focus:outline-none data-[closed]:scale-95 data-[closed]:opacity-0 motion-reduce:transition-none"
             >
                 <p className="px-3 pb-1 pt-2 text-xs font-medium text-ink-2">Tampilan</p>
                 {OPTIONS.map(({ value, label, icon: OptionIcon }) => (

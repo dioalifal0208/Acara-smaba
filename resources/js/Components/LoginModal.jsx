@@ -1,4 +1,4 @@
-import { Button, Dialog, Field, Input, PasswordInput } from '@/ui';
+import { Button, Checkbox, Dialog, Field, Input, PasswordInput } from '@/ui';
 import { useForm } from '@inertiajs/react';
 import { useEffect } from 'react';
 
@@ -57,16 +57,9 @@ export default function LoginModal({ isOpen, onClose }) {
                     />
                 </Field>
 
-                <label className="flex cursor-pointer items-center gap-3 text-sm text-ink">
-                    <input
-                        type="checkbox"
-                        name="remember"
-                        checked={data.remember}
-                        onChange={(e) => setData('remember', e.target.checked)}
-                        className="h-[18px] w-[18px] rounded border-line-strong bg-surface text-accent focus:ring-accent"
-                    />
+                <Checkbox name="remember" checked={data.remember} onChange={(e) => setData('remember', e.target.checked)}>
                     Tetap masuk di perangkat ini
-                </label>
+                </Checkbox>
 
                 <Button variant="primary" type="submit" size="lg" loading={processing} className="w-full">Masuk</Button>
             </form>

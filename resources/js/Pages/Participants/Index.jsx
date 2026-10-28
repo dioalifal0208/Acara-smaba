@@ -18,6 +18,8 @@ const SORTS = {
     'alpha-desc': (a, b) => b.nama.localeCompare(a.nama, 'id', { sensitivity: 'base' }),
 };
 
+const urlParam = (key) => (typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get(key) ?? '');
+
 const normalize = (value) => (value || '').toString().trim().toLowerCase().replace(/\s+/g, ' ');
 
 export default function ParticipantsIndex({ participants }) {
@@ -28,11 +30,22 @@ export default function ParticipantsIndex({ participants }) {
 
     const [addOpen, setAddOpen] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
-    const [query, setQuery] = useState('');
-    const [statusFilter, setStatusFilter] = useState('');
-    const [sortBy, setSortBy] = useState('latest');
-    const [reviewOnly, setReviewOnly] = useState(false);
+    // Filter dibaca dari & ditulis ke URL: tetap ada setelah kembali dari detail peserta dan bisa dibagikan.
+    const [query, setQuery] = useState(() => urlParam('q'));
+    const [statusFilter, setStatusFilter] = useState(() => urlParam('status'));
+    const [sortBy, setSortBy] = useState(() => (SORTS[urlParam('sort')] ? urlParam('sort') : 'latest'));
+    const [reviewOnly, setReviewOnly] = useState(() => urlParam('review') === 'pending');
     const [selected, setSelected] = useState([]);
+
+    useEffect(() => {
+        const params = new URLSearchParams();
+        if (query.trim()) params.set('q', query.trim());
+        if (statusFilter) params.set('status', statusFilter);
+        if (sortBy !== 'latest') params.set('sort', sortBy);
+        if (reviewOnly) params.set('review', 'pending');
+        const next = `${window.location.pathname}${params.size ? `?${params}` : ''}`;
+        if (next !== window.location.pathname + window.location.search) window.history.replaceState(window.history.state, '', next);
+    }, [query, statusFilter, sortBy, reviewOnly]);
 
     const reviewCount = participants.filter(needsReview).length;
     const attendedCount = participants.filter((participant) => participant.has_attended).length;
@@ -64,6 +77,12 @@ export default function ParticipantsIndex({ participants }) {
             .filter((p) => !reviewOnly || needsReview(p))
             .sort(SORTS[sortBy]);
     }, [participants, query, statusFilter, reviewOnly, sortBy]);
+
+    // Peserta yang tersembunyi oleh filter dilepas dari pilihan: hapus massal hanya mengenai baris yang terlihat.
+    useEffect(() => {
+        const visible = new Set(rows.map((p) => p.id));
+        setSelected((current) => (current.every((id) => visible.has(id)) ? current : current.filter((id) => visible.has(id))));
+    }, [rows]);
 
     const filtered = Boolean(query || statusFilter || reviewOnly);
     const clearFilters = () => {

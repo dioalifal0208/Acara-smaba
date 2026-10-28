@@ -21,6 +21,7 @@ use App\Models\LocationIntegrityViolation;
 use App\Models\Workcode;
 use App\Support\AdminDashboardStats;
 use App\Support\AdminNotifications;
+use App\Support\ParticipantToday;
 use App\Support\PrivateFile;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
@@ -28,7 +29,7 @@ use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 // Halaman depan publik: hanya informasi umum. Data kehadiran tidak dikirim ke publik (privasi).
-Route::get('/', fn () => Inertia::render('Welcome'));
+Route::get('/', fn () => Inertia::render('Welcome', ['apkUrl' => SettingController::apkUrl()]));
 
 Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     // Dashboard route
@@ -50,6 +51,12 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
                 'nama' => $workcode->nama_workcode,
                 'kategori' => $workcode->kategori,
                 'counts' => AdminDashboardStats::board($workcode),
+                // Jam hari ini untuk strip jadwal di atas Papan Hadir (null bila harian sedang libur).
+                'jadwal' => $workcode->kategori === 'harian'
+                    ? ParticipantToday::schedule($workcode)
+                    : ($workcode->jam_aktif_mulai && $workcode->jam_aktif_selesai
+                        ? ['mulai' => substr($workcode->jam_aktif_mulai, 0, 5), 'selesai' => substr($workcode->jam_aktif_selesai, 0, 5)]
+                        : null),
             ])->values(),
             'weekly' => AdminDashboardStats::weekly(),
             'lateness' => AdminDashboardStats::lateness(),
@@ -136,16 +143,28 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     // Settings routes
     Route::get('/admin/settings', [SettingController::class, 'edit'])->name('admin.settings');
     Route::post('/admin/settings', [SettingController::class, 'update'])->name('admin.settings.update');
+    Route::post('/admin/settings/apk', [SettingController::class, 'updateApk'])->name('admin.settings.apk');
 });
 
 Route::middleware(['auth', 'verified', 'role:participant'])->group(function () {
     // Participant Dashboard
     Route::get('/participant/dashboard', function () {
-        $activeWorkcode = Workcode::getActive();
+        $participant = auth()->user()->participant;
+        // Hanya presensi yang berlaku untuk peserta ini (bukan kegiatan khusus peserta lain).
+        $activeWorkcode = $participant ? Workcode::getActive($participant) : null;
+        $daily = $participant ? ParticipantToday::dailyWorkcode($participant) : null;
 
         return Inertia::render('Participant/Dashboard', [
             'activeWorkcode' => $activeWorkcode,
-            'participant' => auth()->user()->participant?->append('photo_url'), // pemilik data: boleh melihat fotonya sendiri
+            'participant' => $participant?->append('photo_url'), // pemilik data: boleh melihat fotonya sendiri
+            // Tanggal hari ini menurut zona waktu aplikasi (WIB), bukan jam UTC browser.
+            'today' => today()->toDateString(),
+            'todayAttendances' => $participant ? ParticipantToday::attendances($participant) : [],
+            'schedule' => ParticipantToday::schedule($daily),
+            // Izin bisa diajukan ke presensi harian walau sedang tidak ada presensi yang dibuka.
+            'leaveWorkcodes' => collect([$daily, $activeWorkcode])->filter()->unique('id')
+                ->map(fn (Workcode $workcode) => ['id' => $workcode->id, 'nama_workcode' => $workcode->nama_workcode])
+                ->values(),
         ]);
     })->name('participant.dashboard');
 

@@ -1,5 +1,5 @@
 import GoogleMap from '@/Components/GoogleMap';
-import { Button, cx, Dialog, Field, Input, Segmented, Textarea, useToast } from '@/ui';
+import { Button, Checkbox, cx, Dialog, Field, Input, Segmented, Textarea, useToast } from '@/ui';
 import { useForm } from '@inertiajs/react';
 import { LocateFixed, UserCheck, Users } from 'lucide-react';
 import { Component, useState } from 'react';
@@ -110,10 +110,12 @@ export default function WorkcodeEditor({ workcode, participants, toleranceMinute
 
     const setDayTime = (day, field, value) => setData('jadwal_per_hari', { ...data.jadwal_per_hari, [day]: { ...data.jadwal_per_hari[day], [field]: value } });
     const toggleDay = (day) => setData('hari_aktif', data.hari_aktif.includes(day) ? data.hari_aktif.filter((d) => d !== day) : [...data.hari_aktif, day].sort());
+    // Disalin ke semua hari (termasuk libur) agar hari yang dinyalakan belakangan ikut jam yang sama.
     const copyFirstDay = () => {
-        const first = data.jadwal_per_hari[[...data.hari_aktif].sort()[0]];
-        setData('jadwal_per_hari', { ...data.jadwal_per_hari, ...Object.fromEntries(data.hari_aktif.map((day) => [day, { ...first }])) });
+        const first = data.jadwal_per_hari[[...data.hari_aktif].sort()[0]] ?? DEFAULT_DAY;
+        setData('jadwal_per_hari', Object.fromEntries(DAYS.map((day) => [day.id, { ...first }])));
     };
+    const setAllDaysTime = (field, value) => setData('jadwal_per_hari', Object.fromEntries(DAYS.map((day) => [day.id, { ...data.jadwal_per_hari[day.id], [field]: value }])));
 
     const submit = (e) => {
         e.preventDefault();
@@ -146,15 +148,9 @@ export default function WorkcodeEditor({ workcode, participants, toleranceMinute
             footer={
                 <>
                     {!editing && daily && (
-                        <label className="flex cursor-pointer items-center gap-3 order-last py-2 text-sm text-ink sm:order-none sm:mr-auto sm:py-0">
-                            <input
-                                type="checkbox"
-                                checked={data.set_active}
-                                onChange={(e) => setData('set_active', e.target.checked)}
-                                className="h-[18px] w-[18px] rounded border-line-strong bg-surface text-accent focus:ring-accent"
-                            />
+                        <Checkbox checked={data.set_active} onChange={(e) => setData('set_active', e.target.checked)} className="order-last sm:order-none sm:mr-auto">
                             Langsung aktifkan setelah disimpan
-                        </label>
+                        </Checkbox>
                     )}
                     <Button onClick={onClose}>Batal</Button>
                     <Button variant="primary" type="submit" form="workcode-form" loading={processing}>{saveLabel}</Button>
@@ -198,6 +194,7 @@ export default function WorkcodeEditor({ workcode, participants, toleranceMinute
                                 schedule={data.jadwal_per_hari}
                                 onToggleDay={toggleDay}
                                 onChangeTime={setDayTime}
+                                onChangeAll={setAllDaysTime}
                                 onCopyFirst={copyFirstDay}
                                 toleranceMinutes={toleranceMinutes}
                                 errors={errors}
@@ -232,9 +229,9 @@ export default function WorkcodeEditor({ workcode, participants, toleranceMinute
                         {!daily && (
                             <PickerRow
                                 icon={UserCheck}
-                                title="Stakeholder sudah absensi"
+                                title="Hadir otomatis"
                                 summary={data.auto_participant_ids.length === 0
-                                    ? 'Belum ada yang dipilih'
+                                    ? 'Stakeholder seperti kepala sekolah atau pemateri'
                                     : `${data.auto_participant_ids.length} otomatis hadir saat mulai`}
                                 error={errors.auto_participant_ids}
                                 action="Pilih"
@@ -288,7 +285,7 @@ export default function WorkcodeEditor({ workcode, participants, toleranceMinute
                 participants={participants}
                 selected={data.auto_participant_ids}
                 onChange={setAutoParticipantIds}
-                title="Stakeholder sudah absensi"
+                title="Hadir otomatis"
                 description="Yang dicentang otomatis tercatat hadir pada jam mulai kegiatan dan tidak muncul lagi di daftar peserta. Bila mereka tetap scan, hasil scan menggantikan catatan otomatis."
                 emptyLabel="Belum ada stakeholder dipilih"
             />

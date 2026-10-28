@@ -7,6 +7,7 @@ use App\Models\LeaveRequest;
 use App\Models\Participant;
 use App\Services\FcmService;
 use App\Support\PrivateFile;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
@@ -35,6 +36,7 @@ class AdminLeaveController extends Controller
                     'keterangan' => $req->keterangan ?? $req->alasan,
                     'bukti_url' => PrivateFile::url('leave-document', $req),
                     'status_approval' => $req->status_approval,
+                    'alasan_penolakan' => $req->alasan_penolakan,
                     'created_at' => $req->created_at->format('d M Y H:i'),
                 ];
             });
@@ -74,16 +76,23 @@ class AdminLeaveController extends Controller
         return back()->with('success', 'Pengajuan berhasil disetujui.');
     }
 
-    public function reject(LeaveRequest $leaveRequest)
+    public function reject(Request $request, LeaveRequest $leaveRequest)
     {
-        $processed = DB::transaction(function () use ($leaveRequest) {
+        // Alasan wajib: peserta melihatnya di riwayat izin agar tahu apa yang perlu diperbaiki.
+        $validated = $request->validate([
+            'alasan_penolakan' => 'required|string|max:500',
+        ], [
+            'alasan_penolakan.required' => 'Tulis alasan penolakan agar peserta tahu apa yang perlu diperbaiki.',
+        ]);
+
+        $processed = DB::transaction(function () use ($leaveRequest, $validated) {
             $leaveRequest = LeaveRequest::lockForUpdate()->findOrFail($leaveRequest->id);
 
             if ($leaveRequest->status_approval !== 'pending') {
                 return false;
             }
 
-            $leaveRequest->update(['status_approval' => 'rejected']);
+            $leaveRequest->update(['status_approval' => 'rejected', 'alasan_penolakan' => trim($validated['alasan_penolakan'])]);
             $this->notifyParticipant($leaveRequest);
 
             return true;

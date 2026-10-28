@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 
 const GOOGLE_MAPS_SCRIPT_ID = 'google-maps-javascript-api';
+// Ubin peta selalu terang, jadi radius memakai accent mode terang (#26742e) di kedua tema.
+const MAP_ACCENT = '#26742e';
 const LOCATION_TIMEOUT_MS = 20000;
 
 const AUTH_FAILURE_MESSAGE = `Google Maps menolak API key untuk alamat ${typeof window !== 'undefined' ? window.location.origin : 'situs ini'}. `
@@ -123,9 +125,9 @@ export default function GoogleMap({
             center: markerRef.current?.getPosition(),
             radius: 1,
             map,
-            fillColor: '#4db855',
+            fillColor: MAP_ACCENT,
             fillOpacity: 0,
-            strokeColor: '#2f9338',
+            strokeColor: MAP_ACCENT,
             strokeOpacity: 0,
             strokeWeight: 2,
             clickable: false,
@@ -188,9 +190,9 @@ export default function GoogleMap({
                     center: position,
                     radius: Number(radius) || 100,
                     map,
-                    fillColor: '#4db855',
+                    fillColor: MAP_ACCENT,
                     fillOpacity: 0.25,
-                    strokeColor: '#2f9338',
+                    strokeColor: MAP_ACCENT,
                     strokeOpacity: 0.95,
                     strokeWeight: 2.5,
                     clickable: false,
@@ -344,7 +346,7 @@ export default function GoogleMap({
                         }`}
                     >
                         {locationState === 'loading' ? (
-                            <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
+                            <svg className="h-5 w-5 animate-spin motion-reduce:animate-none" viewBox="0 0 24 24" fill="none">
                                 <circle className="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="3" />
                                 <path className="opacity-90" fill="currentColor" d="M21 12a9 9 0 00-9-9v3a6 6 0 016 6h3z" />
                             </svg>

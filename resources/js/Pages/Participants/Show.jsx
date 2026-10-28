@@ -6,7 +6,7 @@ import FaceRegistrationModal from '@/Components/FaceRegistrationModal';
 import {
     EMPLOYMENT_STATUSES, FaceStatus, ParticipantAvatar, isNonPermanentStatus, nipLabel, formNip, STAFF_ID_HINT,
 } from '@/Components/ParticipantBits';
-import { Button, Card, Field, Input, Section, Select, useConfirm, useToast } from '@/ui';
+import { Button, Card, Checkbox, Field, Input, Section, Select, useConfirm, useToast } from '@/ui';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { AlertTriangle, ChevronLeft, Download, Printer, RotateCcw, ScanFace, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -216,7 +216,7 @@ function QrSection({ participant, onReset }) {
                 <Button icon={Download} onClick={() => window.open(route('participants.download.svg', participant.id), '_blank')}>Unduh</Button>
                 <Button icon={Printer} onClick={handlePrint}>Cetak</Button>
             </div>
-            <Button variant="ghost" icon={RotateCcw} onClick={onReset} className="mt-2 w-full text-danger hover:text-danger">
+            <Button variant="danger-outline" icon={RotateCcw} onClick={onReset} className="mt-2 w-full">
                 Buat QR baru
             </Button>
         </Section>
@@ -347,15 +347,9 @@ function PasswordSection({ participant }) {
                 <Field label="Ulangi kata sandi baru" required>
                     <Input type="password" autoComplete="new-password" value={form.data.password_confirmation} onChange={(e) => form.setData('password_confirmation', e.target.value)} />
                 </Field>
-                <label className="flex cursor-pointer items-start gap-3 text-sm text-ink-2 sm:col-span-2">
-                    <input
-                        type="checkbox"
-                        checked={form.data.logout_sessions}
-                        onChange={(e) => form.setData('logout_sessions', e.target.checked)}
-                        className="mt-0.5 h-[18px] w-[18px] rounded border-line-strong bg-surface text-accent focus:ring-accent"
-                    />
-                    <span>Sekaligus keluarkan dari aplikasi Android dan website, jadi peserta wajib login ulang. Disarankan bila akun diduga dipakai orang lain.</span>
-                </label>
+                <Checkbox checked={form.data.logout_sessions} onChange={(e) => form.setData('logout_sessions', e.target.checked)} className="sm:col-span-2">
+                    Sekaligus keluarkan dari aplikasi Android dan website, jadi peserta wajib login ulang. Disarankan bila akun diduga dipakai orang lain.
+                </Checkbox>
                 <div className="flex justify-end sm:col-span-2">
                     <Button variant="primary" type="submit" disabled={!form.data.password} loading={form.processing}>Simpan kata sandi</Button>
                 </div>

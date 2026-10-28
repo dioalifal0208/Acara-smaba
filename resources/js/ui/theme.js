@@ -16,10 +16,22 @@ export function readTheme() {
     }
 }
 
+// Warna bilah status browser HP (token --app); sama dengan meta theme-color di app.blade.php.
+const THEME_COLORS = { light: '#f6f7f5', dark: '#121513' };
+
+/** Meta theme-color ikut pilihan tampilan; 'system' kembali ke pasangan terang/gelap per media query. */
+export function syncThemeColor(theme) {
+    document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => {
+        const own = (meta.getAttribute('media') || '').includes('dark') ? 'dark' : 'light';
+        meta.setAttribute('content', THEME_COLORS[theme === 'system' ? own : theme]);
+    });
+}
+
 export function applyTheme(theme) {
     const root = document.documentElement;
     if (theme === 'system') delete root.dataset.theme;
     else root.dataset.theme = theme;
+    syncThemeColor(theme);
 
     try {
         if (theme === 'system') window.localStorage.removeItem(KEY);

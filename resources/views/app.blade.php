@@ -25,9 +25,9 @@
         <meta property="twitter:description" content="Sistem Presensi Cerdas & Terintegrasi SMA Negeri 1 Babat. Pantau statistik kehadiran acara secara langsung dengan Face Recognition.">
         <meta property="twitter:image" content="{{ asset('images/og-banner.png') }}">
         <!-- Favicon / Logo Sekolah -->
-        <link rel="icon" type="image/png" href="/images/logo.png">
-        <link rel="shortcut icon" type="image/png" href="/images/logo.png">
-        <link rel="apple-touch-icon" href="/images/logo.png">
+        <link rel="icon" type="image/png" href="/images/logo-96.png">
+        <link rel="shortcut icon" type="image/png" href="/images/logo-96.png">
+        <link rel="apple-touch-icon" href="/images/logo-180.png">
 
         <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.bunny.net">
@@ -37,7 +37,12 @@
         <script>
             try {
                 var uiTheme = localStorage.getItem('ui-theme');
-                if (uiTheme === 'light' || uiTheme === 'dark') document.documentElement.dataset.theme = uiTheme;
+                if (uiTheme === 'light' || uiTheme === 'dark') {
+                    document.documentElement.dataset.theme = uiTheme;
+                    document.querySelectorAll('meta[name="theme-color"]').forEach(function (meta) {
+                        meta.setAttribute('content', uiTheme === 'dark' ? '#121513' : '#f6f7f5');
+                    });
+                }
             } catch (e) {}
         </script>
 

@@ -1,5 +1,5 @@
 import {
-    CalendarClock, Camera, FileBarChart, FileCheck, LayoutDashboard, MapPinOff, PenLine, QrCode, Smartphone, UserRound, Users,
+    CalendarClock, Camera, FileBarChart, FileCheck, LayoutDashboard, MapPinOff, QrCode, Settings, Smartphone, UserRound, Users,
 } from 'lucide-react';
 
 /**
@@ -38,7 +38,7 @@ export const adminNavigation = [
         label: 'Akun',
         items: [
             { route: 'profile.edit', match: 'profile.*', label: 'Profil', icon: UserRound },
-            { route: 'admin.settings', match: 'admin.settings', label: 'Tanda tangan', icon: PenLine },
+            { route: 'admin.settings', match: 'admin.settings', label: 'Pengaturan', icon: Settings },
         ],
     },
 ];

@@ -38,6 +38,7 @@ class AttendanceController extends Controller
         return Inertia::render('Scanner/Index', [
             'activeWorkcode' => $activeWorkcode,
             'initialStats' => AdminDashboardStats::presence($activeWorkcode),
+            'initialBoard' => AdminDashboardStats::board($activeWorkcode),
         ]);
     }
 
@@ -51,12 +52,15 @@ class AttendanceController extends Controller
      */
     public function scan(Request $request, AttendanceValidationService $validationService)
     {
+        // QR peserta dari kamera, atau NIP yang diketik admin bila QR tidak terbaca / HP peserta mati.
         $request->validate([
-            'qr_token' => 'required|string',
+            'qr_token' => 'required_without:nis_nip|nullable|string',
+            'nis_nip' => 'required_without:qr_token|nullable|string|max:50',
             'latitude' => 'nullable|numeric',
             'longitude' => 'nullable|numeric',
             'accuracy' => 'nullable|numeric',
         ]);
+        $manual = ! $request->filled('qr_token');
 
         $activeWorkcode = Workcode::getActive();
 
@@ -76,8 +80,22 @@ class AttendanceController extends Controller
             ], $e->status);
         }
 
-        // Cari peserta berdasarkan qr_token
-        $participant = Participant::where('qr_token', $request->input('qr_token'))->first();
+        if ($manual) {
+            $nip = trim((string) $request->input('nis_nip'));
+            $matches = $nip === '' || $nip === '-' ? collect() : Participant::where('nis_nip', $nip)->limit(2)->get();
+
+            if ($matches->count() !== 1) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => $matches->isEmpty()
+                        ? 'NIP '.$nip.' tidak terdaftar. Periksa lagi angkanya.'
+                        : 'NIP '.$nip.' dipakai lebih dari satu peserta. Perbaiki di Data Peserta, lalu coba lagi.',
+                ], 404);
+            }
+            $participant = $matches->first();
+        } else {
+            $participant = Participant::where('qr_token', $request->input('qr_token'))->first();
+        }
 
         if (! $participant) {
             return response()->json([
@@ -166,7 +184,7 @@ class AttendanceController extends Controller
             'tanggal' => now()->toDateString(),
             'waktu_hadir' => $waktuHadir,
             'status' => 'hadir',
-            'attendance_method' => 'qr_peserta',
+            'attendance_method' => $manual ? 'manual' : 'qr_peserta',
             'device_hash' => hash('sha256', $request->ip().'|'.$request->userAgent()),
             'ip_address' => $request->ip(),
         ]);
@@ -189,6 +207,7 @@ class AttendanceController extends Controller
             'late_minutes' => $lateMinutes,
             'late_formatted' => $lateFormatted,
             'stats' => AdminDashboardStats::presence($activeWorkcode),
+            'board' => AdminDashboardStats::board($activeWorkcode),
         ]);
     }
 
@@ -263,10 +282,12 @@ class AttendanceController extends Controller
                     ];
                 })->values()->toArray();
 
-                $stats['hadir'] = $attendanceRecords->count();
+                // Izin/sakit dipisah dari hadir agar papan laporan menampilkan keduanya dengan benar.
+                $stats['izin'] = $attendanceRecords->whereIn('status', ['izin', 'sakit'])->count();
+                $stats['hadir'] = $attendanceRecords->count() - $stats['izin'];
             }
 
-            $stats['belum'] = $stats['total'] - $stats['hadir'];
+            $stats['belum'] = max(0, $stats['total'] - $stats['hadir'] - $stats['izin']);
         }
 
         $namaKepsek = Setting::get('kepala_sekolah_nama', 'Muhtarom, S.Pd., M.Si.');
@@ -539,6 +560,7 @@ class AttendanceController extends Controller
             ],
             'timestamp' => now()->format('H:i:s'),
             'stats' => AdminDashboardStats::presence($workcode),
+            'board' => AdminDashboardStats::board($workcode),
         ]);
     }
 
