@@ -52,3 +52,6 @@ storage/app/firebase-credentials.json
 
 # Backup database produksi (berisi data pribadi): jangan pernah di-commit
 /backups/
+
+# Catatan critique/audit lokal dari skill impeccable
+/.impeccable/
