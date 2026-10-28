@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Support\PrivateFile;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
@@ -67,6 +68,17 @@ class Workcode extends Model
     public function participants()
     {
         return $this->belongsToMany(Participant::class)->withTimestamps();
+    }
+
+    /**
+     * Peserta yang wajib presensi di workcode ini: peserta terpilih, atau semua peserta bila
+     * workcode tidak membatasi. Dipakai rekap dashboard dan attendance:calculate-alpha.
+     */
+    public function eligibleParticipants(): Builder
+    {
+        $selectedIds = $this->participants()->pluck('participants.id');
+
+        return Participant::query()->when($selectedIds->isNotEmpty(), fn (Builder $query) => $query->whereKey($selectedIds));
     }
 
     /**

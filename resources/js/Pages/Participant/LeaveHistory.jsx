@@ -1,62 +1,43 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { Card, EmptyState, PageHeader, StatusPill } from '@/ui';
 import { Head } from '@inertiajs/react';
+import { FileClock } from 'lucide-react';
 
-const statusStyle = {
-    pending: 'bg-amber-50 text-amber-700 border-amber-200',
-    approved: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    rejected: 'bg-rose-50 text-rose-700 border-rose-200',
-};
-
-const statusLabel = {
-    pending: 'Menunggu persetujuan',
-    approved: 'Disetujui',
-    rejected: 'Ditolak',
-};
-
-const formatLabel = (value) => (value || '-').replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+const formatLabel = (value) => (value || '–').replaceAll('_', ' ').replace(/^\w/, (letter) => letter.toUpperCase());
 
 export default function LeaveHistory({ leaveRequests }) {
     return (
-        <AuthenticatedLayout header={<h1 className="truncate text-base font-extrabold leading-tight text-slate-800 sm:text-xl">Riwayat Izin</h1>}>
-            <Head title="Riwayat Izin" />
+        <AuthenticatedLayout>
+            <Head title="Riwayat izin" />
 
-            <div className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
-                <div className="mx-auto flex max-w-5xl flex-col gap-5">
-                    <section className="page-hero" data-aos="fade-down">
-                        <h2 className="relative text-xl font-extrabold tracking-tight sm:text-2xl">Riwayat Izin</h2>
-                        <p className="relative mt-1 text-sm font-medium text-white/85">Pantau status pengajuan Anda. Izin hanya berlaku setelah disetujui admin.</p>
-                    </section>
+            <div className="space-y-6">
+                <PageHeader title="Riwayat izin" description="Izin baru berlaku setelah disetujui admin." />
 
-                    {leaveRequests.length === 0 ? (
-                        <div className="card-soft p-10 text-center text-sm font-semibold text-slate-500" data-aos="fade-up">
-                            Belum ada pengajuan izin.
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {leaveRequests.map((request, index) => (
-                                <article key={request.id} className="card-soft p-4 sm:p-5" data-aos="fade-up" data-aos-delay={Math.min(index * 60, 300)}>
-                                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                {leaveRequests.length === 0 ? (
+                    <Card>
+                        <EmptyState icon={FileClock} title="Belum ada pengajuan izin" description="Ajukan izin dari beranda bila Anda berhalangan hadir." />
+                    </Card>
+                ) : (
+                    <ul className="space-y-3">
+                        {leaveRequests.map((request) => (
+                            <li key={request.id}>
+                                <Card className="p-5">
+                                    <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0">
-                                            <p className="font-extrabold text-slate-900">{request.workcode_name}</p>
-                                            <p className="mt-1 text-sm font-medium text-slate-600">
-                                                {request.tanggal}{request.tanggal_selesai ? ` s.d. ${request.tanggal_selesai}` : ''}
+                                            <p className="font-semibold text-ink">{formatLabel(request.jenis_izin)}</p>
+                                            <p className="mt-0.5 text-sm text-ink-2">
+                                                {request.tanggal}{request.tanggal_selesai ? ` s.d. ${request.tanggal_selesai}` : ''} · {request.workcode_name}
                                             </p>
                                         </div>
-                                        <span className={`inline-flex w-fit rounded-full border px-2.5 py-1 text-xs font-extrabold ${statusStyle[request.status_approval] || statusStyle.pending}`}>
-                                            {statusLabel[request.status_approval] || 'Menunggu persetujuan'}
-                                        </span>
+                                        <StatusPill status={request.status_approval || 'pending'} />
                                     </div>
-                                    <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-                                        <div><span className="text-slate-500">Tipe: </span><span className="font-semibold text-slate-800">{formatLabel(request.tipe_izin)}</span></div>
-                                        <div><span className="text-slate-500">Jenis: </span><span className="font-semibold text-slate-800">{formatLabel(request.jenis_izin)}</span></div>
-                                    </div>
-                                    <p className="mt-3 text-sm leading-relaxed text-slate-700">{request.keterangan}</p>
-                                    <p className="mt-3 text-xs text-slate-400">Diajukan {request.created_at}</p>
-                                </article>
-                            ))}
-                        </div>
-                    )}
-                </div>
+                                    <p className="mt-3 text-sm leading-relaxed text-ink">{request.keterangan}</p>
+                                    <p className="mt-3 text-xs text-ink-2">{formatLabel(request.tipe_izin)} · diajukan {request.created_at}</p>
+                                </Card>
+                            </li>
+                        ))}
+                    </ul>
+                )}
             </div>
         </AuthenticatedLayout>
     );

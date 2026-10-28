@@ -3,6 +3,7 @@
 namespace Tests;
 
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Facades\Http;
 use Kreait\Firebase\Contract\Messaging;
 
 abstract class TestCase extends BaseTestCase
@@ -18,5 +19,9 @@ abstract class TestCase extends BaseTestCase
         $this->app->bind(Messaging::class, function () {
             throw new \RuntimeException('Firebase Messaging dinonaktifkan di lingkungan test.');
         });
+
+        // Test TIDAK BOLEH memanggil layanan luar (mis. kalender libur Google yang dibaca
+        // attendance:calculate-alpha). Test yang butuh respons memakai Http::fake().
+        Http::preventStrayRequests();
     }
 }

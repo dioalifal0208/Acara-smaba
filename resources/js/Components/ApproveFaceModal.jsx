@@ -1,83 +1,52 @@
 import { useState } from 'react';
 import { useForm } from '@inertiajs/react';
-import { useToast } from './Toast';
+import { ImageOff } from 'lucide-react';
+import { Button, Dialog, useToast } from '@/ui';
 
+/** Tinjau pendaftaran wajah peserta: setujui atau tolak. */
 export default function ApproveFaceModal({ participant, onClose, onSuccess }) {
     const { toast } = useToast();
     const form = useForm();
     const [imgError, setImgError] = useState(false);
+    const [action, setAction] = useState(null);
 
-    const handleApprove = (e) => {
-        e.preventDefault();
-        form.post(route('participants.face.approve', participant.id), {
+    const submit = (kind) => {
+        setAction(kind);
+        form.post(route(`participants.face.${kind}`, participant.id), {
             onSuccess: () => {
-                toast.success('Wajah disetujui.');
-                onSuccess();
-            },
-        });
-    };
-
-    const handleReject = (e) => {
-        e.preventDefault();
-        form.post(route('participants.face.reject', participant.id), {
-            onSuccess: () => {
-                toast.success('Wajah ditolak.');
+                toast.success(kind === 'approve' ? 'Wajah disetujui.' : 'Wajah ditolak.');
                 onSuccess();
             },
         });
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 p-0 sm:p-4 backdrop-blur-sm" onClick={onClose}>
-            <div className="w-full sm:max-w-sm animate-[fadeIn_0.2s_ease-out] rounded-t-3xl sm:rounded-xl rounded-none bg-white border border-slate-200 p-6 shadow-2xl flex flex-col max-h-[90dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-                <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
-                    <div>
-                        <h3 className="text-xl font-extrabold text-slate-800">Review Wajah</h3>
-                        <p className="text-sm text-slate-500 font-semibold mt-0.5">{participant.nama}</p>
-                    </div>
-                    <button onClick={onClose} className="rounded-xl p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                        </svg>
-                    </button>
-                </div>
-                
-                <div className="mb-6 flex flex-col items-center">
-                    {participant.photo_url && !imgError ? (
-                        <img 
-                            src={participant.photo_url} 
-                            alt="Foto Wajah" 
-                            className="w-48 h-48 object-cover rounded-2xl border-4 border-slate-100 shadow-md"
-                            onError={() => setImgError(true)}
-                        />
-                    ) : (
-                        <div className="w-48 h-48 rounded-2xl bg-slate-100 border-4 border-slate-200 flex flex-col items-center justify-center text-slate-400 font-bold p-4 text-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12 text-slate-300 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                            <span className="text-xs">{imgError ? 'Foto gagal dimuat' : 'Tidak ada foto'}</span>
-                        </div>
-                    )}
-                    <p className="text-xs text-slate-500 font-medium mt-4 text-center">Pastikan foto wajah terlihat jelas sebelum memberikan persetujuan.</p>
-                </div>
+        <Dialog
+            open
+            onClose={onClose}
+            title="Tinjau wajah"
+            description={participant.nama}
+            size="sm"
+            footer={
+                <>
+                    <Button variant="danger" onClick={() => submit('reject')} disabled={form.processing} loading={form.processing && action === 'reject'}>Tolak</Button>
+                    <Button variant="primary" onClick={() => submit('approve')} disabled={form.processing} loading={form.processing && action === 'approve'}>Setujui</Button>
+                </>
+            }
+        >
+            <FacePhoto src={participant.photo_url} alt={`Foto wajah ${participant.nama}`} failed={imgError} onError={() => setImgError(true)} />
+            <p className="mt-4 text-center text-sm text-ink-2">Pastikan wajah terlihat jelas dan sesuai orangnya sebelum disetujui.</p>
+        </Dialog>
+    );
+}
 
-                <div className="flex gap-3">
-                    <button
-                        onClick={handleReject}
-                        disabled={form.processing}
-                        className="flex-1 rounded-xl border border-red-200 bg-red-50 py-3 text-sm font-extrabold text-red-600 transition-colors hover:bg-red-100 disabled:opacity-50"
-                    >
-                        Tolak
-                    </button>
-                    <button
-                        onClick={handleApprove}
-                        disabled={form.processing}
-                        className="flex-1 rounded-xl bg-emerald-600 py-3 text-sm font-extrabold text-white shadow-lg shadow-emerald-600/30 transition-all hover:bg-emerald-700 disabled:opacity-50"
-                    >
-                        Setujui
-                    </button>
-                </div>
-            </div>
+export function FacePhoto({ src, alt, failed, onError }) {
+    return src && !failed ? (
+        <img src={src} alt={alt} className="mx-auto h-56 w-56 rounded-xl border border-line object-cover" onError={onError} />
+    ) : (
+        <div className="mx-auto flex h-56 w-56 flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-line-strong bg-surface-2 p-4 text-center text-sm text-ink-2">
+            <ImageOff className="h-8 w-8 text-ink-3" aria-hidden="true" />
+            {failed ? 'Foto gagal dimuat' : 'Tidak ada foto'}
         </div>
     );
 }

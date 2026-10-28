@@ -3,8 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Models\Attendance;
-use App\Models\Participant;
 use App\Models\Workcode;
+use App\Support\Holidays;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 
@@ -19,8 +19,16 @@ class CalculateAttendanceStatus extends Command
         $today = Carbon::today();
         $currentTime = now()->format('H:i:s');
 
+        // Libur nasional: tidak ada kewajiban presensi, jadi tidak ada alpha/lupa absen.
+        if (Holidays::isHoliday($today)) {
+            $this->info('Hari ini libur nasional; status kehadiran tidak dihitung.');
+
+            return;
+        }
+
         // Cari workcode harian yang aktif
-        $workcodes = Workcode::where('is_active', true)->where('kategori', 'harian')->get();
+        $workcodes = Workcode::where('is_active', true)->where('kategori', 'harian')->get()
+            ->filter(fn (Workcode $workcode) => $workcode->isEffectivelyActive());
 
         foreach ($workcodes as $workcode) {
             $hariAktif = $workcode->hari_aktif ?? [];
@@ -37,21 +45,26 @@ class CalculateAttendanceStatus extends Command
                 : null;
             $jamPulangSelesai = $schedule['jam_pulang_selesai'];
 
-            $participants = Participant::all();
+            // Hanya peserta yang wajib presensi di workcode ini (peserta terpilih, atau semua bila tidak dibatasi).
+            $participantIds = $workcode->eligibleParticipants()->pluck('id');
 
-            foreach ($participants as $participant) {
-                $attendance = Attendance::where('workcode_id', $workcode->id)
-                    ->where('participant_id', $participant->id)
-                    ->whereDate('created_at', $today)
-                    ->with('leaveRequest')
-                    ->first();
+            // Satu query untuk semua catatan hari ini; dicocokkan lewat kolom tanggal (bagian unique key).
+            $attendances = Attendance::where('workcode_id', $workcode->id)
+                ->whereDate('tanggal', $today)
+                ->whereIn('participant_id', $participantIds)
+                ->with('leaveRequest')
+                ->get()
+                ->keyBy('participant_id');
+
+            foreach ($participantIds as $participantId) {
+                $attendance = $attendances->get($participantId);
 
                 // Skenario 1: Sudah lewat batas absen DATANG, belum ada record sama sekali
                 if ($jamDatangSelesai && $currentTime > $jamDatangSelesai) {
                     if (! $attendance) {
                         $attendance = Attendance::create([
                             'workcode_id' => $workcode->id,
-                            'participant_id' => $participant->id,
+                            'participant_id' => $participantId,
                             'tanggal' => $today,
                             'status' => 'lupa_absen', // Lupa absen masuk
                             'created_at' => now(),
@@ -92,7 +105,7 @@ class CalculateAttendanceStatus extends Command
                         // Jika karena suatu hal tidak ada record sama sekali di akhir hari
                         Attendance::create([
                             'workcode_id' => $workcode->id,
-                            'participant_id' => $participant->id,
+                            'participant_id' => $participantId,
                             'tanggal' => $today,
                             'status' => 'alpha',
                             'created_at' => now(),

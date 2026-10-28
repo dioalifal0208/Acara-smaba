@@ -1,38 +1,27 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, Link, usePage } from '@inertiajs/react';
-import { useEffect } from 'react';
 import { backgroundReload, jitteredInterval } from '@/lib/backgroundReload';
-import { icons } from '@/lib/adminMenu';
-import MaterialChart from '@/Components/MaterialChart';
-import KpiCard from '@/Components/KpiCard';
+import {
+    AttendanceBoard, Button, Card, DataTable, EmptyState, PageHeader, Section, StatusPill,
+} from '@/ui';
+import TrendChart from '@/ui/TrendChart';
+import { Head, Link, usePage } from '@inertiajs/react';
+import { Camera, CalendarClock, CheckCircle2, ChevronRight, FileCheck, MapPinOff, ScanFace, ImageUp } from 'lucide-react';
+import { useEffect } from 'react';
 
-export default function Dashboard({
-    stats,
-    activeWorkcode: propActiveWorkcode,
-    activeWorkcodes = [],
-    pendingLeaveCount = 0,
-    fakeGpsBlockedToday = 0,
-    weekly = [],
-    lateness = [],
-    methods = [],
-    recentAttendances = [],
-}) {
-    const { activeWorkcode: globalActiveWorkcode } = usePage().props;
-    const activeWorkcode = propActiveWorkcode || globalActiveWorkcode;
-    const attendancePercentage = stats.total > 0 ? Math.round((stats.hadir / stats.total) * 100) : 0;
-    const todayCount = methods.reduce((sum, item) => sum + item.value, 0);
-    const lateTotal = lateness.reduce((sum, item) => sum + item.late, 0);
-    const dailyTotal = lateness.reduce((sum, item) => sum + item.total, 0);
-    const dayLabel = (date, options) => new Date(`${date}T00:00:00`).toLocaleDateString('id-ID', options);
-    const weekDays = weekly.map((item) => new Date(`${item.date}T00:00:00`));
+const RELOAD_PROPS = ['boards', 'activeWorkcodes', 'fakeGpsBlockedToday', 'weekly', 'lateness', 'methods', 'recentAttendances', 'adminNotifications'];
+
+const ACTION_ICONS = { leave: FileCheck, face_registration: ScanFace, photo_change: ImageUp };
+
+/** Papan Hadir memakai kunci hadir/terlambat/izin/belum; backend mengirim tepat_waktu untuk "hadir". */
+const boardCounts = (counts) => ({ hadir: counts.tepat_waktu, terlambat: counts.terlambat, izin: counts.izin, belum: counts.belum });
+
+export default function Dashboard({ boards = [], fakeGpsBlockedToday = 0, weekly = [], lateness = [], methods = [], recentAttendances = [] }) {
+    const { adminNotifications } = usePage().props;
+    const [primary, ...others] = boards;
 
     // Presensi dari aplikasi Android/scanner masuk terus: segarkan data di latar belakang.
     useEffect(() => {
-        const reload = () => backgroundReload({
-            only: ['stats', 'activeWorkcode', 'activeWorkcodes', 'pendingLeaveCount', 'fakeGpsBlockedToday', 'weekly', 'lateness', 'methods', 'recentAttendances'],
-            preserveScroll: true,
-            preserveState: true,
-        });
+        const reload = () => backgroundReload({ only: RELOAD_PROPS, preserveScroll: true, preserveState: true });
         const interval = window.setInterval(reload, jitteredInterval(20000));
         const onVisible = () => document.visibilityState === 'visible' && reload();
         document.addEventListener('visibilitychange', onVisible);
@@ -43,179 +32,141 @@ export default function Dashboard({
         };
     }, []);
 
+    // Terlambat hanya dihitung untuk presensi harian; sisanya tepat waktu.
+    const trend = weekly.map((day) => {
+        const late = lateness.find((item) => item.date === day.date)?.late ?? 0;
+        return { date: day.date, tepat: Math.max(0, day.value - late), telat: Math.min(late, day.value) };
+    });
+
+    const actions = [
+        ...(adminNotifications?.groups ?? []).filter((group) => group.count > 0).map((group) => ({
+            key: group.type, href: group.url, icon: ACTION_ICONS[group.type] ?? FileCheck, count: group.count, label: group.label.toLowerCase(), hint: 'menunggu verifikasi',
+        })),
+        ...(fakeGpsBlockedToday > 0
+            ? [{ key: 'fake-gps', href: route('admin.fake-gps.index'), icon: MapPinOff, count: fakeGpsBlockedToday, label: 'fake GPS diblokir', hint: 'hari ini, periksa catatannya' }]
+            : []),
+    ];
+
+    const usedMethods = methods.filter((method) => method.value > 0);
+
     return (
         <AuthenticatedLayout>
             <Head title="Dashboard" />
 
-            <div className="flex w-full flex-col px-4 py-2 sm:px-6 xl:min-h-0 xl:flex-1 xl:overflow-hidden">
-                <div className="mb-4 shrink-0" data-aos="fade-up">
-                    <h3 className="text-xl font-bold text-neutral-800">Dashboard</h3>
-                    <p className="mt-0.5 text-sm text-neutral-500">
-                        {activeWorkcode
-                            ? <>Ringkasan presensi <span className="font-medium text-neutral-700">{activeWorkcode.nama_workcode}</span>{activeWorkcodes.length > 1 && ` dan ${activeWorkcodes.length - 1} workcode aktif lainnya`}.</>
-                            : 'Belum ada workcode aktif. Aktifkan workcode agar presensi dapat berjalan.'}
-                    </p>
+            <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6 sm:px-6">
+                <PageHeader
+                    title="Dashboard"
+                    description={
+                        primary
+                            ? `Presensi ${primary.nama}${others.length ? ` dan ${others.length} workcode aktif lainnya` : ''}, diperbarui otomatis.`
+                            : 'Belum ada workcode aktif hari ini.'
+                    }
+                    actions={<Button variant="primary" icon={Camera} href={route('scanner')}>Buka Scanner</Button>}
+                />
+
+                {primary ? (
+                    <AttendanceBoard
+                        title={primary.kategori === 'harian' ? `Kehadiran hari ini · ${primary.nama}` : `Kehadiran · ${primary.nama}`}
+                        counts={boardCounts(primary.counts)}
+                    />
+                ) : (
+                    <Card>
+                        <EmptyState
+                            icon={CalendarClock}
+                            title="Belum ada workcode aktif"
+                            description="Presensi baru bisa berjalan setelah ada workcode yang aktif. Aktifkan presensi harian atau buat kegiatan baru."
+                            action={<Button variant="primary" href={route('workcodes.index')}>Atur workcode</Button>}
+                        />
+                    </Card>
+                )}
+
+                {others.length > 0 && (
+                    <Section title="Workcode aktif lainnya">
+                        <ul className="grid gap-x-8 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
+                            {others.map((board) => (
+                                <li key={board.id}>
+                                    <p className="mb-2 truncate text-sm font-medium text-ink">{board.nama}</p>
+                                    <AttendanceBoard compact counts={boardCounts(board.counts)} />
+                                </li>
+                            ))}
+                        </ul>
+                    </Section>
+                )}
+
+                <div className="grid gap-6 lg:grid-cols-3">
+                    <Section
+                        title="Presensi terbaru"
+                        description={usedMethods.length ? `Hari ini lewat ${usedMethods.map((m) => `${m.label.toLowerCase()} ${m.value}`).join(' · ')}` : undefined}
+                        actions={<Button size="sm" variant="ghost" href={route('report')}>Lihat laporan</Button>}
+                        flush
+                        className="lg:col-span-2"
+                    >
+                        <DataTable
+                            caption="Presensi terbaru hari ini"
+                            rows={recentAttendances}
+                            empty={<EmptyState title="Belum ada presensi hari ini" description="Presensi dari aplikasi Android, scanner, dan self check-in akan muncul di sini." />}
+                            mobileCard={(row) => (
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <p className="truncate text-sm font-medium text-ink">{row.nama}</p>
+                                        <p className="truncate text-sm text-ink-2">{row.workcode || 'Tanpa workcode'} · {row.metode}</p>
+                                    </div>
+                                    <div className="shrink-0 text-right">
+                                        <p className="text-sm font-semibold tabular-nums text-ink">{row.waktu || '–'}</p>
+                                        <StatusPill status={row.terlambat ? 'terlambat' : 'hadir'} className="mt-1" />
+                                    </div>
+                                </div>
+                            )}
+                            columns={[
+                                {
+                                    key: 'nama',
+                                    header: 'Peserta',
+                                    cell: (row) => (
+                                        <div className="min-w-0">
+                                            <p className="truncate font-medium text-ink">{row.nama}</p>
+                                            <p className="truncate text-xs tabular-nums text-ink-2">{row.nis_nip || 'Tanpa NIP'}</p>
+                                        </div>
+                                    ),
+                                },
+                                { key: 'workcode', header: 'Workcode', hideBelow: 'xl', className: 'max-w-[12rem] truncate text-ink-2', cell: (row) => row.workcode || '–' },
+                                { key: 'masuk', header: 'Masuk', align: 'right', cell: (row) => <span className="font-semibold tabular-nums">{row.waktu || '–'}</span> },
+                                { key: 'pulang', header: 'Pulang', align: 'right', hideBelow: 'md', cell: (row) => <span className="tabular-nums text-ink-2">{row.pulang || '–'}</span> },
+                                { key: 'status', header: 'Status', cell: (row) => <StatusPill status={row.terlambat ? 'terlambat' : 'hadir'} /> },
+                                { key: 'metode', header: 'Metode', hideBelow: 'lg', className: 'text-ink-2', cell: (row) => row.metode },
+                            ]}
+                        />
+                    </Section>
+
+                    <Section title="Perlu tindakan" flush>
+                        {actions.length === 0 ? (
+                            <EmptyState icon={CheckCircle2} title="Semua beres" description="Tidak ada izin, wajah, atau foto yang menunggu verifikasi." />
+                        ) : (
+                            <ul className="divide-y divide-line border-t border-line">
+                                {actions.map(({ key, href, icon: Icon, count, label, hint }) => (
+                                    <li key={key}>
+                                        <Link href={href} className="flex min-h-14 items-center gap-3 px-5 py-3 transition-colors hover:bg-surface-2/60">
+                                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-ink-2">
+                                                <Icon className="h-[18px] w-[18px]" aria-hidden="true" />
+                                            </span>
+                                            <span className="min-w-0 flex-1">
+                                                <span className="block text-sm font-medium text-ink">
+                                                    <span className="tabular-nums">{count}</span> {label}
+                                                </span>
+                                                <span className="block text-xs text-ink-2">{hint}</span>
+                                            </span>
+                                            <ChevronRight className="h-4 w-4 shrink-0 text-ink-3" aria-hidden="true" />
+                                        </Link>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </Section>
                 </div>
 
-                {/* KPI */}
-                <section className="grid shrink-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                    <KpiCard delay={0} label="Tingkat Kehadiran" value={`${attendancePercentage}%`} icon={icons.chart}>
-                        <span className="font-bold text-emerald-600">{stats.hadir}</span> dari {stats.total} peserta
-                    </KpiCard>
-                    <KpiCard delay={50} label="Sudah Hadir" value={stats.hadir} icon={icons.check}>
-                        <span className="font-bold text-emerald-600">+{todayCount}</span> presensi masuk hari ini
-                    </KpiCard>
-                    <KpiCard delay={100} label="Belum Hadir" value={stats.belum} icon={icons.clock}>
-                        <span className="font-bold text-rose-500">{stats.total > 0 ? 100 - attendancePercentage : 0}%</span> peserta belum presensi
-                    </KpiCard>
-                    <KpiCard delay={150} label="Total Peserta" value={stats.total} icon={icons.users}>
-                        <span className="font-bold text-neutral-800">{activeWorkcodes.length}</span> workcode aktif
-                    </KpiCard>
-                </section>
-
-                {/* Grafik */}
-                <section className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:min-h-0 xl:flex-[1.15] xl:grid-cols-3">
-                    <ChartCard delay={0} title="Presensi 7 Hari" subtitle="Jumlah peserta hadir per hari" footer="7 hari terakhir">
-                        <MaterialChart
-                            className={CHART_FILL}
-                            type="bar"
-                            label="Hadir"
-                            labels={weekDays.map((day) => day.toLocaleDateString('id-ID', { weekday: 'short' }))}
-                            titles={weekDays.map((day) => day.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long' }))}
-                            data={weekly.map((item) => item.value)}
-                        />
-                    </ChartCard>
-                    <ChartCard
-                        delay={50}
-                        title="Keterlambatan 7 Hari"
-                        subtitle="Presensi harian yang melewati batas jam datang"
-                        footer={dailyTotal > 0 ? `${lateTotal} dari ${dailyTotal} presensi harian terlambat` : 'belum ada presensi harian'}
-                    >
-                        <MaterialChart
-                            className={CHART_FILL}
-                            type="line"
-                            label="Terlambat"
-                            color="#F44335"
-                            labels={lateness.map((item) => dayLabel(item.date, { weekday: 'short' }))}
-                            titles={lateness.map((item) => `${dayLabel(item.date, { weekday: 'long', day: 'numeric', month: 'long' })} · ${item.total} presensi`)}
-                            data={lateness.map((item) => item.late)}
-                        />
-                    </ChartCard>
-                    <ChartCard delay={100} title="Metode Presensi" subtitle="Sebaran metode hari ini" footer={`${todayCount} presensi hari ini`} className="md:col-span-2 xl:col-span-1">
-                        <MaterialChart
-                            className={CHART_FILL}
-                            type="bar"
-                            label="Presensi"
-                            labels={methods.map((item) => item.label)}
-                            data={methods.map((item) => item.value)}
-                        />
-                    </ChartCard>
-                </section>
-
-                {/* Tabel & linimasa */}
-                <section className="mt-4 grid grid-cols-1 gap-4 xl:min-h-0 xl:flex-1 xl:grid-cols-3">
-                    <div className="card-soft flex flex-col overflow-hidden xl:col-span-2 xl:min-h-0" data-aos="fade-up">
-                        <div className="p-4 pb-2">
-                            <h6 className="text-base font-semibold text-neutral-800">Presensi Terbaru</h6>
-                            <p className="mt-0.5 flex items-center gap-1 text-sm text-neutral-500">
-                                <span className="h-4 w-4 text-sky-600">{icons.check}</span>
-                                <span className="font-bold text-neutral-700">{todayCount}</span> presensi hari ini
-                            </p>
-                        </div>
-
-                        {recentAttendances.length === 0 ? (
-                            <p className="px-4 pb-10 pt-6 text-center text-sm text-neutral-400">Belum ada presensi hari ini.</p>
-                        ) : (
-                            <div className="min-h-0 flex-1 overflow-x-auto xl:overflow-hidden">
-                                <table className="min-w-full text-left">
-                                    <thead>
-                                        <tr className="border-b border-neutral-200 text-xs font-semibold uppercase text-neutral-500 opacity-70">
-                                            <th className="whitespace-nowrap px-6 py-2.5">Peserta</th>
-                                            <th className="hidden whitespace-nowrap px-6 py-2.5 md:table-cell">Workcode</th>
-                                            <th className="whitespace-nowrap px-6 py-2.5 text-center">Masuk</th>
-                                            <th className="hidden whitespace-nowrap px-6 py-2.5 text-center sm:table-cell">Pulang</th>
-                                            <th className="whitespace-nowrap px-6 py-2.5 text-center">Metode</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {recentAttendances.map((row) => (
-                                            <tr key={row.id} className="border-b border-neutral-100 transition-colors last:border-0 hover:bg-neutral-50">
-                                                <td className="whitespace-nowrap px-6 py-2">
-                                                    <div className="flex items-center gap-3">
-                                                        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-gradient text-xs font-semibold text-white">
-                                                            {initials(row.nama)}
-                                                        </span>
-                                                        <div className="min-w-0">
-                                                            <p className="truncate text-sm font-medium text-neutral-800">{row.nama}</p>
-                                                            <p className="truncate text-xs text-neutral-500">{row.nis_nip || 'Tanpa NIS/NIP'}</p>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="hidden max-w-[14rem] truncate px-6 py-2 text-xs text-neutral-600 md:table-cell">{row.workcode || '-'}</td>
-                                                <td className="px-6 py-2 text-center text-xs font-bold tabular-nums text-neutral-800">{row.waktu || '-'}</td>
-                                                <td className="hidden px-6 py-2 text-center text-xs tabular-nums text-neutral-500 sm:table-cell">{row.pulang || '-'}</td>
-                                                <td className="px-6 py-2 text-center text-xs font-bold text-neutral-600">{row.metode}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="card-soft flex flex-col xl:min-h-0" data-aos="fade-up" data-aos-delay="100">
-                        <div className="p-4 pb-0">
-                            <h6 className="text-base font-semibold text-neutral-800">Perlu Perhatian</h6>
-                            <p className="mt-0.5 text-sm text-neutral-500">Menunggu tindakan admin</p>
-                        </div>
-                        <ol className="relative flex flex-1 flex-col justify-center p-4 pt-3 before:absolute before:bottom-8 before:left-[29px] before:top-8 before:w-px before:bg-neutral-200">
-                            <TimelineItem href={route('admin.leave.index')} icon={icons.document} count={pendingLeaveCount} title="pengajuan izin" hint="menunggu verifikasi" tone="text-rose-500" />
-                            <TimelineItem href={route('admin.fake-gps.index')} icon={icons.gpsOff} count={fakeGpsBlockedToday} title="fake GPS diblokir" hint="hari ini" tone="text-amber-500" />
-                        </ol>
-                    </div>
-                </section>
+                <Section title="Tren 7 hari" description="Peserta hadir per hari, dipisah tepat waktu dan terlambat.">
+                    <TrendChart days={trend} caption="Terlambat dihitung dari presensi harian yang melewati batas jam datang. Presensi kegiatan selalu dihitung tepat waktu." />
+                </Section>
             </div>
         </AuthenticatedLayout>
     );
-}
-
-// HP: tinggi tetap; desktop: isi sisa tinggi kartu.
-const CHART_FILL = 'h-[170px] xl:h-auto xl:min-h-[90px] xl:flex-1';
-
-function ChartCard({ title, subtitle, footer, delay, className = '', children }) {
-    return (
-        <div className={`card-soft flex flex-col p-4 xl:min-h-0 ${className}`} data-aos="fade-up" data-aos-delay={delay}>
-            <h6 className="text-base font-semibold text-neutral-800">{title}</h6>
-            <p className="text-sm text-neutral-500">{subtitle}</p>
-            <div className="mt-3 flex flex-1 flex-col xl:min-h-0">{children}</div>
-            <hr className="hr-fade my-2.5" />
-            <p className="flex items-center gap-1 text-sm text-neutral-500">
-                <span className="h-4 w-4">{icons.clock}</span>
-                {footer}
-            </p>
-        </div>
-    );
-}
-
-function TimelineItem({ href, icon, count, title, hint, tone }) {
-    return (
-        <li className="relative pb-4 last:pb-0">
-            <Link href={href} className="group -mx-2 flex items-start gap-3 rounded-md p-2 transition-colors hover:bg-neutral-50">
-                <span className={`relative z-10 flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-white ${count > 0 ? tone : 'text-neutral-400'}`}>
-                    <span className="h-[18px] w-[18px]">{icon}</span>
-                </span>
-                <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-neutral-800">
-                        {count} {title}
-                    </span>
-                    <span className="block truncate text-xs font-medium text-neutral-500">{hint}</span>
-                </span>
-                <span className="mt-1 h-4 w-4 shrink-0 text-neutral-300 transition-transform group-hover:translate-x-0.5 group-hover:text-neutral-500">{icons.chevron}</span>
-            </Link>
-        </li>
-    );
-}
-
-function initials(name = '') {
-    return name.split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || '?';
 }

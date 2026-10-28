@@ -1,14 +1,16 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, Link, router } from '@inertiajs/react';
-import { useEffect, useRef, useState } from 'react';
 import { backgroundReload, jitteredInterval } from '@/lib/backgroundReload';
-import KpiCard from '@/Components/KpiCard';
-import { icons } from '@/lib/adminMenu';
+import { Button, DataTable, EmptyState, Input, PageHeader, SearchField, Section, Select, StatusPill } from '@/ui';
+import { Head, router } from '@inertiajs/react';
+import { Ban, ChevronLeft, ChevronRight, Eye, MapPinOff, ShieldCheck } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 
-const reasonTone = {
-    developer_options: 'from-amber-400 to-orange-500',
-};
-const blockingTone = 'from-rose-400 to-rose-600';
+const EMPTY_FILTERS = { q: '', status: '', reason: '', date: '' };
+
+// Tautan halaman: tombol nonaktif bila tidak ada halaman tujuan.
+const pageLink = (url) => (url ? { href: url, preserveScroll: true } : { disabled: true });
+
+const clean = (form) => Object.fromEntries(Object.entries(form).filter(([, value]) => value));
 
 export default function FakeGpsIndex({ logs, filters, reasonOptions, stats }) {
     const [form, setForm] = useState(filters);
@@ -38,189 +40,124 @@ export default function FakeGpsIndex({ logs, filters, reasonOptions, stats }) {
         };
     }, []);
 
-    const update = (key) => (event) => setForm((current) => ({ ...current, [key]: event.target.value }));
+    const set = (key) => (value) => setForm((current) => ({ ...current, [key]: value }));
     const hasFilter = Object.values(form).some(Boolean);
 
     return (
         <AuthenticatedLayout>
-            <Head title="Catatan Fake GPS" />
+            <Head title="Fake GPS" />
 
-            <div className="flex w-full flex-1 flex-col px-4 py-2 sm:px-6 xl:min-h-0 xl:overflow-hidden">
-                <div className="mb-4 shrink-0" data-aos="fade-up">
-                    <h3 className="text-xl font-bold text-neutral-800">Fake GPS</h3>
-                    <p className="mt-0.5 text-sm text-neutral-500">
-                        Presensi Android yang diblokir karena lokasi palsu, aplikasi fake GPS, atau HP yang di-root/dimodifikasi. Opsi Pengembang aktif tetap boleh presensi, tetapi dicatat.
-                    </p>
-                </div>
+            <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6 sm:px-6">
+                <PageHeader
+                    title="Fake GPS"
+                    description="Presensi Android yang diblokir karena lokasi palsu, aplikasi fake GPS, atau HP yang di-root. Opsi Pengembang aktif tetap boleh presensi, tetapi dicatat."
+                />
 
-                <section className="grid shrink-0 grid-cols-1 gap-4 sm:grid-cols-3">
-                    <KpiCard delay={0} label="Diblokir Hari Ini" value={stats.blocked_today} icon={icons.gpsOff}>
-                        <span className={`font-bold ${stats.blocked_today > 0 ? 'text-rose-500' : 'text-emerald-600'}`}>{stats.blocked_today}</span> presensi ditolak
-                    </KpiCard>
-                    <KpiCard delay={50} label="Dicatat Hari Ini" value={stats.logged_today} icon={icons.document}>
-                        <span className="font-bold text-amber-500">{stats.logged_today}</span> opsi pengembang aktif
-                    </KpiCard>
-                    <KpiCard delay={100} label="Peserta (7 Hari)" value={stats.users_7_days} icon={icons.users}>
-                        peserta berbeda tercatat
-                    </KpiCard>
-                </section>
-
-                <div className="mt-4 flex flex-col xl:min-h-0 xl:flex-1">
-                    <section className="card-soft flex flex-col overflow-hidden xl:min-h-0 xl:flex-1" data-aos="fade-up" data-aos-delay="100">
-                        <div className="p-4 pb-0">
-                            <h6 className="text-base font-semibold text-neutral-800">Catatan Percobaan</h6>
-                            <p className="mt-0.5 flex items-center gap-1 text-sm text-neutral-500">
-                                <span className="h-4 w-4 text-emerald-500">{icons.check}</span>
-                                <span className="font-bold text-neutral-700">{logs.total ?? logs.data.length}</span> catatan
-                            </p>
-                        </div>
-                        <div className="grid gap-2 px-4 py-3 sm:grid-cols-2 lg:grid-cols-[1fr_auto_auto_auto_auto] lg:items-center">
-                            <input
-                                type="search"
-                                value={form.q}
-                                onChange={update('q')}
-                                placeholder="Cari nama, NIS/NIP, atau tipe HP"
-                                autoComplete="off"
-                                className="input-soft"
-                            />
-                            <select value={form.status} onChange={update('status')} className="input-soft lg:w-auto" aria-label="Filter status">
-                                <option value="">Semua status</option>
-                                <option value="blocked">Diblokir</option>
-                                <option value="logged">Dicatat saja</option>
-                            </select>
-                            <select value={form.reason} onChange={update('reason')} className="input-soft lg:w-auto" aria-label="Filter keterangan">
-                                <option value="">Semua keterangan</option>
-                                {reasonOptions.map((option) => (
-                                    <option key={option.code} value={option.code}>{option.label}</option>
-                                ))}
-                            </select>
-                            <input
-                                type="date"
-                                value={form.date}
-                                onChange={update('date')}
-                                className="input-soft lg:w-auto"
-                                aria-label="Filter tanggal"
-                            />
-                            {hasFilter && (
-                                <button
-                                    type="button"
-                                    onClick={() => setForm({ q: '', status: '', reason: '', date: '' })}
-                                    className="rounded-md px-3 py-2 text-xs font-medium text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900"
-                                >
-                                    Reset filter
-                                </button>
-                            )}
-                        </div>
-
-                        {logs.data.length === 0 ? (
-                            <p className="border-t border-neutral-200 px-5 py-14 text-center text-sm text-neutral-400">
-                                {hasFilter ? 'Tidak ada catatan yang cocok dengan filter.' : 'Belum ada catatan fake GPS.'}
-                            </p>
-                        ) : (
-                            <>
-                                {/* Tabel untuk layar lebar */}
-                                <div className="hidden min-h-0 flex-1 overflow-x-auto md:block xl:overflow-y-auto">
-                                    <table className="min-w-full text-left text-sm">
-                                        <thead className="sticky top-0 z-10 bg-white text-xs font-semibold uppercase text-neutral-500">
-                                            <tr className="border-y border-neutral-200 [&>th]:opacity-70">
-                                                <th className="px-5 py-3">Waktu</th>
-                                                <th className="px-5 py-3">User</th>
-                                                <th className="px-5 py-3">HP</th>
-                                                <th className="px-5 py-3">Keterangan</th>
-                                                <th className="px-5 py-3">Status</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-neutral-100">
-                                            {logs.data.map((log) => (
-                                                <tr key={log.id} className="align-top transition-colors hover:bg-neutral-50">
-                                                    <td className="whitespace-nowrap px-5 py-3 text-xs font-bold text-slate-500">
-                                                        {log.created_at}
-                                                        {log.workcode_name && <p className="mt-0.5 font-medium text-slate-400">{log.workcode_name}</p>}
-                                                    </td>
-                                                    <td className="px-5 py-3">
-                                                        <p className="font-extrabold text-slate-800">{log.participant_name}</p>
-                                                        <p className="text-xs font-medium text-slate-500">{log.participant_nip}</p>
-                                                    </td>
-                                                    <td className="px-5 py-3 font-semibold text-slate-700">{log.device_model}</td>
-                                                    <td className="px-5 py-3"><Reasons log={log} /></td>
-                                                    <td className="px-5 py-3"><StatusBadge blocked={log.blocked} /></td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+                <Section flush>
+                    <DataTable
+                        caption="Catatan fake GPS"
+                        rows={logs.data}
+                        filtered={hasFilter}
+                        onClearFilters={() => setForm(EMPTY_FILTERS)}
+                        empty={<EmptyState icon={ShieldCheck} title="Belum ada catatan" description="Percobaan presensi dengan lokasi palsu atau HP yang dimodifikasi akan tercatat di sini." />}
+                        toolbar={
+                            <div className="space-y-3 px-5 py-4">
+                                <div>
+                                    <h2 className="text-base font-semibold text-ink">Catatan percobaan</h2>
+                                    <p className="mt-0.5 text-sm text-ink-2">
+                                        Hari ini <span className="font-medium text-ink">{stats.blocked_today} diblokir</span> dan {stats.logged_today} dicatat · {stats.users_7_days} peserta berbeda dalam 7 hari
+                                    </p>
                                 </div>
-
-                                {/* Kartu untuk layar HP */}
-                                <ul className="divide-y divide-neutral-100 border-t border-neutral-200 md:hidden">
-                                    {logs.data.map((log) => (
-                                        <li key={log.id} className="px-4 py-3">
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div className="min-w-0">
-                                                    <p className="truncate text-sm font-extrabold text-slate-800">{log.participant_name}</p>
-                                                    <p className="text-xs font-medium text-slate-500">{log.participant_nip} · {log.device_model}</p>
-                                                </div>
-                                                <StatusBadge blocked={log.blocked} />
-                                            </div>
-                                            <div className="mt-2"><Reasons log={log} /></div>
-                                            <p className="mt-1.5 text-xs font-medium text-slate-400">
-                                                {log.created_at}{log.workcode_name && ` · ${log.workcode_name}`}
-                                            </p>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </>
-                        )}
-
-                        {logs.last_page > 1 && (
-                            <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-xs font-bold text-slate-500 sm:px-5">
-                                <span>Halaman {logs.current_page} dari {logs.last_page} · {logs.total} catatan</span>
-                                <div className="flex gap-2">
-                                    <PageLink href={logs.prev_page_url} label="Sebelumnya" />
-                                    <PageLink href={logs.next_page_url} label="Berikutnya" />
+                                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[1fr_auto_auto_auto_auto] lg:items-center">
+                                    <SearchField value={form.q} onChange={set('q')} label="Cari catatan" placeholder="Cari nama, NIP, atau tipe HP…" className="sm:col-span-2 lg:col-span-1" />
+                                    <Select value={form.status} onChange={(e) => set('status')(e.target.value)} aria-label="Filter status" className="lg:w-40">
+                                        <option value="">Semua status</option>
+                                        <option value="blocked">Diblokir</option>
+                                        <option value="logged">Dicatat saja</option>
+                                    </Select>
+                                    <Select value={form.reason} onChange={(e) => set('reason')(e.target.value)} aria-label="Filter keterangan" className="lg:w-52">
+                                        <option value="">Semua keterangan</option>
+                                        {reasonOptions.map((option) => <option key={option.code} value={option.code}>{option.label}</option>)}
+                                    </Select>
+                                    <Input type="date" value={form.date} onChange={(e) => set('date')(e.target.value)} aria-label="Filter tanggal" className="lg:w-44" />
+                                    {hasFilter && <Button variant="ghost" onClick={() => setForm(EMPTY_FILTERS)}>Hapus filter</Button>}
                                 </div>
                             </div>
+                        }
+                        mobileCard={(log) => (
+                            <div className="space-y-2">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                        <p className="truncate text-sm font-medium text-ink">{log.participant_name}</p>
+                                        <p className="truncate text-sm text-ink-2">{log.participant_nip} · {log.device_model}</p>
+                                    </div>
+                                    <Outcome blocked={log.blocked} />
+                                </div>
+                                <Reasons log={log} />
+                                <p className="text-xs tabular-nums text-ink-2">{log.created_at}{log.workcode_name && ` · ${log.workcode_name}`}</p>
+                            </div>
                         )}
-                    </section>
-                </div>
+                        columns={[
+                            {
+                                key: 'waktu',
+                                header: 'Waktu',
+                                cell: (log) => (
+                                    <div className="whitespace-nowrap">
+                                        <p className="tabular-nums text-ink">{log.created_at}</p>
+                                        {log.workcode_name && <p className="text-xs text-ink-2">{log.workcode_name}</p>}
+                                    </div>
+                                ),
+                            },
+                            {
+                                key: 'peserta',
+                                header: 'Peserta',
+                                cell: (log) => (
+                                    <div className="min-w-0">
+                                        <p className="font-medium text-ink">{log.participant_name}</p>
+                                        <p className="text-xs tabular-nums text-ink-2">{log.participant_nip}</p>
+                                    </div>
+                                ),
+                            },
+                            { key: 'hp', header: 'HP', hideBelow: 'lg', className: 'text-ink-2', cell: (log) => log.device_model },
+                            { key: 'alasan', header: 'Keterangan', cell: (log) => <Reasons log={log} /> },
+                            { key: 'hasil', header: 'Hasil', cell: (log) => <Outcome blocked={log.blocked} /> },
+                        ]}
+                    />
+
+                    {logs.last_page > 1 && (
+                        <nav className="flex items-center justify-between gap-3 border-t border-line px-5 py-3" aria-label="Halaman catatan">
+                            <p className="text-sm text-ink-2">Halaman {logs.current_page} dari {logs.last_page} · {logs.total} catatan</p>
+                            <div className="flex gap-2">
+                                <Button size="sm" icon={ChevronLeft} {...pageLink(logs.prev_page_url)}>Sebelumnya</Button>
+                                <Button size="sm" {...pageLink(logs.next_page_url)}>
+                                    Berikutnya
+                                    <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                                </Button>
+                            </div>
+                        </nav>
+                    )}
+                </Section>
             </div>
         </AuthenticatedLayout>
     );
 }
 
-function clean(form) {
-    return Object.fromEntries(Object.entries(form).filter(([, value]) => value));
-}
-
+/** Alasan blokir sebagai kapsul; Opsi Pengembang (hanya dicatat) netral, sisanya merah. */
 function Reasons({ log }) {
     return (
         <div>
             <div className="flex flex-wrap gap-1.5">
                 {log.reasons.map((reason) => (
-                    <span key={reason.code} className={`inline-flex items-center rounded-md bg-gradient-to-b px-2 py-0.5 text-[10px] font-bold uppercase leading-4 text-white ${reasonTone[reason.code] || blockingTone}`}>
-                        {reason.label}
-                    </span>
+                    <StatusPill key={reason.code} tone={reason.code === 'developer_options' ? 'netral' : 'alpha'} icon={reason.code === 'developer_options' ? null : MapPinOff} label={reason.label} />
                 ))}
             </div>
-            {log.fake_apps.length > 0 && (
-                <p className="mt-1.5 text-xs font-semibold text-slate-500">Aplikasi: {log.fake_apps.join(', ')}</p>
-            )}
+            {log.fake_apps.length > 0 && <p className="mt-1.5 text-xs text-ink-2">Aplikasi: {log.fake_apps.join(', ')}</p>}
         </div>
     );
 }
 
-function StatusBadge({ blocked }) {
-    return (
-        <span className={`inline-flex shrink-0 items-center gap-1.5 text-xs font-semibold ${blocked ? 'text-rose-600' : 'text-amber-600'}`}>
-            <span className="h-1.5 w-1.5 rounded-full bg-current" />
-            {blocked ? 'Diblokir' : 'Dicatat'}
-        </span>
-    );
-}
-
-function PageLink({ href, label }) {
-    return href ? (
-        <Link href={href} preserveScroll className="rounded-md border border-brand-600 px-3 py-1.5 text-brand-700 transition-colors hover:bg-brand-600 hover:text-white">{label}</Link>
-    ) : (
-        <span className="cursor-not-allowed rounded-md border border-neutral-200 px-3 py-1.5 text-neutral-300">{label}</span>
-    );
+function Outcome({ blocked }) {
+    return blocked
+        ? <StatusPill tone="alpha" icon={Ban} label="Diblokir" />
+        : <StatusPill tone="telat" icon={Eye} label="Dicatat" />;
 }

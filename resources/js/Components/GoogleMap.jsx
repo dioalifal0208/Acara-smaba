@@ -297,7 +297,7 @@ export default function GoogleMap({
 
     if (loadError) {
         return (
-            <div className="flex h-full w-full items-center justify-center bg-red-50 p-4 text-center text-xs font-semibold text-red-700">
+            <div className="flex h-full w-full items-center justify-center bg-danger-soft p-4 text-center text-sm text-danger">
                 {loadError}
             </div>
         );
@@ -315,12 +315,12 @@ export default function GoogleMap({
                         title="Gunakan lokasi saya saat ini"
                         aria-label="Gunakan lokasi saya saat ini"
                         aria-busy={locationState === 'loading'}
-                        className={`flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white shadow-lg transition hover:bg-slate-50 disabled:cursor-wait disabled:opacity-60 ${
+                        className={`flex h-10 w-10 items-center justify-center rounded-xl border border-line bg-surface shadow-lg transition hover:bg-surface-2 disabled:cursor-wait disabled:opacity-60 ${
                             locationState === 'success'
-                                ? 'text-emerald-600 ring-4 ring-emerald-200/70'
+                                ? 'text-status-hadir ring-4 ring-status-hadir/25'
                                 : locationState === 'error'
-                                    ? 'text-red-600 ring-4 ring-red-200/70'
-                                    : 'text-indigo-600'
+                                    ? 'text-danger ring-4 ring-danger/25'
+                                    : 'text-accent'
                         }`}
                     >
                         {locationState === 'loading' ? (
@@ -338,14 +338,14 @@ export default function GoogleMap({
                     </button>
                 )}
 
-                <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg">
+                <div className="overflow-hidden rounded-xl border border-line bg-surface shadow-lg">
                     <button
                         type="button"
                         onClick={() => changeZoom(1)}
                         disabled={!mapReady}
                         title="Perbesar peta"
                         aria-label="Perbesar peta"
-                        className="flex h-10 w-10 items-center justify-center border-b border-slate-200 text-xl font-semibold leading-none text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                        className="flex h-10 w-10 items-center justify-center border-b border-line text-xl font-semibold leading-none text-ink transition hover:bg-surface-2 disabled:opacity-60"
                     >
                         +
                     </button>
@@ -355,7 +355,7 @@ export default function GoogleMap({
                         disabled={!mapReady}
                         title="Perkecil peta"
                         aria-label="Perkecil peta"
-                        className="flex h-10 w-10 items-center justify-center text-2xl font-normal leading-none text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+                        className="flex h-10 w-10 items-center justify-center text-2xl font-normal leading-none text-ink transition hover:bg-surface-2 disabled:opacity-60"
                     >
                         −
                     </button>

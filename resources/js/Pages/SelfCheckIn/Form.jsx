@@ -1,7 +1,9 @@
-import { Head, router, useForm } from '@inertiajs/react';
-import { appUrl } from '@/lib/appUrl';
+import PublicShell from '@/Layouts/PublicShell';
 import { backgroundReload, jitteredInterval } from '@/lib/backgroundReload';
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { Button, Card, Select, Spinner, cx } from '@/ui';
+import { Head, router, useForm } from '@inertiajs/react';
+import { AlertCircle, CalendarClock, CheckCircle2, Eraser, Info, Search } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 // ── Helper: Simple Lightweight Device Fingerprint (tanpa library eksternal) ──
 function getOrCreateDeviceId() {
@@ -44,53 +46,29 @@ function setLocalLock(workcodeId, participant, timestamp) {
     } catch (_) {}
 }
 
-// ── Komponen: Halaman Terkunci Permanen (sudah absen) ──
+const participantId = (p) => p?.nis_nip || `${p?.status || 'GTT/PTT'} · tanpa NIP`;
+
+// ── Layar setelah presensi berhasil: perangkat ini terkunci untuk workcode ini ──
 function LockedScreen({ lock, activeWorkcode }) {
     return (
-        <div className="relative min-h-[100dvh] bg-canvas flex flex-col items-center justify-center p-4 sm:p-6 text-center overflow-y-auto">
-            {/* Glow */}
-            <div className="absolute top-0 left-0 w-64 h-64 rounded-full bg-brand-500/10 blur-3xl pointer-events-none -translate-x-1/2 -translate-y-1/2" />
-            <div className="absolute bottom-0 right-0 w-80 h-80 rounded-full bg-brand-violet/10 blur-3xl pointer-events-none translate-x-1/2 translate-y-1/2" />
-
-            {/* Card */}
-            <div className="relative z-10 w-full max-w-sm rounded-xl bg-white border border-emerald-100 shadow-soft-lg p-7">
-                {/* Logo */}
-                <div className="flex justify-center mb-4">
-                    <img src={appUrl('images/logo.png')} alt="Logo E-Presensi SMABA" className="h-12 w-12 object-contain" />
-                </div>
-
-                {/* Centang Besar */}
-                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/30">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-9 w-9 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                </div>
-
-                <h2 className="text-lg font-extrabold text-emerald-800 mb-1">Presensi Berhasil!</h2>
-                <p className="text-xs text-slate-500 font-semibold mb-4">
-                    {activeWorkcode?.nama_workcode || 'Workcode Aktif'}
-                </p>
-
-                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mb-4">
-                    <p className="text-base font-extrabold text-slate-900 leading-tight">{lock.participant?.nama}</p>
-                    <p className="text-xs text-emerald-700 font-bold mt-0.5">
-                        {lock.participant?.nis_nip || lock.participant?.status || 'Tanpa NIP'}
-                    </p>
-                    <p className="text-xs text-slate-500 mt-2 font-semibold">
-                        Tercatat pukul: <span className="font-extrabold text-slate-700">{lock.timestamp}</span>
-                    </p>
-                </div>
-
-                <div className="flex items-start gap-2 rounded-xl bg-amber-50 border border-amber-200 p-3 text-left">
-                    <span className="text-amber-600 text-sm mt-0.5 flex-shrink-0">🔒</span>
-                    <p className="text-[11px] text-amber-800 font-semibold leading-relaxed">
-                        Perangkat ini telah dikunci untuk workcode ini. 1 perangkat hanya diizinkan untuk 1 kali presensi.
-                    </p>
-                </div>
+        <div className="space-y-4 text-center" role="status">
+            <CheckCircle2 className="mx-auto h-16 w-16 text-status-hadir" strokeWidth={1.75} aria-hidden="true" />
+            <div>
+                <h1 className="font-display text-2xl font-semibold text-ink">Presensi tercatat</h1>
+                <p className="mt-1 text-sm text-ink-2">{activeWorkcode?.nama_workcode || 'Workcode aktif'}</p>
             </div>
 
-            <p className="relative z-10 mt-5 text-[10px] text-slate-400 font-medium">
-                © {new Date().getFullYear()} E-Presensi SMABA · Presensi Mandiri
+            <Card className="p-5 text-left">
+                <p className="text-lg font-semibold leading-tight text-ink">{lock.participant?.nama}</p>
+                <p className="mt-0.5 text-sm tabular-nums text-ink-2">{participantId(lock.participant)}</p>
+                <p className="mt-3 text-sm text-ink-2">
+                    Pukul <span className="font-semibold tabular-nums text-ink">{lock.timestamp}</span>
+                </p>
+            </Card>
+
+            <p className="flex items-start gap-2 text-left text-sm text-ink-2">
+                <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                HP ini sudah dipakai untuk presensi kegiatan ini. Satu HP hanya untuk satu kali presensi, jadi peserta lain memakai HP masing-masing.
             </p>
         </div>
     );
@@ -281,6 +259,12 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
         setShowSuggestions(false);
     };
 
+    // "Ganti": kembali ke pencarian nama.
+    const changeParticipant = () => {
+        handleInputChange('');
+        window.requestAnimationFrame(() => document.getElementById('nis_nip_input')?.focus());
+    };
+
     useEffect(() => {
         const handleClickOutside = (workcode) => {
             if (suggestionsRef.current && !suggestionsRef.current.contains(workcode.target)) {
@@ -321,13 +305,13 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                 // Anti-Mock Check: Akurasi 0 = injector
                 if (accuracy === 0) {
                     setIsLocating(false);
-                    setErrorMsg('Peringatan Keamanan: Terdeteksi manipulasi lokasi / Mock Location (Akurasi 0). Matikan aplikasi Fake GPS pada perangkat Anda.');
+                    setErrorMsg('Lokasi palsu terdeteksi. Matikan aplikasi Fake GPS di HP Anda, lalu coba lagi.');
                     playAudio('error');
                     return;
                 }
                 if (accuracy > 100) {
                     setIsLocating(false);
-                    setErrorMsg(`Sinyal GPS kurang presisi (akurasi: ±${Math.round(accuracy)}m). Mohon pastikan GPS dalam mode Akurasi Tinggi (High Accuracy) dan berada di area terbuka.`);
+                    setErrorMsg(`Sinyal GPS kurang tepat (±${Math.round(accuracy)} m). Nyalakan GPS mode akurasi tinggi, pindah ke area terbuka, lalu coba lagi.`);
                     playAudio('error');
                     return;
                 }
@@ -380,10 +364,8 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                         } else if (resData.status === 'already') {
                             setResult({
                                 type: 'already',
-                                title: 'Sudah Presensi',
-                                message: `${resData.participant.nama} (${resData.participant.nis_nip || resData.participant.status || 'Tanpa NIP'}) sudah mengisi presensi untuk workcode ini.`,
                                 nama: resData.participant.nama,
-                                nis_nip: resData.participant.nis_nip,
+                                id: participantId(resData.participant),
                             });
                             playAudio('error');
                             reset();
@@ -403,7 +385,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                         }
                     }
                 } catch (err) {
-                    setErrorMsg('Gagal terhubung ke server. Periksa koneksi internet Anda.');
+                    setErrorMsg('Gagal terhubung ke server. Periksa koneksi internet lalu coba lagi.');
                     playAudio('error');
                 } finally {
                     setIsLocating(false);
@@ -411,10 +393,10 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
             },
             (error) => {
                 setIsLocating(false);
-                let msg = 'Gagal mendapatkan lokasi GPS Anda.';
-                if (error.code === 1) msg = 'Akses lokasi ditolak. Aktifkan izin lokasi (GPS) pada browser/perangkat Anda.';
-                else if (error.code === 2) msg = 'Sinyal GPS tidak ditemukan atau tidak stabil.';
-                else if (error.code === 3) msg = 'Waktu permintaan lokasi habis (timeout). Silakan coba lagi.';
+                let msg = 'Lokasi HP tidak bisa didapat. Nyalakan GPS lalu coba lagi.';
+                if (error.code === 1) msg = 'Izin lokasi ditolak. Izinkan lokasi untuk situs ini di pengaturan browser, lalu coba lagi.';
+                else if (error.code === 2) msg = 'Sinyal GPS tidak ditemukan. Pindah ke area terbuka lalu coba lagi.';
+                else if (error.code === 3) msg = 'Mencari lokasi terlalu lama. Coba lagi.';
                 setErrorMsg(msg);
                 playAudio('error');
             },
@@ -422,244 +404,173 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
         );
     };
 
+    const busy = processing || isLocating;
+    const workcodes = selectedParticipant?.available_workcodes || [];
+    const closesAt = activeWorkcode?.jam_aktif_selesai?.slice(0, 5);
+
     // Jika device sudah terkunci → tampilkan layar terkunci saja
     if (deviceLock) {
         return (
-            <>
-                <Head title="Presensi Berhasil - E-Presensi SMABA" />
+            <PublicShell>
+                <Head title="Presensi tercatat" />
                 <LockedScreen lock={deviceLock} activeWorkcode={activeWorkcode} />
-            </>
+            </PublicShell>
         );
     }
 
     return (
-        <>
-            <Head title="Presensi Workcode - E-Presensi SMABA" />
+        <PublicShell>
+            <Head title="Presensi kegiatan" />
 
-            <div className="relative min-h-[100dvh] bg-canvas text-slate-800 flex flex-col justify-between p-4 sm:p-6 overflow-y-auto">
-                {/* Glow Spots */}
-                <div className="absolute top-0 left-0 -translate-x-1/2 -translate-y-1/2 w-72 h-72 rounded-full bg-brand-500/10 blur-3xl pointer-events-none" />
-                <div className="absolute bottom-0 right-0 translate-x-1/2 translate-y-1/2 w-80 h-80 rounded-full bg-brand-violet/10 blur-3xl pointer-events-none" />
-
-                {/* Header Logo */}
-                <header data-aos="fade-down" className="relative z-10 mx-auto flex h-[76px] flex-none items-center justify-center gap-3 text-left" data-aos="fade-down">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white p-1.5 shadow-soft ring-1 ring-brand-100">
-                        <img src={appUrl('images/logo.png')} alt="Logo E-Presensi SMABA" className="h-full w-full object-contain" />
-                    </div>
+            {!activeWorkcode ? (
+                <div className="py-10 text-center">
+                    <CalendarClock className="mx-auto h-12 w-12 text-ink-3" strokeWidth={1.5} aria-hidden="true" />
+                    <h1 className="mt-4 font-display text-2xl font-semibold text-ink">Presensi belum dibuka</h1>
+                    <p className="mt-2 text-sm text-ink-2">Panitia belum mengaktifkan presensi kegiatan. Biarkan halaman ini terbuka atau hubungi panitia.</p>
+                </div>
+            ) : result ? (
+                <div className="space-y-4 py-6 text-center" role="status">
+                    <Info className="mx-auto h-12 w-12 text-status-izin" strokeWidth={1.5} aria-hidden="true" />
                     <div>
-                        <span className="block text-sm font-extrabold leading-tight tracking-tight text-slate-800">E-Presensi SMABA</span>
-                        <span className="block text-[10px] font-bold text-brand-600">SCAN WORKCODE · PRESENSI DIGITAL</span>
+                        <h1 className="font-display text-2xl font-semibold text-ink">Sudah presensi</h1>
+                        <p className="mt-2 text-sm text-ink-2">
+                            <span className="font-medium text-ink">{result.nama}</span> ({result.id}) sudah tercatat hadir di kegiatan ini. Tidak perlu presensi lagi.
+                        </p>
                     </div>
-                </header>
+                    <Button onClick={() => setResult(null)} className="w-full">Pilih nama lain</Button>
+                </div>
+            ) : (
+                <form onSubmit={handleSubmit} className="space-y-6">
+                    <div>
+                        <p className="text-sm text-ink-2">Presensi kegiatan</p>
+                        <h1 className="mt-1 font-display text-2xl font-semibold leading-tight text-ink">{activeWorkcode.nama_workcode}</h1>
+                        {closesAt && <p className="mt-1 text-sm text-ink-2">Dibuka sampai pukul <span className="tabular-nums">{closesAt}</span> WIB</p>}
+                    </div>
 
-                {/* Main Form Card */}
-                <main className="relative z-10 flex-1 flex items-center justify-center my-6 w-full">
-                    <div className="w-full max-w-md">
-
-                        {/* Workcode Inactive */}
-                        {!activeWorkcode && (
-                            <div className="bg-white border border-amber-200 rounded-xl p-6 shadow-2xl text-center" data-aos="zoom-in">
-                                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-xl font-bold">
-                                    ⚠️
+                    {/* Langkah 1: pilih nama */}
+                    <section aria-labelledby="step-name">
+                        <h2 id="step-name" className="mb-2 text-sm font-medium text-ink">1. Pilih nama Anda</h2>
+                        {selectedParticipant ? (
+                            <Card className="flex items-center gap-3 p-4">
+                                <CheckCircle2 className="h-5 w-5 shrink-0 text-status-hadir" aria-hidden="true" />
+                                <div className="min-w-0 flex-1">
+                                    <p className="truncate text-base font-semibold text-ink">{selectedParticipant.nama}</p>
+                                    <p className="text-sm tabular-nums text-ink-2">{participantId(selectedParticipant)}</p>
                                 </div>
-                                <h2 className="text-base font-extrabold text-slate-800">Presensi Saat Ini Ditutup</h2>
-                                <p className="text-xs text-slate-500 mt-2 font-medium leading-relaxed">
-                                    Belum ada Workcode yang diaktifkan oleh Panitia/Admin. Silakan hubungi panitia workcode untuk membuka sesi presensi.
-                                </p>
-                            </div>
-                        )}
+                                <Button size="sm" variant="ghost" onClick={changeParticipant} disabled={busy}>Ganti</Button>
+                            </Card>
+                        ) : (
+                            <div className="relative" ref={suggestionsRef}>
+                                <label htmlFor="nis_nip_input" className="sr-only">Nama atau NIP</label>
+                                <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-ink-3" aria-hidden="true" />
+                                {/* Huruf 16px agar iPhone tidak memperbesar halaman saat isian disentuh. */}
+                                <input
+                                    id="nis_nip_input"
+                                    type="text"
+                                    placeholder="Ketik nama atau NIP"
+                                    value={data.nis_nip}
+                                    onChange={(e) => handleInputChange(e.target.value)}
+                                    onFocus={() => { if (data.nis_nip.trim().length >= 2) setShowSuggestions(true); }}
+                                    className="h-12 w-full rounded-xl border border-line-strong bg-surface pl-12 pr-4 text-base text-ink placeholder:text-ink-3 focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/25"
+                                    disabled={busy}
+                                    autoComplete="off"
+                                    autoCapitalize="words"
+                                    spellCheck={false}
+                                    autoFocus
+                                    role="combobox"
+                                    aria-expanded={showSuggestions}
+                                    aria-controls="suggestions-list"
+                                    aria-autocomplete="list"
+                                    aria-describedby="name-hint"
+                                />
+                                <p id="name-hint" className="mt-1.5 text-sm text-ink-2">Ketik minimal 2 huruf, lalu pilih dari daftar.</p>
 
-                        {/* Status Result Card (sudah/already) */}
-                        {activeWorkcode && result && (
-                            <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-center shadow-xl animate-[slideUp_0.3s_ease-out] text-amber-800" data-aos="zoom-in">
-                                <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-amber-100 text-amber-700 text-lg font-bold">
-                                    ⚠
-                                </div>
-                                <h3 className="text-md font-extrabold mb-1">{result.title}</h3>
-                                <p className="text-xs text-slate-700 leading-relaxed font-bold">{result.message}</p>
-                            </div>
-                        )}
-
-                        {/* Form Utama */}
-                        {activeWorkcode && !result && (
-                            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-soft-lg" data-aos="zoom-in">
-                                <div className="border-b border-brand-100 bg-brand-soft px-5 py-4 text-center">
-                                    <span className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-[10px] font-extrabold text-brand-600 border border-brand-100 mb-2">
-                                        🟢 {activeWorkcode.nama_workcode}
-                                    </span>
-                                    <h2 className="text-sm font-bold text-slate-800 uppercase tracking-wider">Presensi Mandiri</h2>
-                                    <p className="text-xs text-slate-500 mt-1 font-semibold">Ketik nama atau NIP untuk memilih</p>
-                                </div>
-
-                                <form onSubmit={handleSubmit} className="space-y-4 p-5 sm:p-6">
-                                    <div className="grid grid-cols-2 gap-2" aria-label="Tahapan presensi">
-                                        <div className="flex items-center gap-2 rounded-xl bg-brand-soft px-3 py-2 ring-1 ring-brand-100">
-                                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand-gradient text-[10px] font-extrabold text-white">1</span>
-                                            <span className="text-[10px] font-extrabold text-brand-700">Pilih peserta</span>
-                                        </div>
-                                        <div className={`flex items-center gap-2 rounded-xl px-3 py-2 ring-1 ${selectedParticipant ? 'bg-brand-soft text-brand-700 ring-brand-100' : 'bg-slate-50 text-slate-400 ring-slate-100'}`}>
-                                            <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-extrabold ${selectedParticipant ? 'bg-brand-gradient text-white' : 'bg-slate-200 text-slate-500'}`}>2</span>
-                                            <span className="text-[10px] font-extrabold">Tanda tangan</span>
-                                        </div>
-                                    </div>
-                                    <div className="relative" ref={suggestionsRef}>
-                                        <label htmlFor="nis_nip_input" className="mb-1.5 block text-xs font-extrabold text-slate-700">Nama atau NIP</label>
-                                        <input
-                                            id="nis_nip_input"
-                                            type="text"
-                                            placeholder="Ketik minimal 2 huruf nama atau NIP..."
-                                            value={data.nis_nip}
-                                            onChange={(e) => handleInputChange(e.target.value)}
-                                            onFocus={() => { if (!selectedParticipant && data.nis_nip.trim().length >= 2) setShowSuggestions(true); }}
-                                            className="w-full min-h-[50px] rounded-2xl border border-slate-200 bg-slate-50 py-3 px-4 text-sm font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:border-brand-500 focus:outline-none focus:ring-4 focus:ring-brand-500/10"
-                                            required
-                                            disabled={processing || isLocating}
-                                            autoComplete="off"
-                                            autoFocus
-                                            role="combobox"
-                                            aria-expanded={showSuggestions}
-                                            aria-controls="suggestions-list"
-                                            aria-autocomplete="list"
-                                        />
-
-                                        {showSuggestions && (
-                                            <div id="suggestions-list" role="listbox" className="absolute left-0 right-0 mt-2 z-50 overflow-hidden rounded-xl border border-slate-100 bg-white shadow-2xl max-h-56 overflow-y-auto divide-y divide-slate-100 animate-[fadeIn_0.15s_ease-out]">
-                                                {isSearchingSuggestions ? (
-                                                    <div className="px-4 py-4 text-center">
-                                                        <p className="text-xs font-semibold text-slate-500">Mencari data...</p>
-                                                    </div>
-                                                ) : suggestions.length > 0 ? (
-                                                    suggestions.map((p) => (
+                                {showSuggestions && (
+                                    <div id="suggestions-list" role="listbox" aria-label="Hasil pencarian peserta" className="absolute inset-x-0 top-12 z-20 mt-1 max-h-72 overflow-y-auto rounded-xl border border-line bg-surface shadow-xl">
+                                        {isSearchingSuggestions ? (
+                                            <p className="flex items-center justify-center gap-2 px-4 py-5 text-sm text-ink-2"><Spinner className="h-4 w-4" />Mencari…</p>
+                                        ) : suggestions.length > 0 ? (
+                                            <ul className="divide-y divide-line">
+                                                {suggestions.map((p) => (
+                                                    <li key={p.id}>
                                                         <button
                                                             type="button"
-                                                            key={p.id}
                                                             role="option"
-                                                            aria-selected={selectedParticipant?.id === p.id}
+                                                            aria-selected={false}
                                                             onClick={() => handleSelectSuggestion(p)}
-                                                            className="block w-full px-4 py-3 text-left transition-colors hover:bg-brand-soft focus:bg-brand-soft focus:outline-none"
+                                                            className="flex min-h-14 w-full flex-col justify-center px-4 py-2.5 text-left hover:bg-surface-2 focus-visible:bg-surface-2"
                                                         >
-                                                            <p className="text-sm font-semibold text-slate-800">{p.nama}</p>
-                                                            <p className="text-[11px] text-brand-600 font-bold mt-0.5">
-                                                                {p.nis_nip || `${p.status || 'GTT/PTT'} · Tanpa NIP`}
-                                                            </p>
+                                                            <span className="text-base font-medium text-ink">{p.nama}</span>
+                                                            <span className="text-sm tabular-nums text-ink-2">{participantId(p)}</span>
                                                         </button>
-                                                    ))
-                                                ) : (
-                                                    <div className="px-4 py-4 text-center">
-                                                        <p className="text-xs font-semibold text-slate-500">Data tidak ditemukan.</p>
-                                                    </div>
-                                                )}
-                                            </div>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        ) : (
+                                            <p className="px-4 py-5 text-center text-sm text-ink-2">Nama tidak ditemukan. Periksa ejaan atau coba ketik NIP.</p>
                                         )}
                                     </div>
-
-                                    {selectedParticipant ? (
-                                        <>
-                                            <div className="flex items-center gap-3 rounded-2xl border border-brand-100 bg-brand-soft p-3">
-                                                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-gradient text-sm font-extrabold text-white">
-                                                    {selectedParticipant.nama?.charAt(0)?.toUpperCase()}
-                                                </span>
-                                                <div className="min-w-0 flex-1">
-                                                    <p className="truncate text-sm font-extrabold text-slate-900">{selectedParticipant.nama}</p>
-                                                    <p className="text-[11px] font-bold text-brand-600">{selectedParticipant.nis_nip || `${selectedParticipant.status || 'GTT/PTT'} · Tanpa NIP`}</p>
-                                                </div>
-                                                <span className="text-[10px] font-extrabold text-brand-600">DIPILIH</span>
-                                            </div>
-
-                                            <div className="rounded-xl border border-indigo-100 bg-indigo-50/50 p-3">
-                                                <label className="mb-1 block text-[10px] font-extrabold uppercase tracking-wider text-indigo-800">Workcode yang dipilih</label>
-                                                <select value={data.workcode_id || ''} onChange={(event) => setData('workcode_id', Number(event.target.value) || null)} className="w-full rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 focus:border-indigo-500 focus:ring-indigo-500">
-                                                    {(selectedParticipant.available_workcodes || []).map((workcode) => <option key={workcode.workcode_id} value={workcode.workcode_id}>{workcode.nama_workcode}</option>)}
-                                                </select>
-                                            </div>
-
-                                    <div className="rounded-2xl border border-brand-100 bg-brand-soft/50 p-3">
-                                        <div className="mb-2 flex items-center justify-between gap-3">
-                                            <div>
-                                                <p className="text-xs font-extrabold text-slate-700">
-                                                    Tanda Tangan Peserta <span className="text-red-500">*</span>
-                                                </p>
-                                                <p className="text-[10px] font-medium text-slate-500">Gunakan jari atau stylus pada area berikut.</p>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={clearSignature}
-                                                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-bold text-slate-600 shadow-sm transition hover:bg-slate-100"
-                                            >
-                                                Hapus
-                                            </button>
-                                        </div>
-                                        <canvas
-                                            ref={signatureCanvasRef}
-                                            width="800"
-                                            height="240"
-                                            onPointerDown={startSignature}
-                                            onPointerMove={drawSignature}
-                                            onPointerUp={finishSignature}
-                                            onPointerCancel={finishSignature}
-                                            onPointerLeave={finishSignature}
-                                            className="h-32 w-full cursor-crosshair touch-none rounded-xl border border-dashed border-slate-300 bg-white shadow-inner"
-                                            aria-label="Area tanda tangan peserta"
-                                        />
-                                        <p className={`mt-1.5 text-center text-[10px] font-bold ${signatureData ? 'text-emerald-600' : 'text-slate-400'}`}>
-                                            {signatureData ? '✓ Tanda tangan siap disimpan' : 'Belum ada tanda tangan'}
-                                        </p>
-                                    </div>
-                                        </>
-                                    ) : (
-                                        <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-center">
-                                            <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-sm font-bold text-slate-500">2</div>
-                                            <p className="text-xs font-extrabold text-slate-600">Pilih nama atau NIP terlebih dahulu</p>
-                                            <p className="mt-1 text-[10px] font-medium text-slate-400">Area tanda tangan akan terbuka setelah peserta dipilih.</p>
-                                        </div>
-                                    )}
-
-                                    {errorMsg && (
-                                        <p className="text-[11px] text-red-600 text-center font-semibold flex items-center justify-center gap-1" role="alert">
-                                            <span>✕</span> {errorMsg}
-                                        </p>
-                                    )}
-
-                                    <button
-                                        type="submit"
-                                        disabled={processing || isLocating || !selectedParticipant || !signatureData}
-                                        className="btn-brand w-full min-h-[48px] gap-2 disabled:opacity-50"
-                                    >
-                                        {isLocating ? (
-                                            <>
-                                                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                                                Mencari Lokasi GPS...
-                                            </>
-                                        ) : processing ? (
-                                            <>
-                                                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                                                Memproses Data...
-                                            </>
-                                        ) : !selectedParticipant ? 'Pilih Peserta Terlebih Dahulu' : !signatureData ? 'Bubuhkan Tanda Tangan' : 'Kirim Kehadiran'}
-                                    </button>
-                                </form>
+                                )}
                             </div>
                         )}
 
+                        {workcodes.length > 1 && (
+                            <div className="mt-3">
+                                <label htmlFor="workcode-select" className="mb-1.5 block text-sm text-ink-2">Presensi untuk kegiatan</label>
+                                <Select id="workcode-select" value={data.workcode_id || ''} onChange={(event) => setData('workcode_id', Number(event.target.value) || null)}>
+                                    {workcodes.map((workcode) => <option key={workcode.workcode_id} value={workcode.workcode_id}>{workcode.nama_workcode}</option>)}
+                                </Select>
+                            </div>
+                        )}
+                    </section>
+
+                    {/* Langkah 2: tanda tangan (terbuka setelah nama dipilih) */}
+                    <section aria-labelledby="step-sign">
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                            <h2 id="step-sign" className={cx('text-sm font-medium', selectedParticipant ? 'text-ink' : 'text-ink-2')}>2. Tanda tangan</h2>
+                            {selectedParticipant && signatureData && (
+                                <Button size="sm" variant="ghost" icon={Eraser} onClick={clearSignature} disabled={busy} className="-mr-3">Ulangi</Button>
+                            )}
+                        </div>
+                        {selectedParticipant ? (
+                            <>
+                                {/* Kanvas selalu putih seperti kertas (goresan gelap), juga di mode gelap. */}
+                                <canvas
+                                    ref={signatureCanvasRef}
+                                    width="800"
+                                    height="320"
+                                    onPointerDown={startSignature}
+                                    onPointerMove={drawSignature}
+                                    onPointerUp={finishSignature}
+                                    onPointerCancel={finishSignature}
+                                    onPointerLeave={finishSignature}
+                                    className={cx('h-40 w-full cursor-crosshair touch-none rounded-xl border-2 bg-white', signatureData ? 'border-line-strong' : 'border-dashed border-line-strong')}
+                                    aria-label="Area tanda tangan. Gambar tanda tangan dengan jari."
+                                />
+                                <p className="mt-1.5 text-sm text-ink-2" aria-live="polite">
+                                    {signatureData ? 'Tanda tangan siap dikirim.' : 'Tanda tangani dengan jari di kotak putih.'}
+                                </p>
+                            </>
+                        ) : (
+                            <p className="rounded-xl border border-dashed border-line-strong px-4 py-8 text-center text-sm text-ink-2">Pilih nama dulu, lalu tanda tangan di sini.</p>
+                        )}
+                    </section>
+
+                    {errorMsg && (
+                        <p className="flex items-start gap-2 rounded-xl border border-danger/30 bg-danger-soft p-4 text-sm text-ink" role="alert">
+                            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-danger" aria-hidden="true" />
+                            {errorMsg}
+                        </p>
+                    )}
+
+                    <div>
+                        <Button variant="primary" type="submit" size="lg" loading={busy} disabled={!selectedParticipant || !signatureData} className="w-full">
+                            {isLocating ? 'Memeriksa lokasi…' : processing ? 'Mengirim…' : 'Kirim kehadiran'}
+                        </Button>
+                        <p className="mt-2 text-center text-xs text-ink-2">Lokasi HP diperiksa saat mengirim. Izinkan akses lokasi bila browser bertanya.</p>
                     </div>
-                </main>
-
-                {/* Footer */}
-                <footer className="relative z-10 flex h-12 flex-none items-center justify-center text-center text-[10px] text-slate-500" data-aos="fade-up">
-                    <p>&copy; {new Date().getFullYear()} E-Presensi SMABA.</p>
-                </footer>
-            </div>
-
-            <style>{`
-                @keyframes slideUp {
-                    from { opacity: 0; transform: translateY(20px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-                @keyframes fadeIn {
-                    from { opacity: 0; transform: translateY(-5px); }
-                    to { opacity: 1; transform: translateY(0); }
-                }
-            `}</style>
-        </>
+                </form>
+            )}
+        </PublicShell>
     );
 }

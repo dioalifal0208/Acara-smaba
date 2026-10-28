@@ -3,6 +3,8 @@
 namespace App\Support;
 
 use App\Models\Attendance;
+use App\Models\Participant;
+use App\Models\Workcode;
 use Carbon\CarbonImmutable;
 
 /**
@@ -18,6 +20,77 @@ class AdminDashboardStats
         'tanda_tangan' => 'Tanda Tangan',
         'manual' => 'Manual',
     ];
+
+    /**
+     * Ringkasan kehadiran untuk satu workcode: peserta yang berhak (peserta terpilih, atau semua
+     * peserta bila workcode tidak membatasi) dan yang berstatus hadir. Harian: hanya hari ini;
+     * kegiatan: sekali presensi per kegiatan (sama dengan AttendanceValidationService::checkAlreadyAttended).
+     * Baris alpha/lupa_absen/izin dari scheduler atau persetujuan izin tidak dihitung hadir.
+     *
+     * @return array{total: int, hadir: int, belum: int}
+     */
+    public static function presence(?Workcode $workcode): array
+    {
+        if (! $workcode) {
+            $total = Participant::count();
+
+            return ['total' => $total, 'hadir' => 0, 'belum' => $total];
+        }
+
+        $eligible = $workcode->eligibleParticipants();
+
+        $total = (clone $eligible)->count();
+        $hadir = Attendance::query()
+            ->where('workcode_id', $workcode->id)
+            ->where('status', 'hadir')
+            ->when($workcode->kategori === 'harian', fn ($query) => $query->whereDate('tanggal', today()))
+            ->whereIn('participant_id', $eligible->select('participants.id'))
+            ->distinct()
+            ->count('participant_id');
+
+        return ['total' => $total, 'hadir' => $hadir, 'belum' => max(0, $total - $hadir)];
+    }
+
+    /**
+     * Rincian Papan Hadir dashboard untuk satu workcode, dengan cakupan peserta & hari yang sama
+     * dengan presence(): hadir tepat waktu, terlambat (presensi harian lewat batas jam datang),
+     * izin/sakit, dan belum (sisanya, termasuk alpha & lupa absen). Jumlah keempatnya = total.
+     *
+     * @return array{total: int, tepat_waktu: int, terlambat: int, izin: int, belum: int}
+     */
+    public static function board(?Workcode $workcode): array
+    {
+        if (! $workcode) {
+            $total = Participant::count();
+
+            return ['total' => $total, 'tepat_waktu' => 0, 'terlambat' => 0, 'izin' => 0, 'belum' => $total];
+        }
+
+        $eligible = $workcode->eligibleParticipants();
+        $total = (clone $eligible)->count();
+
+        $rows = Attendance::query()
+            ->where('workcode_id', $workcode->id)
+            ->whereIn('status', ['hadir', 'izin', 'sakit'])
+            ->when($workcode->kategori === 'harian', fn ($query) => $query->whereDate('tanggal', today()))
+            ->whereIn('participant_id', $eligible->select('participants.id'))
+            ->orderBy('waktu_hadir')
+            ->get(['participant_id', 'status', 'waktu_hadir'])
+            ->groupBy('participant_id');
+
+        // Peserta dengan baris hadir dihitung hadir walau juga punya baris izin; presensi pertama menentukan terlambat.
+        $present = $rows->map(fn ($attendances) => $attendances->firstWhere('status', 'hadir'))->filter();
+        $terlambat = $present->filter(fn (Attendance $attendance) => $attendance->waktu_hadir && $workcode->isLateAt($attendance->waktu_hadir))->count();
+        $izin = $rows->count() - $present->count();
+
+        return [
+            'total' => $total,
+            'tepat_waktu' => $present->count() - $terlambat,
+            'terlambat' => $terlambat,
+            'izin' => $izin,
+            'belum' => max(0, $total - $present->count() - $izin),
+        ];
+    }
 
     /** Jumlah presensi hadir 7 hari terakhir (termasuk hari ini). */
     public static function weekly(): array
@@ -84,7 +157,7 @@ class AdminDashboardStats
     public static function recent(int $limit = 6): array
     {
         return self::today()
-            ->with(['participant:id,nama,nis_nip', 'workcode:id,nama_workcode'])
+            ->with(['participant:id,nama,nis_nip', 'workcode'])
             ->latest('waktu_hadir')
             ->take($limit)
             ->get()
@@ -96,6 +169,7 @@ class AdminDashboardStats
                 'waktu' => $attendance->waktu_hadir?->format('H:i'),
                 'pulang' => $attendance->waktu_pulang?->format('H:i'),
                 'metode' => self::METHOD_LABELS[$attendance->attendance_method ?: 'wajah'] ?? 'Lainnya',
+                'terlambat' => (bool) $attendance->workcode?->isLateAt($attendance->waktu_hadir),
             ])
             ->all();
     }

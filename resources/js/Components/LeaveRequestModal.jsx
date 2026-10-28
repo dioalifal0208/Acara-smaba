@@ -1,13 +1,7 @@
-import { useState } from 'react';
-import Modal from '@/Components/Modal';
+import { Button, Dialog, Field, Input, Select, Textarea, useToast } from '@/ui';
 import { useForm } from '@inertiajs/react';
-import InputError from '@/Components/InputError';
-import InputLabel from '@/Components/InputLabel';
-import TextInput from '@/Components/TextInput';
-import PrimaryButton from '@/Components/PrimaryButton';
-import SecondaryButton from '@/Components/SecondaryButton';
-import { useToast } from '@/Components/Toast';
 
+/** Formulir pengajuan izin/sakit oleh peserta; disetujui admin sebelum status presensi berubah. */
 export default function LeaveRequestModal({ show, onClose, workcodeId, tanggal }) {
     const { toast } = useToast();
     const { data, setData, post, processing, errors, reset } = useForm({
@@ -21,155 +15,100 @@ export default function LeaveRequestModal({ show, onClose, workcodeId, tanggal }
         tanggal_selesai: '',
     });
 
-    const submit = (e) => {
-        e.preventDefault();
-
-        post(route('leave.store'), {
-            preserveScroll: true,
-            onSuccess: () => {
-                closeModal();
-                toast.success('Pengajuan izin berhasil dikirim.');
-            },
-            onError: (errors) => {
-                if (errors.error) {
-                    toast.error(errors.error);
-                }
-            }
-        });
-    };
-
     const closeModal = () => {
         reset();
         onClose();
     };
 
+    const submit = (e) => {
+        e.preventDefault();
+        post(route('leave.store'), {
+            preserveScroll: true,
+            onSuccess: () => {
+                closeModal();
+                toast.success('Pengajuan izin terkirim. Tunggu persetujuan admin.');
+            },
+            onError: (errs) => {
+                if (errs.error) toast.error(errs.error);
+            },
+        });
+    };
+
     return (
-        <Modal show={show} onClose={closeModal}>
-            <form onSubmit={submit} className="p-6 max-h-[90dvh] overflow-y-auto">
-                <h2 className="text-lg font-bold text-gray-900 mb-6">
-                    Pengajuan Izin
-                </h2>
-
-                <div className="mb-4">
-                    <InputLabel htmlFor="tipe_izin" value="Tipe Izin" />
-                    <select
-                        id="tipe_izin"
-                        name="tipe_izin"
-                        value={data.tipe_izin}
-                        onChange={(e) => setData('tipe_izin', e.target.value)}
-                        className="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm min-h-[44px]"
-                        required
-                    >
-                        <option value="" disabled>Pilih tipe izin</option>
-                        <option value="izin_penuh">Izin penuh</option>
-                        <option value="tidak_absen_datang">Izin tidak absen datang</option>
-                        <option value="tidak_absen_pulang">Izin tidak absen pulang</option>
-                    </select>
-                    <InputError message={errors.tipe_izin} className="mt-2" />
+        <Dialog
+            open={show}
+            onClose={closeModal}
+            title="Ajukan izin"
+            description="Status presensi baru berubah setelah admin menyetujui pengajuan ini."
+            size="lg"
+            footer={
+                <>
+                    <Button onClick={closeModal}>Batal</Button>
+                    <Button variant="primary" type="submit" form="leave-request" loading={processing}>Kirim pengajuan</Button>
+                </>
+            }
+        >
+            <form id="leave-request" onSubmit={submit} className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label="Tipe izin" required error={errors.tipe_izin}>
+                        <Select value={data.tipe_izin} onChange={(e) => setData('tipe_izin', e.target.value)}>
+                            <option value="" disabled>Pilih tipe</option>
+                            <option value="izin_penuh">Izin penuh</option>
+                            <option value="tidak_absen_datang">Tidak absen datang</option>
+                            <option value="tidak_absen_pulang">Tidak absen pulang</option>
+                        </Select>
+                    </Field>
+                    <Field label="Jenis izin" required error={errors.jenis_izin}>
+                        <Select value={data.jenis_izin} onChange={(e) => setData('jenis_izin', e.target.value)}>
+                            <option value="" disabled>Pilih jenis</option>
+                            <option value="izin_sakit">Sakit</option>
+                            <option value="force_majeure">Force majeure</option>
+                            <option value="tidak_masuk_kerja_dengan_keterangan">Tidak masuk dengan keterangan</option>
+                            <option value="perjalanan_dinas_dalam_kota">Dinas dalam kota</option>
+                            <option value="perjalanan_dinas_luar_kota">Dinas luar kota</option>
+                            <option value="cuti">Cuti</option>
+                            <option value="diklat_dan_pelatihan">Diklat dan pelatihan</option>
+                        </Select>
+                    </Field>
                 </div>
 
-                <div className="mb-4">
-                    <InputLabel htmlFor="jenis_izin" value="Jenis Izin" />
-                    <select
-                        id="jenis_izin"
-                        name="jenis_izin"
-                        value={data.jenis_izin}
-                        onChange={(e) => setData('jenis_izin', e.target.value)}
-                        className="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm min-h-[44px]"
-                        required
-                    >
-                        <option value="" disabled>Pilih jenis izin</option>
-                        <option value="izin_sakit">Izin sakit</option>
-                        <option value="force_majeure">Force majeure</option>
-                        <option value="tidak_masuk_kerja_dengan_keterangan">Tidak masuk kerja dengan keterangan</option>
-                        <option value="perjalanan_dinas_dalam_kota">Perjalanan dinas dalam kota</option>
-                        <option value="perjalanan_dinas_luar_kota">Perjalanan dinas luar kota</option>
-                        <option value="cuti">Cuti</option>
-                        <option value="diklat_dan_pelatihan">Diklat dan pelatihan</option>
-                    </select>
-                    <InputError message={errors.jenis_izin} className="mt-2" />
+                <Field label="Keterangan" required error={errors.keterangan}>
+                    <Textarea rows={3} value={data.keterangan} onChange={(e) => setData('keterangan', e.target.value)} />
+                </Field>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                    <Field label={data.izin_lebih_dari_satu_hari ? 'Tanggal mulai' : 'Tanggal'} required error={errors.tanggal}>
+                        <Input type="date" value={data.tanggal} onChange={(e) => setData('tanggal', e.target.value)} />
+                    </Field>
+                    {data.izin_lebih_dari_satu_hari && (
+                        <Field label="Tanggal selesai" required error={errors.tanggal_selesai}>
+                            <Input type="date" value={data.tanggal_selesai} min={data.tanggal || undefined} onChange={(e) => setData('tanggal_selesai', e.target.value)} />
+                        </Field>
+                    )}
                 </div>
 
-                <div className="mb-4">
-                    <InputLabel htmlFor="keterangan" value="Keterangan" />
-                    <textarea
-                        id="keterangan"
-                        name="keterangan"
-                        value={data.keterangan}
-                        onChange={(e) => setData('keterangan', e.target.value)}
-                        className="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm"
-                        rows="3"
-                        required
-                    />
-                    <InputError message={errors.keterangan} className="mt-2" />
-                </div>
-
-                <div className="mb-4">
-                    <InputLabel htmlFor="tanggal" value={data.izin_lebih_dari_satu_hari ? 'Tanggal Mulai' : 'Tanggal Izin'} />
-                    <TextInput
-                        id="tanggal"
-                        type="date"
-                        name="tanggal"
-                        value={data.tanggal}
-                        onChange={(e) => setData('tanggal', e.target.value)}
-                        className="mt-1 block w-full"
-                        required
-                    />
-                    <InputError message={errors.tanggal} className="mt-2" />
-                </div>
-
-                <label className="mb-4 flex items-center gap-3 rounded-md border border-gray-200 p-3 text-sm text-gray-700 cursor-pointer">
+                <label className="flex cursor-pointer items-center gap-3 text-sm text-ink">
                     <input
                         type="checkbox"
                         checked={data.izin_lebih_dari_satu_hari}
                         onChange={(e) => {
                             setData('izin_lebih_dari_satu_hari', e.target.checked);
-                            if (!e.target.checked) {
-                                setData('tanggal_selesai', '');
-                            }
+                            if (!e.target.checked) setData('tanggal_selesai', '');
                         }}
-                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        className="h-[18px] w-[18px] rounded border-line-strong bg-surface text-accent focus:ring-accent"
                     />
-                    <span>Izin lebih dari 1 hari</span>
+                    Izin lebih dari satu hari
                 </label>
 
-                {data.izin_lebih_dari_satu_hari && (
-                    <div className="mb-4">
-                        <InputLabel htmlFor="tanggal_selesai" value="Tanggal Selesai" />
-                        <TextInput
-                            id="tanggal_selesai"
-                            type="date"
-                            name="tanggal_selesai"
-                            value={data.tanggal_selesai}
-                            min={data.tanggal || undefined}
-                            onChange={(e) => setData('tanggal_selesai', e.target.value)}
-                            className="mt-1 block w-full"
-                            required
-                        />
-                        <InputError message={errors.tanggal_selesai} className="mt-2" />
-                    </div>
-                )}
-
-                <div className="mb-4">
-                    <InputLabel htmlFor="dokumen" value="Dokumen Pendukung (Foto/PDF, maks. 5 MB)" />
+                <Field label="Dokumen pendukung" required hint="Foto atau PDF, maksimal 5 MB. Contoh: surat dokter atau surat tugas." error={errors.dokumen}>
                     <input
-                        id="dokumen"
                         type="file"
                         accept=".jpg,.jpeg,.png,.pdf"
                         onChange={(e) => setData('dokumen', e.target.files[0])}
-                        className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                        required
+                        className="block w-full text-sm text-ink-2 file:mr-3 file:h-10 file:cursor-pointer file:rounded-lg file:border file:border-line-strong file:bg-surface file:px-4 file:text-sm file:font-medium file:text-ink hover:file:bg-surface-2"
                     />
-                    <InputError message={errors.dokumen} className="mt-2" />
-                </div>
-
-                <div className="mt-6 flex justify-end gap-3">
-                    <SecondaryButton onClick={closeModal}>Batal</SecondaryButton>
-                    <PrimaryButton disabled={processing}>
-                        Kirim Pengajuan
-                    </PrimaryButton>
-                </div>
+                </Field>
             </form>
-        </Modal>
+        </Dialog>
     );
 }

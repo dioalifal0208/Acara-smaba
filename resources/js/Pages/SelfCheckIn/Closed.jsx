@@ -1,6 +1,8 @@
-import { Head } from '@inertiajs/react';
-import { appUrl } from '@/lib/appUrl';
+import PublicShell from '@/Layouts/PublicShell';
 import { backgroundReload, jitteredInterval } from '@/lib/backgroundReload';
+import { Card, cx } from '@/ui';
+import { Head } from '@inertiajs/react';
+import { CheckCircle2, Clock, Hourglass, IdCard, Lock, PauseCircle, QrCode } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 // Halaman yang ditutup sementara memeriksa ulang ke server, lalu otomatis kembali ke form bila workcode aktif lagi.
@@ -18,67 +20,59 @@ function getLocalLock(workcodeId) {
     }
 }
 
+/** Isi per alasan dari server: ikon, warna ikon, judul, dan langkah yang perlu dilakukan. */
 const CONTENT = {
     invalid: {
-        icon: '⌛',
-        tone: 'amber',
-        title: 'QR / Tautan Presensi Kadaluarsa',
+        icon: QrCode,
+        tone: 'text-status-telat',
+        title: 'QR sudah tidak berlaku',
         steps: [
-            'QR presensi berganti otomatis setiap hari, dan panitia dapat memperbaruinya kapan saja.',
             'Pindai ulang QR terbaru yang sedang ditampilkan panitia di lokasi kegiatan.',
-            'Jangan memakai foto/tangkapan layar QR atau tautan yang dibagikan sebelumnya.',
+            'Jangan memakai foto, tangkapan layar, atau tautan QR yang dibagikan sebelumnya. QR bisa diperbarui panitia kapan saja.',
         ],
     },
     ended: {
-        icon: '⏰',
-        tone: 'rose',
-        title: 'Sesi Presensi Telah Berakhir',
+        icon: Hourglass,
+        tone: 'text-status-alpha',
+        title: 'Presensi sudah ditutup',
         steps: [
-            'Waktu presensi untuk workcode ini sudah selesai, sehingga QR/tautannya tidak berlaku lagi.',
-            'Jika Anda hadir tetapi belum sempat presensi, segera hubungi panitia/admin untuk pencatatan.',
+            'Waktu presensi kegiatan ini sudah selesai, jadi QR dan tautannya tidak berlaku lagi.',
+            'Jika Anda hadir tetapi belum sempat presensi, segera hubungi panitia atau admin untuk dicatat.',
         ],
     },
     not_started: {
-        icon: '🕒',
-        tone: 'sky',
-        title: 'Sesi Presensi Belum Dimulai',
-        steps: [
-            'Tetap buka halaman ini. Form presensi akan terbuka otomatis ketika sesi dimulai.',
-        ],
+        icon: Clock,
+        tone: 'text-status-izin',
+        title: 'Presensi belum dibuka',
+        steps: ['Biarkan halaman ini terbuka. Form presensi muncul sendiri saat waktunya tiba.'],
     },
     inactive: {
-        icon: '⏸️',
-        tone: 'amber',
-        title: 'Presensi Dinonaktifkan Sementara',
+        icon: PauseCircle,
+        tone: 'text-status-telat',
+        title: 'Presensi dihentikan sementara',
         steps: [
-            'Panitia sedang menonaktifkan sesi presensi workcode ini.',
-            'Tetap buka halaman ini. Form presensi akan terbuka otomatis ketika diaktifkan kembali.',
+            'Panitia sedang menghentikan presensi kegiatan ini.',
+            'Biarkan halaman ini terbuka. Form presensi muncul sendiri saat dibuka kembali.',
         ],
     },
     closed_by_selection: {
-        icon: '🔒',
-        tone: 'amber',
-        title: 'Presensi Ditutup Sementara',
+        icon: Lock,
+        tone: 'text-status-telat',
+        title: 'Presensi ditutup sementara',
         steps: [
-            'Saat ini sedang berlangsung workcode lain yang hanya untuk peserta terpilih.',
-            'Jika Anda termasuk peserta terpilih, pindai QR workcode tersebut yang ditampilkan panitia.',
+            'Sedang berlangsung kegiatan lain yang hanya untuk peserta terpilih.',
+            'Jika Anda termasuk peserta terpilih, pindai QR kegiatan tersebut yang ditampilkan panitia.',
         ],
     },
     harian: {
-        icon: '🪪',
-        tone: 'sky',
-        title: 'Gunakan QR Pribadi',
+        icon: IdCard,
+        tone: 'text-status-izin',
+        title: 'Gunakan presensi harian',
         steps: [
             'Presensi harian tidak memakai QR presensi mandiri.',
-            'Tunjukkan QR Code Pribadi Anda kepada petugas/admin, atau gunakan aplikasi E-Presensi.',
+            'Presensi lewat aplikasi PRESENSI SMABA di HP, atau tunjukkan QR pribadi Anda kepada petugas.',
         ],
     },
-};
-
-const TONES = {
-    amber: { ring: 'border-amber-200', badge: 'bg-amber-100 text-amber-700', title: 'text-amber-900' },
-    rose: { ring: 'border-rose-200', badge: 'bg-rose-100 text-rose-700', title: 'text-rose-900' },
-    sky: { ring: 'border-sky-200', badge: 'bg-sky-100 text-sky-700', title: 'text-sky-900' },
 };
 
 function formatTime(time) {
@@ -86,12 +80,8 @@ function formatTime(time) {
 }
 
 function formatDate(date) {
-    if (!date) {
-        return null;
-    }
-
+    if (!date) return null;
     const parsed = new Date(`${date.slice(0, 10)}T00:00:00`);
-
     return Number.isNaN(parsed.getTime())
         ? date
         : parsed.toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -99,7 +89,7 @@ function formatDate(date) {
 
 export default function Closed({ reason, message, temporary = false, workcode = null, hasOtherActiveWorkcode = false, serverTime = null }) {
     const content = CONTENT[reason] || CONTENT.invalid;
-    const tone = TONES[content.tone];
+    const Icon = content.icon;
     const start = formatTime(workcode?.jam_aktif_mulai);
     const end = formatTime(workcode?.jam_aktif_selesai);
     const checkedAt = serverTime
@@ -146,109 +136,87 @@ export default function Closed({ reason, message, temporary = false, workcode = 
     }, [temporary, localLock, reason, workcode?.starts_at, serverTime]);
 
     return (
-        <>
-            <Head title={`${content.title} - E-Presensi SMABA`} />
+        <PublicShell>
+            <Head title={content.title} />
 
-            <div className="relative flex min-h-[100dvh] flex-col justify-between overflow-y-auto bg-canvas p-4 text-slate-800 sm:p-6">
-                <div className="pointer-events-none absolute left-0 top-0 h-72 w-72 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-500/10 blur-3xl" />
-                <div className="pointer-events-none absolute bottom-0 right-0 h-80 w-80 translate-x-1/2 translate-y-1/2 rounded-full bg-brand-violet/10 blur-3xl" />
+            <div className="space-y-6">
+                <div className="pt-4 text-center">
+                    <Icon className={cx('mx-auto h-14 w-14', content.tone)} strokeWidth={1.5} aria-hidden="true" />
+                    <h1 className="mt-4 font-display text-2xl font-semibold text-ink">{content.title}</h1>
+                    {message && <p className="mt-2 text-sm text-ink-2">{message}</p>}
+                </div>
 
-                <header data-aos="fade-down" className="relative z-10 mx-auto flex h-[76px] flex-none items-center justify-center gap-3 text-left">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white p-1.5 shadow-soft ring-1 ring-brand-100">
-                        <img src={appUrl('images/logo.png')} alt="Logo E-Presensi SMABA" className="h-full w-full object-contain" />
-                    </div>
-                    <div>
-                        <span className="block text-sm font-extrabold leading-tight tracking-tight text-slate-800">E-Presensi SMABA</span>
-                        <span className="block text-[10px] font-bold text-brand-600">SCAN WORKCODE · PRESENSI DIGITAL</span>
-                    </div>
-                </header>
-
-                <main className="relative z-10 my-6 flex w-full flex-1 items-center justify-center">
-                    <div className={`w-full max-w-md rounded-xl border ${tone.ring} bg-white p-6 text-center shadow-soft-lg`} data-aos="zoom-in">
-                        <div className={`mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full text-2xl ${tone.badge}`} aria-hidden="true">
-                            {content.icon}
+                {localLock && (
+                    <Card className="flex gap-3 p-4" role="status">
+                        <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-status-hadir" aria-hidden="true" />
+                        <div className="min-w-0">
+                            <p className="text-sm font-medium text-ink">Presensi Anda sudah tercatat</p>
+                            <p className="mt-1 text-base font-semibold text-ink">{localLock.participant?.nama}</p>
+                            <p className="text-sm tabular-nums text-ink-2">
+                                {localLock.participant?.nis_nip || localLock.participant?.status || 'Tanpa NIP'}
+                                {localLock.timestamp ? ` · pukul ${localLock.timestamp}` : ''}
+                            </p>
+                            <p className="mt-2 text-sm text-ink-2">Tidak perlu presensi ulang.</p>
                         </div>
-                        <h1 className={`text-lg font-extrabold ${tone.title}`}>{content.title}</h1>
-                        <p className="mt-1 text-xs font-semibold leading-relaxed text-slate-500">{message}</p>
+                    </Card>
+                )}
 
-                        {localLock && (
-                            <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-left" role="status">
-                                <span className="block text-[10px] font-extrabold uppercase tracking-wider text-emerald-700">✓ Perangkat ini sudah presensi</span>
-                                <p className="mt-1 text-sm font-extrabold text-slate-900">{localLock.participant?.nama}</p>
-                                <p className="text-xs font-semibold text-emerald-800">
-                                    {localLock.participant?.nis_nip || localLock.participant?.status || 'Tanpa NIP'}
-                                    {localLock.timestamp ? ` · tercatat pukul ${localLock.timestamp}` : ''}
-                                </p>
-                                <p className="mt-2 text-[11px] font-semibold text-slate-600">Presensi Anda untuk workcode ini sudah tersimpan. Tidak perlu presensi ulang.</p>
-                            </div>
-                        )}
-
-                        {workcode && (
-                            <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left">
-                                <span className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-500">Workcode</span>
-                                <p className="mt-0.5 text-sm font-extrabold text-slate-800">{workcode.nama_workcode}</p>
-                                {(workcode.tanggal || (start && end)) && (
-                                    <dl className="mt-3 grid grid-cols-2 gap-3 text-xs">
-                                        {workcode.tanggal && (
-                                            <div className="col-span-2">
-                                                <dt className="font-bold text-slate-500">Tanggal</dt>
-                                                <dd className="font-extrabold text-slate-700">{formatDate(workcode.tanggal)}</dd>
-                                            </div>
-                                        )}
-                                        {start && end && (
-                                            <>
-                                                <div>
-                                                    <dt className="font-bold text-slate-500">Dibuka</dt>
-                                                    <dd className="font-extrabold text-slate-700">{start} WIB</dd>
-                                                </div>
-                                                <div>
-                                                    <dt className="font-bold text-slate-500">{reason === 'ended' ? 'Ditutup' : 'Ditutup pukul'}</dt>
-                                                    <dd className="font-extrabold text-slate-700">{end} WIB</dd>
-                                                </div>
-                                            </>
-                                        )}
-                                    </dl>
+                {workcode && (
+                    <Card className="p-4">
+                        <p className="text-sm text-ink-2">Kegiatan</p>
+                        <p className="mt-0.5 text-base font-semibold text-ink">{workcode.nama_workcode}</p>
+                        {(workcode.tanggal || (start && end)) && (
+                            <dl className="mt-3 grid grid-cols-2 gap-3 border-t border-line pt-3 text-sm">
+                                {workcode.tanggal && (
+                                    <div className="col-span-2">
+                                        <dt className="text-ink-2">Tanggal</dt>
+                                        <dd className="font-medium text-ink">{formatDate(workcode.tanggal)}</dd>
+                                    </div>
                                 )}
-                            </div>
+                                {start && end && (
+                                    <>
+                                        <div>
+                                            <dt className="text-ink-2">Dibuka</dt>
+                                            <dd className="font-medium tabular-nums text-ink">{start} WIB</dd>
+                                        </div>
+                                        <div>
+                                            <dt className="text-ink-2">Ditutup</dt>
+                                            <dd className="font-medium tabular-nums text-ink">{end} WIB</dd>
+                                        </div>
+                                    </>
+                                )}
+                            </dl>
                         )}
+                    </Card>
+                )}
 
-                        {!localLock && (
-                            <div className="mt-5 text-left">
-                                <span className="block text-[10px] font-extrabold uppercase tracking-wider text-slate-500">Apa yang harus dilakukan?</span>
-                                <ul className="mt-2 space-y-2">
-                                    {content.steps.map((step) => (
-                                        <li key={step} className="flex gap-2 text-xs font-semibold leading-relaxed text-slate-600">
-                                            <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-500" aria-hidden="true" />
-                                            <span>{step}</span>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                        )}
+                {!localLock && (
+                    <section aria-labelledby="next-steps">
+                        <h2 id="next-steps" className="text-sm font-medium text-ink">Yang perlu dilakukan</h2>
+                        <ul className="mt-2 space-y-2">
+                            {content.steps.map((step) => (
+                                <li key={step} className="flex gap-2.5 text-sm leading-relaxed text-ink-2">
+                                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-ink-3" aria-hidden="true" />
+                                    <span>{step}</span>
+                                </li>
+                            ))}
+                        </ul>
+                    </section>
+                )}
 
-                        {hasOtherActiveWorkcode && reason !== 'harian' && (
-                            <p className="mt-5 rounded-2xl border border-brand-100 bg-brand-soft p-3 text-left text-[11px] font-bold leading-relaxed text-brand-700">
-                                Saat ini ada sesi presensi lain yang sedang berlangsung. Pindai QR terbaru yang ditampilkan panitia untuk sesi tersebut.
-                            </p>
-                        )}
+                {hasOtherActiveWorkcode && reason !== 'harian' && (
+                    <p className="rounded-xl border border-line bg-surface-2 p-4 text-sm text-ink">
+                        Ada presensi kegiatan lain yang sedang dibuka. Pindai QR terbaru yang ditampilkan panitia untuk kegiatan itu.
+                    </p>
+                )}
 
-                        {temporary && !localLock && (
-                            <p className="mt-5 flex items-center justify-center gap-2 text-[11px] font-bold text-slate-500" role="status">
-                                <span className="h-2 w-2 animate-pulse rounded-full bg-brand-500" aria-hidden="true" />
-                                Memeriksa status presensi secara otomatis…
-                            </p>
-                        )}
-
-                        {checkedAt && (
-                            <p className="mt-3 text-[10px] font-semibold text-slate-400">Diperiksa pukul {checkedAt} WIB</p>
-                        )}
-                    </div>
-                </main>
-
-                <footer className="relative z-10 flex h-12 flex-none items-center justify-center text-center text-[10px] text-slate-500">
-                    <p>&copy; {new Date().getFullYear()} E-Presensi SMABA.</p>
-                </footer>
+                {(temporary && !localLock) || checkedAt ? (
+                    <p className="text-center text-xs text-ink-2" role="status">
+                        {temporary && !localLock && 'Halaman memeriksa ulang secara otomatis. '}
+                        {checkedAt && `Diperiksa pukul ${checkedAt} WIB.`}
+                    </p>
+                ) : null}
             </div>
-        </>
+        </PublicShell>
     );
 }

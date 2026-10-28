@@ -39,7 +39,9 @@ class AttendanceHistoryController extends Controller
 
         $attendances = Attendance::with(['workcode', 'leaveRequest'])
             ->where('participant_id', $user->participant_id)
-            ->orderBy('created_at', 'desc')
+            // Terbaru menurut tanggal presensi, bukan kapan barisnya dibuat (presensi manual bisa dibuat belakangan).
+            ->orderByDesc('tanggal')
+            ->orderByDesc('id')
             ->paginate($perPage);
 
         return response()->json([

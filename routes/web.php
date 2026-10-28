@@ -18,68 +18,23 @@ use App\Http\Controllers\WorkcodeController;
 use App\Models\Attendance;
 use App\Models\LeaveRequest;
 use App\Models\LocationIntegrityViolation;
-use App\Models\Participant;
 use App\Models\Workcode;
 use App\Support\AdminDashboardStats;
 use App\Support\AdminNotifications;
 use App\Support\PrivateFile;
-use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 
-Route::get('/', function () {
-    $user = auth()->user();
-
-    // Live Stats untuk Guest & Admin
-    $totalParticipants = Participant::count();
-    $totalAttended = Attendance::distinct('participant_id')->count('participant_id');
-    $stats = [
-        'total' => $totalParticipants,
-        'hadir' => $totalAttended,
-        'belum' => $totalParticipants - $totalAttended,
-    ];
-
-    // Ambil 5 aktivitas presensi terbaru (disensor namanya untuk privasi)
-    $recentScans = Attendance::with('participant')
-        ->orderBy('created_at', 'desc')
-        ->take(5)
-        ->get()
-        ->map(function ($attendance) {
-            $name = $attendance->participant->nama ?? 'Unknown';
-            // Sensor: "Dio Alif" menjadi "Dio A."
-            $parts = explode(' ', $name);
-            $maskedName = $parts[0];
-            if (count($parts) > 1) {
-                $maskedName .= ' '.substr($parts[count($parts) - 1], 0, 1).'.';
-            }
-
-            return [
-                'id' => $attendance->id,
-                'nama' => $maskedName,
-                'waktu' => $attendance->created_at->format('H:i'),
-            ];
-        });
-
-    return Inertia::render('Welcome', [
-        'canLogin' => Route::has('login'),
-        'laravelVersion' => Application::VERSION,
-        'phpVersion' => PHP_VERSION,
-        'initialStats' => $stats,
-        'recentScans' => $recentScans,
-    ]);
-});
+// Halaman depan publik: hanya informasi umum. Data kehadiran tidak dikirim ke publik (privasi).
+Route::get('/', fn () => Inertia::render('Welcome'));
 
 Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     // Dashboard route
     Route::get('/dashboard', function () {
         $activeWorkcodes = Workcode::getActiveWorkcodes();
         $activeWorkcode = $activeWorkcodes->first();
-        $totalParticipants = Participant::count();
-        $totalAttended = $activeWorkcode
-            ? Attendance::where('workcode_id', $activeWorkcode->id)->distinct('participant_id')->count('participant_id')
-            : 0;
 
         $pendingLeaveCount = LeaveRequest::where('status_approval', 'pending')->count();
 
@@ -88,11 +43,14 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
             'activeWorkcodes' => $activeWorkcodes,
             'pendingLeaveCount' => $pendingLeaveCount,
             'fakeGpsBlockedToday' => LocationIntegrityViolation::where('blocked', true)->whereDate('created_at', today())->count(),
-            'stats' => [
-                'total' => $totalParticipants,
-                'hadir' => $totalAttended,
-                'belum' => $totalParticipants - $totalAttended,
-            ],
+            'stats' => AdminDashboardStats::presence($activeWorkcode),
+            // Papan Hadir per workcode aktif (yang pertama tampil besar di dashboard).
+            'boards' => $activeWorkcodes->map(fn (Workcode $workcode) => [
+                'id' => $workcode->id,
+                'nama' => $workcode->nama_workcode,
+                'kategori' => $workcode->kategori,
+                'counts' => AdminDashboardStats::board($workcode),
+            ])->values(),
             'weekly' => AdminDashboardStats::weekly(),
             'lateness' => AdminDashboardStats::lateness(),
             'methods' => AdminDashboardStats::methods(),
@@ -131,6 +89,7 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::get('/participants/{participant}', [ParticipantController::class, 'show'])->whereNumber('participant')->name('participants.show');
     Route::put('/participants/{participant}', [ParticipantController::class, 'update'])->name('participants.update');
     Route::post('/participants/{participant}/qr/regenerate', [ParticipantController::class, 'regenerateQrToken'])->name('participants.qr.regenerate');
+    Route::put('/participants/{participant}/password', [ParticipantController::class, 'updatePassword'])->name('participants.password.update');
     Route::get('/participants/{participant}/face-history', [ParticipantController::class, 'faceHistory'])->name('participants.face-history');
     Route::delete('/participants/{participant}', [ParticipantController::class, 'destroy'])->name('participants.destroy');
 
@@ -255,5 +214,12 @@ Route::get('/storage/{path}', function (string $path) {
 Route::get('/verify-signature/{workcode}', [VerificationController::class, 'verify'])
     ->middleware(['signed', 'throttle:60,1'])
     ->name('signature.verify');
+
+// Katalog komponen tampilan baru, hanya untuk pengembangan lokal.
+if (app()->isLocal()) {
+    Route::get('/_ui', fn () => Inertia::render('Dev/UiKit'))
+        ->middleware(['auth', 'admin'])
+        ->name('dev.ui');
+}
 
 require __DIR__.'/auth.php';

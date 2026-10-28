@@ -6,6 +6,7 @@ use App\Support\FaceAttemptLimiter;
 use App\Support\FaceDescriptor;
 use App\Support\FaceMatcher;
 use App\Support\PrivateFile;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
@@ -14,10 +15,68 @@ class Participant extends Model
 {
     use HasFactory;
 
+    /** Status pegawai tidak tetap: tanpa NIP (diganti ID khusus) dan tidak masuk laporan presensi harian. */
+    public const NON_PERMANENT_STATUSES = ['GTT', 'PTT'];
+
+    /** Tahun "TMT" pada ID khusus GTT/PTT (posisi tahun TMT CPNS pada NIP). */
+    public const STAFF_ID_TMT_YEAR = '2026';
+
+    /** Kode jenis kelamin pada NIP: 1 = laki-laki, 2 = perempuan. */
+    public const GENDER_CODES = ['L' => '1', 'P' => '2'];
+
+    public static function isNonPermanent(?string $status): bool
+    {
+        return in_array($status, self::NON_PERMANENT_STATUSES, true);
+    }
+
+    /**
+     * 15 digit pertama ID khusus GTT/PTT, mengikuti format NIP PNS: tanggal lahir (YYYYMMDD) +
+     * tahun TMT (selalu 2026) + bulan didaftarkan (MM) + kode jenis kelamin (1/2). Null bila tanggal
+     * lahir atau jenis kelamin belum diisi.
+     */
+    public function staffIdPrefix(): ?string
+    {
+        $gender = self::GENDER_CODES[$this->jenis_kelamin] ?? null;
+
+        if (! $this->tanggal_lahir || ! $gender) {
+            return null;
+        }
+
+        return $this->tanggal_lahir->format('Ymd')
+            .self::STAFF_ID_TMT_YEAR
+            .($this->created_at ?? now())->format('m')
+            .$gender;
+    }
+
+    /**
+     * ID khusus GTT/PTT 18 digit: awalan di atas + nomor urut 3 digit (001, 002, ...) yang belum dipakai
+     * peserta lain dengan awalan sama (termasuk NIP asli). Dipakai sebagai username & password awal.
+     */
+    public function generateStaffId(): ?string
+    {
+        $prefix = $this->staffIdPrefix();
+
+        if ($prefix === null) {
+            return null;
+        }
+
+        $lastNumber = static::query()
+            ->where('nis_nip', 'like', $prefix.'___')
+            ->when($this->exists, fn (Builder $query) => $query->whereKeyNot($this->getKey()))
+            ->pluck('nis_nip')
+            ->filter(fn ($nip) => preg_match('/^\d{18}$/', $nip))
+            ->map(fn ($nip) => (int) substr($nip, -3))
+            ->max() ?? 0;
+
+        return $prefix.str_pad((string) ($lastNumber + 1), 3, '0', STR_PAD_LEFT);
+    }
+
     protected $fillable = [
         'nama',
         'nis_nip',
         'status',
+        'tanggal_lahir',
+        'jenis_kelamin',
         'qr_token',
         'face_descriptor',
         'face_status',
@@ -26,6 +85,7 @@ class Participant extends Model
 
     protected $casts = [
         'face_descriptor' => 'array',
+        'tanggal_lahir' => 'date',
     ];
 
     /**
@@ -41,6 +101,8 @@ class Participant extends Model
         'photo_path',
         // Isi QR pribadi: siapa pun yang memegangnya bisa dipresensikan lewat scanner.
         'qr_token',
+        // Data pribadi untuk ID GTT/PTT; dikirim eksplisit hanya di halaman admin.
+        'tanggal_lahir',
     ];
 
     /**
@@ -92,6 +154,25 @@ class Participant extends Model
             }
         });
 
+        // GTT/PTT tidak memakai NIP: nis_nip selalu ID khusus dari tanggal lahir & jenis kelamin.
+        // ID lama dipertahankan selama awalannya masih cocok (nomor urut tidak berubah tiap disimpan);
+        // diganti bila tanggal lahir/jenis kelamin dikoreksi atau peserta baru menjadi GTT/PTT.
+        // Tanpa kedua data itu, belum ada ID (dan belum ada akun login).
+        static::saving(function (Participant $participant) {
+            if (! self::isNonPermanent($participant->status)) {
+                return;
+            }
+
+            $prefix = $participant->staffIdPrefix();
+            $current = $participant->exists && self::isNonPermanent($participant->getOriginal('status'))
+                ? $participant->getOriginal('nis_nip')
+                : null;
+
+            $participant->nis_nip = $prefix === null
+                ? null
+                : (is_string($current) && preg_match('/^'.$prefix.'\d{3}$/', $current) ? $current : $participant->generateStaffId());
+        });
+
         // Hapus seluruh file pribadi peserta. Path dikumpulkan sebelum delete (baris turunan
         // terhapus lewat cascade DB), file baru dihapus setelah baris benar-benar terhapus.
         static::deleting(function (Participant $participant) {
@@ -103,6 +184,13 @@ class Participant extends Model
     }
 
     /** Wajah yang pernah disetujui admin, terbaru dulu. */
+    /** Hanya pegawai tetap (bukan GTT/PTT). Status kosong tetap ikut. */
+    public function scopePermanentStaff(Builder $query): Builder
+    {
+        return $query->where(fn (Builder $query) => $query->whereNull('status')
+            ->orWhereNotIn('status', self::NON_PERMANENT_STATUSES));
+    }
+
     public function faceHistories()
     {
         return $this->hasMany(FaceHistory::class)->orderByDesc('approved_at')->orderByDesc('id');

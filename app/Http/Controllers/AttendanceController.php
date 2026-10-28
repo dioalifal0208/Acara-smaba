@@ -9,12 +9,18 @@ use App\Models\Setting;
 use App\Models\Workcode;
 use App\Services\AttendanceValidationService;
 use App\Services\QrCodeService;
+use App\Support\AdminDashboardStats;
 use App\Support\PrivateFile;
 use Carbon\Carbon;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
+use PhpOffice\PhpSpreadsheet\Cell\Coordinate;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class AttendanceController extends Controller
 {
@@ -28,20 +34,10 @@ class AttendanceController extends Controller
     public function scanner()
     {
         $activeWorkcode = Workcode::getActive();
-        $totalParticipants = Participant::count();
-        $totalAttended = $activeWorkcode
-            ? Attendance::where('workcode_id', $activeWorkcode->id)
-                ->distinct('participant_id')
-                ->count('participant_id')
-            : 0;
 
         return Inertia::render('Scanner/Index', [
             'activeWorkcode' => $activeWorkcode,
-            'initialStats' => [
-                'total' => $totalParticipants,
-                'hadir' => $totalAttended,
-                'belum' => $totalParticipants - $totalAttended,
-            ],
+            'initialStats' => AdminDashboardStats::presence($activeWorkcode),
         ]);
     }
 
@@ -119,7 +115,7 @@ class AttendanceController extends Controller
             ->where('participant_id', $participant->id)
             ->when(
                 $activeWorkcode->kategori === 'harian',
-                fn ($q) => $q->whereDate('created_at', now()->toDateString())
+                fn ($q) => $q->whereDate('tanggal', now()->toDateString())
             )
             ->first();
 
@@ -180,12 +176,6 @@ class AttendanceController extends Controller
             ? 'Presensi berhasil, tapi terlambat '.$lateFormatted.'.'
             : 'Presensi berhasil dicatat!';
 
-        // Hitung stats terbaru
-        $totalParticipants = Participant::count();
-        $totalAttended = Attendance::where('workcode_id', $activeWorkcode->id)
-            ->distinct('participant_id')
-            ->count('participant_id');
-
         return response()->json([
             'status' => $status,
             'message' => $message,
@@ -198,11 +188,7 @@ class AttendanceController extends Controller
             'is_late' => $isLate,
             'late_minutes' => $lateMinutes,
             'late_formatted' => $lateFormatted,
-            'stats' => [
-                'total' => $totalParticipants,
-                'hadir' => $totalAttended,
-                'belum' => $totalParticipants - $totalAttended,
-            ],
+            'stats' => AdminDashboardStats::presence($activeWorkcode),
         ]);
     }
 
@@ -236,15 +222,18 @@ class AttendanceController extends Controller
         $attendances = [];
         $stats = ['total' => 0, 'hadir' => 0, 'belum' => 0, 'izin' => 0, 'sakit' => 0, 'alpha' => 0];
         $participants = [];
+        $period = null;
 
         if ($selectedWorkcode) {
-            $allParticipants = Participant::orderBy('nama')->get();
+            $allParticipants = $this->reportParticipants($selectedWorkcode);
             $participants = $allParticipants;
             $stats['total'] = $allParticipants->count();
 
             if ($selectedWorkcode->kategori === 'harian') {
-                // Rekap harian: hitung alpha, izin, sakit, lupa_absen, total terlambat per peserta
-                $attendances = $this->buildDailyRecap($selectedWorkcode, $allParticipants);
+                // Rekap harian per bulan: hitung alpha, izin, sakit, lupa_absen, total terlambat per peserta
+                $month = $this->reportMonth($request);
+                $period = $this->periodPayload($month);
+                $attendances = $this->buildDailyRecap($selectedWorkcode, $allParticipants, $month);
                 $stats['hadir'] = collect($attendances)->where('status', '!=', 'alpha')->count();
             } else {
                 // Kegiatan sekali: list presensi per peserta
@@ -290,6 +279,8 @@ class AttendanceController extends Controller
             'selectedWorkcode' => $selectedWorkcode,
             'mediaRetentionDays' => config('attendance.media_retention_days', 30),
             'stats' => $stats,
+            // Periode rekap workcode harian (satu bulan penuh); null untuk kegiatan.
+            'period' => $period,
             'attendances' => $attendances,
             'participants' => $participants,
             'kepalaSekolahNama' => $namaKepsek,
@@ -308,10 +299,11 @@ class AttendanceController extends Controller
         $attendances = Attendance::where('workcode_id', $workcode->id)
             ->where('participant_id', $participant->id)
             ->when($workcode->kategori === 'harian', function ($q) use ($year, $month) {
-                $q->whereYear('created_at', $year)
-                    ->whereMonth('created_at', $month);
+                $q->whereYear('tanggal', $year)
+                    ->whereMonth('tanggal', $month);
             })
-            ->orderBy('created_at')
+            ->orderBy('tanggal')
+            ->orderBy('id')
             ->get()
             ->map(function ($att) use ($workcode) {
                 $late = ($att->status ?? 'hadir') === 'hadir' && $att->waktu_hadir && $workcode->isLateAt($att->waktu_hadir);
@@ -443,66 +435,70 @@ class AttendanceController extends Controller
     /**
      * Export data presensi ke CSV.
      */
-    public function exportAttendance(Workcode $workcode)
+    public function exportAttendance(Workcode $workcode, Request $request)
     {
-        $allParticipants = Participant::orderBy('nama')->get();
-        $filename = 'rekap_presensi_'.str_replace(' ', '_', $workcode->nama_workcode).'_'.now()->format('Ymd_His').'.csv';
+        $allParticipants = $this->reportParticipants($workcode);
+        $month = $workcode->kategori === 'harian' ? $this->reportMonth($request) : null;
+        $filename = 'rekap_presensi_'.preg_replace('/[^A-Za-z0-9_-]+/', '_', $workcode->nama_workcode)
+            .($month ? '_'.$month->format('Y-m') : '').'_'.now()->format('Ymd_His').'.xlsx';
 
-        $headers = [
-            'Content-Type' => 'text/csv; charset=UTF-8',
-            'Content-Disposition' => 'attachment; filename="'.$filename.'"',
-        ];
+        if ($workcode->kategori === 'harian') {
+            $header = ['No', 'Nama', 'NIS/NIP', 'Status Pegawai', 'Alpha', 'Izin', 'Sakit', 'Lupa Absen', 'Total Terlambat (Menit)'];
+            $rows = collect($this->buildDailyRecap($workcode, $allParticipants, $month))->values()->map(fn ($r, $i) => [
+                $i + 1,
+                $r['nama'],
+                $r['nis_nip'],
+                $r['status_pegawai'] ?? '',
+                $r['total_alpha'] ?? 0,
+                $r['total_izin'] ?? 0,
+                $r['total_sakit'] ?? 0,
+                $r['total_lupa_absen'] ?? 0,
+                $r['total_menit_terlambat'] ?? 0,
+            ]);
+        } else {
+            $header = ['No', 'Nama', 'NIS/NIP', 'Status Pegawai', 'Waktu Presensi', 'Status', 'Metode Presensi'];
+            $attendanceRecords = Attendance::where('workcode_id', $workcode->id)->get()->keyBy('participant_id');
+            $rows = $allParticipants->values()->map(function (Participant $p, int $i) use ($attendanceRecords) {
+                $att = $attendanceRecords->get($p->id);
 
-        $callback = function () use ($workcode, $allParticipants) {
-            $file = fopen('php://output', 'w');
-            // UTF-8 BOM for Excel compatibility
-            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
+                return [
+                    $i + 1,
+                    $p->nama,
+                    $p->nis_nip,
+                    $p->status ?? '',
+                    $att?->waktu_hadir?->format('H:i:s') ?? '-',
+                    $att ? ($att->status ?? 'hadir') : 'alpha',
+                    $this->attendanceMethodLabel($att) ?? '-',
+                ];
+            });
+        }
 
-            if ($workcode->kategori === 'harian') {
-                fputcsv($file, ['No', 'Nama', 'NIS/NIP', 'Status Pegawai', 'Alpha', 'Izin', 'Sakit', 'Lupa Absen', 'Total Terlambat (Menit)']);
+        $spreadsheet = new Spreadsheet;
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Rekap Presensi');
+        $sheet->fromArray($header, null, 'A1');
 
-                $recaps = $this->buildDailyRecap($workcode, $allParticipants);
-                $no = 1;
-                foreach ($recaps as $r) {
-                    fputcsv($file, [
-                        $no++,
-                        $r['nama'],
-                        $r['nis_nip'],
-                        $r['status_pegawai'] ?? '',
-                        $r['total_alpha'] ?? 0,
-                        $r['total_izin'] ?? 0,
-                        $r['total_sakit'] ?? 0,
-                        $r['total_lupa_absen'] ?? 0,
-                        $r['total_menit_terlambat'] ?? 0,
-                    ]);
-                }
-            } else {
-                fputcsv($file, ['No', 'Nama', 'NIS/NIP', 'Status Pegawai', 'Waktu Presensi', 'Status', 'Metode Presensi']);
-
-                $attendanceRecords = Attendance::where('workcode_id', $workcode->id)
-                    ->with('participant')
-                    ->get()
-                    ->keyBy('participant_id');
-
-                $no = 1;
-                foreach ($allParticipants as $p) {
-                    $att = $attendanceRecords->get($p->id);
-                    fputcsv($file, [
-                        $no++,
-                        $p->nama,
-                        $p->nis_nip,
-                        $p->status ?? '',
-                        $att?->waktu_hadir?->format('H:i:s') ?? '-',
-                        $att ? ($att->status ?? 'hadir') : 'alpha',
-                        $this->attendanceMethodLabel($att) ?? '-',
-                    ]);
-                }
+        foreach ($rows as $index => $row) {
+            foreach ($row as $column => $value) {
+                $cell = Coordinate::stringFromColumnIndex($column + 1).($index + 2);
+                // Tipe sel ditulis eksplisit (tidak lewat value binder global): angka sebagai angka,
+                // teks sebagai string agar NIS/NIP 18 digit tidak menjadi notasi ilmiah di Excel.
+                is_int($value)
+                    ? $sheet->setCellValueExplicit($cell, $value, DataType::TYPE_NUMERIC)
+                    : $sheet->setCellValueExplicit($cell, (string) $value, DataType::TYPE_STRING);
             }
+        }
 
-            fclose($file);
-        };
+        $lastColumn = Coordinate::stringFromColumnIndex(count($header));
+        $sheet->getStyle("A1:{$lastColumn}1")->getFont()->setBold(true);
+        foreach (range(1, count($header)) as $column) {
+            $sheet->getColumnDimension(Coordinate::stringFromColumnIndex($column))->setAutoSize(true);
+        }
 
-        return response()->stream($callback, 200, $headers);
+        return response()->streamDownload(fn () => (new Xlsx($spreadsheet))->save('php://output'), $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Cache-Control' => 'max-age=0',
+        ]);
     }
 
     /**
@@ -527,11 +523,6 @@ class AttendanceController extends Controller
      */
     private function scanJsonResponse(string $status, Participant $participant, Workcode $workcode, ?string $message = null)
     {
-        $totalParticipants = Participant::count();
-        $totalAttended = Attendance::where('workcode_id', $workcode->id)
-            ->distinct('participant_id')
-            ->count('participant_id');
-
         $defaultMessages = [
             'already' => 'Peserta sudah melakukan presensi.',
             'success' => 'Presensi berhasil dicatat!',
@@ -547,32 +538,68 @@ class AttendanceController extends Controller
                 'nis_nip' => $participant->nis_nip,
             ],
             'timestamp' => now()->format('H:i:s'),
-            'stats' => [
-                'total' => $totalParticipants,
-                'hadir' => $totalAttended,
-                'belum' => $totalParticipants - $totalAttended,
-            ],
+            'stats' => AdminDashboardStats::presence($workcode),
         ]);
     }
 
     /**
-     * Build daily recap data per participant.
+     * Bulan rekap presensi harian dari ?bulan=YYYY-MM (mis. untuk mencetak bulan lalu); bawaan bulan berjalan.
      */
-    private function buildDailyRecap(Workcode $workcode, $allParticipants): array
+    private function reportMonth(Request $request): CarbonImmutable
+    {
+        $bulan = $request->input('bulan');
+
+        if (is_string($bulan) && preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $bulan)) {
+            return CarbonImmutable::createFromFormat('!Y-m', $bulan)->startOfMonth();
+        }
+
+        return CarbonImmutable::now()->startOfMonth();
+    }
+
+    /** Periode rekap untuk halaman laporan dan cetak: tanggal 1 s.d. akhir bulan (28–31). */
+    private function periodPayload(CarbonImmutable $month): array
+    {
+        $start = $month->startOfMonth();
+        $end = $month->endOfMonth();
+
+        return [
+            'month' => $start->format('Y-m'),
+            'start' => $start->toDateString(),
+            'end' => $end->toDateString(),
+            'label' => $start->locale('id')->isoFormat('D MMMM YYYY').' s.d. '.$end->locale('id')->isoFormat('D MMMM YYYY'),
+        ];
+    }
+
+    /**
+     * Peserta yang masuk laporan workcode. Harian: peserta yang wajib presensi di workcode itu, tanpa
+     * GTT/PTT (tidak masuk laporan presensi harian). Kegiatan: semua peserta (perilaku lama).
+     */
+    private function reportParticipants(Workcode $workcode)
+    {
+        if ($workcode->kategori === 'harian') {
+            return $workcode->eligibleParticipants()->permanentStaff()->orderBy('nama')->get();
+        }
+
+        return Participant::orderBy('nama')->get();
+    }
+
+    /**
+     * Rekap harian per peserta untuk satu bulan (berdasarkan kolom tanggal).
+     *
+     * Izin/sakit dihitung dari baris presensi saja: persetujuan izin sudah membuat satu baris `izin` per hari
+     * (AdminLeaveController). Sakit = baris `sakit`, atau `izin` yang jenis izinnya sakit. Dulu pengajuan izin
+     * ikut dihitung lagi sehingga satu hari izin terhitung dua kali (dan izin tidak absen pulang ikut terhitung).
+     */
+    private function buildDailyRecap(Workcode $workcode, $allParticipants, CarbonImmutable $month): array
     {
         $attendanceRecords = Attendance::where('workcode_id', $workcode->id)
+            ->whereBetween('tanggal', [$month->startOfMonth()->toDateString(), $month->endOfMonth()->toDateString()])
+            ->with('leaveRequest')
             ->get()
             ->groupBy('participant_id');
 
-        // Ambil leave requests yang disetujui untuk workcode ini
-        $leaveRecords = LeaveRequest::where('workcode_id', $workcode->id)
-            ->where('status_approval', 'approved')
-            ->get()
-            ->groupBy('participant_id');
-
-        return $allParticipants->map(function ($p) use ($attendanceRecords, $leaveRecords, $workcode) {
+        return $allParticipants->map(function ($p) use ($attendanceRecords, $workcode) {
             $participantAttendances = $attendanceRecords->get($p->id, collect());
-            $participantLeaves = $leaveRecords->get($p->id, collect());
 
             $totalAlpha = 0;
             $totalIzin = 0;
@@ -588,7 +615,8 @@ class AttendanceController extends Controller
                         $totalAlpha++;
                         break;
                     case 'izin':
-                        $totalIzin++;
+                        // Persetujuan izin menyimpan semua jenis (termasuk sakit) sebagai status izin.
+                        str_contains((string) $att->leaveRequest?->jenis_izin, 'sakit') ? $totalSakit++ : $totalIzin++;
                         break;
                     case 'sakit':
                         $totalSakit++;
@@ -596,22 +624,14 @@ class AttendanceController extends Controller
                     case 'lupa_absen':
                         $totalLupaAbsen++;
                         break;
+                    case 'libur':
+                        break;
                     case 'hadir':
                     default:
                         if ($att->waktu_hadir) {
                             $totalMenitTerlambat += $workcode->lateMinutes($att->waktu_hadir);
                         }
                         break;
-                }
-            }
-
-            // Tambahkan izin/sakit dari leave requests yang tidak ada attendance record-nya
-            foreach ($participantLeaves as $leave) {
-                $jenis = $leave->jenis_izin ?? $leave->tipe_izin ?? '';
-                if (str_contains($jenis, 'sakit')) {
-                    $totalSakit++;
-                } else {
-                    $totalIzin++;
                 }
             }
 

@@ -112,7 +112,7 @@ class AttendanceValidationService
         return Attendance::where('workcode_id', $workcode->id)
             ->where('device_hash', $deviceHash)
             ->when($participantId !== null, fn ($query) => $query->where('participant_id', '!=', $participantId))
-            ->whereDate('created_at', now()->toDateString())
+            ->whereDate('tanggal', now()->toDateString())
             ->whereHas('participant')
             ->exists();
     }
@@ -205,7 +205,7 @@ class AttendanceValidationService
             ->where('participant_id', $participant->id)
             ->when(
                 $workcode->kategori === 'harian',
-                fn ($query) => $query->whereDate('created_at', now()->toDateString())
+                fn ($query) => $query->whereDate('tanggal', now()->toDateString())
             );
 
         return $attendanceQuery->exists();

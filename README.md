@@ -295,9 +295,13 @@ Sekitar 110 test mencakup autentikasi, workcode, scanner QR, self check-in (GPS 
 Produksi berjalan di shared hosting (Hostinger) melalui SSH. Satu perintah `deploy` menjalankan:
 
 1. seluruh test Laravel, lalu `npm run build`;
-2. commit perubahan dan push branch `main` ke GitHub;
-3. di server: mode maintenance, `git pull`, `composer install --no-dev --no-scripts` + `package:discover`, `migrate --force`, cache config & view;
-4. menyalin `public/` ke folder web, mengarahkan `index.php` ke folder aplikasi, lalu mengaktifkan aplikasi kembali dan memeriksa website.
+2. test unit dan build APK rilis Android (`ANDROID_DIR`); bila repo Android punya perubahan yang belum di-commit, `versionCode` dan patch `versionName` dinaikkan otomatis;
+3. commit perubahan dan push branch `main` web dan Android ke GitHub;
+4. di server: mode maintenance, `git pull`, `composer install --no-dev --no-scripts` + `package:discover`, `migrate --force`, cache config & view;
+5. menyalin `public/` ke folder web, mengarahkan `index.php` ke folder aplikasi, lalu mengaktifkan aplikasi kembali dan memeriksa website;
+6. menyalin APK ke `<ANDROID_DIR>/dist/Presensi-SMABA-v<versi>.apk` dan mencetak lokasinya.
+
+Bila test atau build mana pun gagal, deploy berhenti sebelum ada yang dikirim ke GitHub atau server. `ANDROID_MIN_VERSION_CODE` di server tidak diubah otomatis; naikkan manual bila versi lama perlu dipaksa update.
 
 Persiapan sekali saja:
 

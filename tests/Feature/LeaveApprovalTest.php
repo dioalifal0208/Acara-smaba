@@ -95,6 +95,43 @@ class LeaveApprovalTest extends TestCase
         $this->assertSame(3, Attendance::where('leave_request_id', $leaveRequest->id)->count());
     }
 
+    public function test_failed_approval_rolls_back_status_and_attendances(): void
+    {
+        [$admin, $participant, $workcode] = $this->createApprovalContext();
+        $leaveRequest = $this->createLeaveRequest($participant, $workcode, 'izin_penuh', '2026-10-02');
+
+        // Gagal saat membuat baris tanggal kedua dari tiga.
+        Attendance::creating(function (Attendance $attendance) {
+            if ($attendance->tanggal === '2026-10-01') {
+                throw new \RuntimeException('Simulasi gagal menyimpan presensi.');
+            }
+        });
+
+        $this->withoutExceptionHandling();
+        try {
+            $this->actingAs($admin)->post(route('admin.leave.approve', $leaveRequest));
+            $this->fail('Persetujuan seharusnya gagal.');
+        } catch (\RuntimeException $e) {
+            $this->assertSame('Simulasi gagal menyimpan presensi.', $e->getMessage());
+        }
+
+        $this->assertSame('pending', $leaveRequest->fresh()->status_approval);
+        $this->assertSame(0, Attendance::count());
+    }
+
+    public function test_processed_request_cannot_be_approved_or_rejected_again(): void
+    {
+        [$admin, $participant, $workcode] = $this->createApprovalContext();
+        $leaveRequest = $this->createLeaveRequest($participant, $workcode, 'izin_penuh');
+
+        $this->actingAs($admin)->post(route('admin.leave.approve', $leaveRequest))->assertSessionHas('success');
+        $this->actingAs($admin)->post(route('admin.leave.approve', $leaveRequest))->assertSessionHas('error');
+        $this->actingAs($admin)->post(route('admin.leave.reject', $leaveRequest))->assertSessionHas('error');
+
+        $this->assertSame('approved', $leaveRequest->fresh()->status_approval);
+        $this->assertSame(1, Attendance::where('leave_request_id', $leaveRequest->id)->count());
+    }
+
     private function createApprovalContext(): array
     {
         $admin = User::factory()->create(['role' => 'admin']);

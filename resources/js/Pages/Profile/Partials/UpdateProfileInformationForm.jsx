@@ -1,118 +1,41 @@
-import InputError from '@/Components/InputError';
-import InputLabel from '@/Components/InputLabel';
-import PrimaryButton from '@/Components/PrimaryButton';
-import TextInput from '@/Components/TextInput';
-import { Transition } from '@headlessui/react';
+import { Button, Field, Input, Section } from '@/ui';
 import { Link, useForm, usePage } from '@inertiajs/react';
+import { Check } from 'lucide-react';
 
-export default function UpdateProfileInformation({
-    mustVerifyEmail,
-    status,
-    className = '',
-}) {
+export default function UpdateProfileInformation({ mustVerifyEmail, status }) {
     const user = usePage().props.auth.user;
-
-    const { data, setData, patch, errors, processing, recentlySuccessful } =
-        useForm({
-            name: user.name,
-            email: user.email,
-        });
+    const { data, setData, patch, errors, processing, recentlySuccessful, isDirty } = useForm({ name: user.name, email: user.email });
 
     const submit = (e) => {
         e.preventDefault();
-
-        patch(route('profile.update'));
+        patch(route('profile.update'), { preserveScroll: true });
     };
 
     return (
-        <section className={className}>
-            <header>
-                <h2 className="text-base font-semibold text-neutral-800">
-                    Informasi Profil
-                </h2>
-
-                <p className="mt-0.5 text-sm text-neutral-500">
-                    Perbarui informasi profil dan alamat email akun Anda.
-                </p>
-            </header>
-
-            <form onSubmit={submit} className="mt-6 space-y-6">
-                <div>
-                    <InputLabel htmlFor="name" value="Nama" />
-
-                    <TextInput
-                        id="name"
-                        className="mt-1 block w-full"
-                        value={data.name}
-                        onChange={(e) => setData('name', e.target.value)}
-                        required
-                        isFocused
-                        autoComplete="name"
-                    />
-
-                    <InputError className="mt-2" message={errors.name} />
-                </div>
-
-                <div>
-                    <InputLabel htmlFor="email" value="Email" />
-
-                    <TextInput
-                        id="email"
-                        type="email"
-                        className="mt-1 block w-full"
-                        value={data.email}
-                        onChange={(e) => setData('email', e.target.value)}
-                        required
-                        autoComplete="username"
-                    />
-
-                    <InputError className="mt-2" message={errors.email} />
-                </div>
+        <Section title="Informasi profil" description="Nama dan email yang dipakai untuk masuk.">
+            <form onSubmit={submit} className="max-w-xl space-y-4">
+                <Field label="Nama" required error={errors.name}>
+                    <Input value={data.name} onChange={(e) => setData('name', e.target.value)} autoComplete="name" />
+                </Field>
+                <Field label="Email" required error={errors.email}>
+                    <Input type="email" value={data.email} onChange={(e) => setData('email', e.target.value)} autoComplete="username" />
+                </Field>
 
                 {mustVerifyEmail && user.email_verified_at === null && (
-                    <div>
-                        <p className="mt-2 text-sm text-slate-800">
-                            Alamat email Anda belum terverifikasi. 
-                            <Link
-                                href={route('verification.send')}
-                                method="post"
-                                as="button"
-                                className="rounded-md text-sm text-slate-600 underline hover:text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
-                            >
-                                Kirim ulang email verifikasi.
-                            </Link>
-                        </p>
-
-                        {status === 'verification-link-sent' && (
-                            <div className="mt-2 text-sm font-medium text-green-600">
-                                Link verifikasi baru sudah dikirim ke email Anda.
-                            </div>
-                        )}
-                    </div>
+                    <p className="text-sm text-ink-2">
+                        Email Anda belum terverifikasi.{' '}
+                        <Link href={route('verification.send')} method="post" as="button" className="font-medium text-accent hover:underline">
+                            Kirim ulang email verifikasi
+                        </Link>
+                        {status === 'verification-link-sent' && <span className="mt-1 block text-status-hadir">Tautan verifikasi baru sudah dikirim.</span>}
+                    </p>
                 )}
 
-                <hr className="hr-fade" />
-                <div className="flex items-center gap-4">
-                    <button
-                        disabled={processing}
-                        className="btn-brand"
-                    >
-                        {processing ? 'Menyimpan...' : 'Simpan Perubahan'}
-                    </button>
-
-                    <Transition
-                        show={recentlySuccessful}
-                        enter="transition ease-in-out"
-                        enterFrom="opacity-0"
-                        leave="transition ease-in-out"
-                        leaveTo="opacity-0"
-                    >
-                        <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-600">
-                            Tersimpan
-                        </p>
-                    </Transition>
+                <div className="flex items-center gap-3">
+                    <Button variant="primary" type="submit" loading={processing} disabled={!isDirty}>Simpan perubahan</Button>
+                    {recentlySuccessful && <p className="flex items-center gap-1 text-sm text-status-hadir" role="status"><Check className="h-4 w-4" aria-hidden="true" />Tersimpan</p>}
                 </div>
             </form>
-        </section>
+        </Section>
     );
 }

@@ -23,6 +23,14 @@ Schedule::call(fn () => Artisan::call('attendance:calculate-alpha'))
     ->everyFiveMinutes()
     ->withoutOverlapping();
 
+// Samakan is_active kegiatan terjadwal dengan jam aktifnya dan kirim push FCM saat dibuka/ditutup.
+// Bila cron produksi berjalan tiap 5 menit, push terlambat paling lama 5 menit; status presensinya
+// sendiri tetap tepat waktu karena dihitung dari jadwal (Workcode::isEffectivelyActive).
+Schedule::call(fn () => Artisan::call('workcode:auto-activate'))
+    ->name('workcode:auto-activate')
+    ->everyMinute()
+    ->withoutOverlapping();
+
 // Foto & tanda tangan presensi hanya disimpan attendance.media_retention_days (bawaan 30 hari).
 Schedule::call(fn () => Artisan::call('attendance:prune-media'))
     ->name('attendance:prune-media')

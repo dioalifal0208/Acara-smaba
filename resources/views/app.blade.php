@@ -3,7 +3,8 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta name="theme-color" content="#2f9338">
+        <meta name="theme-color" content="#f6f7f5" media="(prefers-color-scheme: light)">
+        <meta name="theme-color" content="#121513" media="(prefers-color-scheme: dark)">
         <meta name="csrf-token" content="{{ csrf_token() }}">
         <meta name="app-url" content="{{ url('/') }}">
         <meta name="google-maps-api-key" content="{{ config('services.google_maps.key') }}">
@@ -32,13 +33,21 @@
         <link rel="preconnect" href="https://fonts.bunny.net">
         <link href="https://fonts.bunny.net/css?family=inter:400,500,600,700&display=swap" rel="stylesheet" />
 
+        <!-- Pilihan tampilan (Terang/Gelap) dipasang sebelum halaman tampil agar tidak berkedip; lihat resources/js/ui/theme.js -->
+        <script>
+            try {
+                var uiTheme = localStorage.getItem('ui-theme');
+                if (uiTheme === 'light' || uiTheme === 'dark') document.documentElement.dataset.theme = uiTheme;
+            } catch (e) {}
+        </script>
+
         <!-- Scripts -->
         @routes
         @viteReactRefresh
         @vite(['resources/js/app.jsx', "resources/js/Pages/{$page['component']}.jsx"])
         @inertiaHead
     </head>
-    <body class="bg-canvas font-sans antialiased">
+    <body class="font-sans antialiased">
         @inertia
     </body>
 </html>

@@ -322,7 +322,7 @@ export default function FaceEnrollmentCamera({ onComplete, className = '', subje
                         </svg>
                     </div>
                     <h3 className="text-center text-sm font-extrabold">Persetujuan Data Wajah</h3>
-                    <ul className="mt-3 space-y-1.5 text-[11px] leading-relaxed text-slate-300 list-disc pl-4">
+                    <ul className="mt-3 space-y-1.5 text-xs leading-relaxed text-slate-300 list-disc pl-4">
                         <li>Foto dan data titik wajah {subjectLabel} disimpan <strong className="text-white">hanya untuk presensi</strong> di SMA Negeri 1 Babat.</li>
                         <li>Data disimpan di server sekolah secara privat dan hanya bisa dilihat admin presensi{subjectLabel === 'Anda' ? ' dan Anda sendiri' : ''}.</li>
                         <li>Data wajah dihapus saat data peserta dihapus atau bila {subjectLabel === 'Anda' ? 'Anda' : 'peserta'} meminta penghapusan kepada admin.</li>
@@ -361,8 +361,8 @@ export default function FaceEnrollmentCamera({ onComplete, className = '', subje
                 <div className="absolute top-3 inset-x-3 z-20">
                     <div className="rounded-2xl bg-slate-900/75 backdrop-blur-md border border-white/10 px-3.5 py-2.5 text-white">
                         <div className="flex items-center justify-between gap-2">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-white/60">{stage === 'samples' ? 'Langkah 1 dari 2 · Wajah menghadap depan' : 'Langkah 2 dari 2 · Verifikasi wajah hidup'}</p>
-                            <span className={`text-[10px] font-black ${timeLeft <= 15 ? 'text-rose-300' : 'text-white/70'}`}>{timeLeft}s</span>
+                            <p className="text-xs font-semibold text-white/75">{stage === 'samples' ? 'Langkah 1 dari 2 · Wajah menghadap depan' : 'Langkah 2 dari 2 · Verifikasi wajah hidup'}</p>
+                            <span className={`text-xs font-bold tabular-nums ${timeLeft <= 15 ? 'text-rose-300' : 'text-white/70'}`}>{timeLeft}s</span>
                         </div>
                         <p className="text-sm font-extrabold leading-snug mt-0.5">{stage === 'samples' ? 'Lihat lurus ke kamera dan tahan posisi' : 'Wajah biasa dulu, lalu tersenyum saat diminta'}</p>
                     </div>
@@ -378,7 +378,7 @@ export default function FaceEnrollmentCamera({ onComplete, className = '', subje
                     <div className="mt-2 h-1.5 rounded-full bg-white/20 overflow-hidden">
                         <div className="h-full bg-emerald-400 transition-all duration-300" style={{ width: `${progress}%` }} />
                     </div>
-                    <p className="mt-1 text-center text-[10px] font-semibold text-white/70">
+                    <p className="mt-1 text-center text-xs font-medium text-white/80">
                         {stage === 'samples' ? `${captured} / ${FRONT_SAMPLES} sampel wajah terekam` : 'Sampel wajah terekam · memverifikasi wajah hidup'}
                     </p>
                 </div>

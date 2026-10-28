@@ -58,8 +58,9 @@ return [
     | Kunci Perangkat (aplikasi Android)
     |--------------------------------------------------------------------------
     |
-    | Akun peserta terkunci ke HP pertama yang dipakai login (ANDROID_ID). Pindah HP harus
-    | lewat pengajuan yang disetujui admin. Selama aplikasi Android versi lama (yang belum
+    | Akun peserta terkunci ke HP pertama yang dipakai login (ANDROID_ID). Pindah HP hanya
+    | lewat admin: Reset kunci di halaman Perangkat, lalu HP yang dipakai login berikutnya
+    | otomatis terdaftar (tidak ada pengajuan dari aplikasi). Selama aplikasi Android versi lama (yang belum
     | mengirim device_id) masih beredar, biarkan require_device_id = false: login tanpa
     | device_id tetap diterima tanpa penguncian. Setelah semua peserta memakai versi baru,
     | set DEVICE_LOCK_REQUIRE_ID=true agar aplikasi lama ditolak (426, wajib update).

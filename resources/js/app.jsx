@@ -6,14 +6,13 @@ import { createInertiaApp, router } from '@inertiajs/react';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
 import AOS from 'aos';
-import { ToastProvider } from '@/Components/Toast';
-import { ConfirmProvider } from '@/Components/ConfirmDialog';
+import { ConfirmProvider, ToastProvider } from '@/ui';
 
 // AOS (Animate On Scroll): animasi masuk ringan di setiap halaman. Diputar sekali, singkat,
 // dan nonaktif bila pengguna memilih "kurangi gerakan" di sistemnya (aksesibilitas).
 const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 AOS.init({
-    duration: 600,
+    duration: 400,
     easing: 'ease-out-cubic',
     once: true,
     offset: 24,
@@ -46,6 +45,6 @@ createInertiaApp({
         );
     },
     progress: {
-        color: '#2f9338', // Hijau logo sekolah (warna utama web)
+        color: '#26742e', // Hijau aksi utama (token accent)
     },
 });

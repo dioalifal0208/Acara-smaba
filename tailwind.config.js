@@ -1,27 +1,17 @@
 import defaultTheme from 'tailwindcss/defaultTheme';
 import forms from '@tailwindcss/forms';
-import colors from 'tailwindcss/colors';
 
-/**
- * Tema dashboard putih dengan warna utama hijau logo SMA Negeri 1 Babat (#2F9338).
- * `brand` (dan `indigo`, yang masih dipakai di beberapa halaman) dipetakan ke skala hijau ini.
- */
-const smaba = {
-    50: '#f2fbf2',
-    100: '#e1f7e2',
-    200: '#c3efc6',
-    300: '#94e199',
-    400: '#6bcc72',
-    500: '#4db855',
-    600: '#2f9338',
-    700: '#26742e',
-    800: '#225d28',
-    900: '#1d4d23',
-    950: '#0b2b10',
-};
+/** Token desain baru (resources/css/tokens.css): nilai RGB di CSS variable agar ikut mode gelap. */
+const token = (name) => `rgb(var(--${name}) / <alpha-value>)`;
 
 /** @type {import('tailwindcss').Config} */
 export default {
+    // `dark:` ikut sistem, kecuali pengguna memilih Terang/Gelap di tombol tampilan (<html data-theme>).
+    darkMode: ['variant', [
+        '@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) & }',
+        ':root[data-theme="dark"] &',
+    ]],
+
     content: [
         './vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php',
         './storage/framework/views/*.php',
@@ -32,35 +22,37 @@ export default {
     theme: {
         extend: {
             fontFamily: {
-                sans: ['Inter', ...defaultTheme.fontFamily.sans],
+                // SF Pro bawaan sistem di perangkat Apple (tidak boleh di-host di web), Inter di lainnya.
+                sans: ['-apple-system', 'BlinkMacSystemFont', '"SF Pro Text"', 'Inter', '"Segoe UI"', 'Roboto', ...defaultTheme.fontFamily.sans],
+                display: ['-apple-system', 'BlinkMacSystemFont', '"SF Pro Display"', 'Inter', '"Segoe UI"', 'Roboto', ...defaultTheme.fontFamily.sans],
             },
             colors: {
-                // Abu-abu netral seperti referensi (Material Dashboard), bukan abu kebiruan.
-                slate: colors.neutral,
-                indigo: smaba,
-                brand: {
-                    ...smaba,
-                    violet: '#6bcc72',
-                    soft: '#f2fbf2',
+                app: token('app'),
+                surface: { DEFAULT: token('surface'), 2: token('surface-2') },
+                ink: { DEFAULT: token('ink'), 2: token('ink-2'), 3: token('ink-3') },
+                line: { DEFAULT: token('line'), strong: token('line-strong') },
+                accent: { DEFAULT: token('accent'), ink: token('accent-ink'), soft: token('accent-soft') },
+                status: {
+                    hadir: token('hadir'),
+                    'hadir-soft': token('hadir-soft'),
+                    telat: token('telat'),
+                    'telat-soft': token('telat-soft'),
+                    izin: token('izin'),
+                    'izin-soft': token('izin-soft'),
+                    alpha: token('alpha'),
+                    'alpha-soft': token('alpha-soft'),
                 },
-                canvas: '#f5f5f5',
-                smaba,
+                danger: { DEFAULT: token('alpha'), soft: token('alpha-soft') },
+                chart: { hadir: token('chart-hadir'), telat: token('chart-telat'), izin: token('chart-izin'), belum: token('chart-belum') },
             },
-            backgroundImage: {
-                // Gradien hijau utama (tombol utama, menu aktif, ikon KPI)
-                'brand-gradient': 'linear-gradient(195deg, #4db855 0%, #2f9338 100%)',
-                'brand-gradient-x': 'linear-gradient(90deg, #2f9338 0%, #4db855 100%)',
+            keyframes: {
+                'toast-in': {
+                    from: { opacity: '0', transform: 'translateY(-8px)' },
+                    to: { opacity: '1', transform: 'translateY(0)' },
+                },
             },
-            boxShadow: {
-                soft: '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
-                'soft-lg': '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
-                // Bayangan ikon & tombol utama (pola shadow-success pada referensi, diwarnai hijau)
-                dark: '0 4px 20px 0 rgba(0, 0, 0, 0.14), 0 7px 10px -5px rgba(47, 147, 56, 0.4)',
-                'dark-sm': '0 2px 2px 0 rgba(47, 147, 56, 0.14), 0 3px 1px -2px rgba(47, 147, 56, 0.2), 0 1px 5px 0 rgba(47, 147, 56, 0.15)',
-                'dark-hover': '0 14px 26px -12px rgba(47, 147, 56, 0.4), 0 4px 23px 0 rgba(0, 0, 0, 0.15), 0 8px 10px -5px rgba(47, 147, 56, 0.2)',
-            },
-            borderRadius: {
-                '4xl': '2rem',
+            animation: {
+                'toast-in': 'toast-in 200ms ease-out',
             },
         },
     },

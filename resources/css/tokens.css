@@ -1,0 +1,94 @@
+/*
+ * Token warna tampilan baru (redesign). Nilai berupa kanal RGB agar Tailwind bisa memberi alpha
+ * (bg-ink/10). Satu warna satu arti: hijau SMABA = aksi utama & status hadir.
+ *
+ * Mode gelap ikut sistem, kecuali pengguna memilih Terang/Gelap (<html data-theme>).
+ * Rasio kontras dicek di catatan tiap baris (teks vs latar); jalankan scripts/check-contrast.mjs.
+ */
+:root {
+    --app: 246 247 245;          /* #f6f7f5 latar halaman */
+    --surface: 255 255 255;      /* #ffffff kartu, tabel */
+    --surface-2: 238 240 237;    /* #eef0ed isian lembut, hover */
+    --ink: 27 31 28;             /* #1b1f1c teks utama, 15.5:1 di app */
+    --ink-2: 75 84 78;           /* #4b544e teks sekunder, 7.3:1 di app */
+    --ink-3: 105 113 107;        /* #69716b placeholder/keterangan, 4.7:1 di app */
+    --line: 223 227 223;         /* #dfe3df garis pemisah (dekoratif) */
+    --line-strong: 128 137 130;  /* #808982 border kontrol, >=3:1 */
+    --accent: 38 116 46;         /* #26742e aksi utama, 5.8:1 */
+    --accent-ink: 255 255 255;   /* teks di atas accent, 5.8:1 */
+    --accent-soft: 231 243 232;  /* #e7f3e8 */
+    --hadir: 38 116 46;          /* #26742e */
+    --hadir-soft: 231 243 232;   /* #e7f3e8, teks hadir 5.1:1 */
+    --telat: 168 83 11;          /* #a8530b */
+    --telat-soft: 251 239 226;   /* #fbefe2, teks telat 4.8:1 */
+    --izin: 31 95 191;           /* #1f5fbf */
+    --izin-soft: 232 238 250;    /* #e8eefa, teks izin 5.2:1 */
+    --alpha: 180 35 24;          /* #b42318 alpha & aksi berbahaya */
+    --alpha-soft: 251 234 234;   /* #fbeaea, teks alpha 5.7:1 */
+
+    /* Isian grafik (bukan teks). Divalidasi dataviz: CVD protan ΔE 19.8 hijau↔oranye.
+       Oranye terang di bawah 3:1 terhadap latar, jadi grafik wajib punya legenda/label/tabel. */
+    --chart-hadir: 38 116 46;    /* #26742e */
+    --chart-telat: 224 160 58;   /* #e0a03a */
+    --chart-izin: 31 95 191;     /* #1f5fbf */
+    --chart-belum: 214 219 214;  /* #d6dbd6 netral */
+}
+
+/* Mode gelap: ikut sistem kecuali admin memilih Terang/Gelap (<html data-theme>, toggle di bilah atas). */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+        color-scheme: dark;
+        --app: 18 21 19;             /* #121513 */
+        --surface: 27 32 28;         /* #1b201c */
+        --surface-2: 37 43 38;       /* #252b26 */
+        --ink: 233 236 233;          /* #e9ece9, 15.4:1 */
+        --ink-2: 163 172 165;        /* #a3aca5, 7.1:1 di surface */
+        --ink-3: 138 147 140;        /* #8a938c, 5.2:1 di surface */
+        --line: 50 58 52;            /* #323a34 */
+        --line-strong: 112 121 114;  /* #707972, >=3:1 */
+        --accent: 92 196 102;        /* #5cc466 */
+        --accent-ink: 11 43 16;      /* #0b2b10, 7.0:1 di accent */
+        --accent-soft: 29 51 32;     /* #1d3320 */
+        --hadir: 92 196 102;
+        --hadir-soft: 29 51 32;      /* teks hadir 6.2:1 */
+        --telat: 240 160 75;         /* #f0a04b */
+        --telat-soft: 58 42 23;      /* teks telat 6.5:1 */
+        --izin: 124 176 255;         /* #7cb0ff */
+        --izin-soft: 26 42 69;       /* teks izin 6.5:1 */
+        --alpha: 249 112 102;        /* #f97066 */
+        --alpha-soft: 61 29 27;      /* teks alpha 5.4:1 */
+
+        --chart-hadir: 69 168 80;    /* #45a850 */
+        --chart-telat: 168 83 11;    /* #a8530b */
+        --chart-izin: 79 143 232;    /* #4f8fe8 */
+        --chart-belum: 58 66 60;     /* #3a423c */
+    }
+}
+
+:root[data-theme='dark'] {
+    color-scheme: dark;
+    --app: 18 21 19;             /* #121513 */
+    --surface: 27 32 28;         /* #1b201c */
+    --surface-2: 37 43 38;       /* #252b26 */
+    --ink: 233 236 233;          /* #e9ece9, 15.4:1 */
+    --ink-2: 163 172 165;        /* #a3aca5, 7.1:1 di surface */
+    --ink-3: 138 147 140;        /* #8a938c, 5.2:1 di surface */
+    --line: 50 58 52;            /* #323a34 */
+    --line-strong: 112 121 114;  /* #707972, >=3:1 */
+    --accent: 92 196 102;        /* #5cc466 */
+    --accent-ink: 11 43 16;      /* #0b2b10, 7.0:1 di accent */
+    --accent-soft: 29 51 32;     /* #1d3320 */
+    --hadir: 92 196 102;
+    --hadir-soft: 29 51 32;      /* teks hadir 6.2:1 */
+    --telat: 240 160 75;         /* #f0a04b */
+    --telat-soft: 58 42 23;      /* teks telat 6.5:1 */
+    --izin: 124 176 255;         /* #7cb0ff */
+    --izin-soft: 26 42 69;       /* teks izin 6.5:1 */
+    --alpha: 249 112 102;        /* #f97066 */
+    --alpha-soft: 61 29 27;      /* teks alpha 5.4:1 */
+
+    --chart-hadir: 69 168 80;    /* #45a850 */
+    --chart-telat: 168 83 11;    /* #a8530b */
+    --chart-izin: 79 143 232;    /* #4f8fe8 */
+    --chart-belum: 58 66 60;     /* #3a423c */
+}

@@ -4,6 +4,7 @@ namespace Tests\Feature\Auth;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 class AuthenticationTest extends TestCase
@@ -15,6 +16,18 @@ class AuthenticationTest extends TestCase
         $response = $this->get('/login');
 
         $response->assertRedirect('/');
+    }
+
+    public function test_password_reset_by_email_is_not_available(): void
+    {
+        // Akun dibuat & diubah admin; email tidak dikonfigurasi, jadi tidak ada reset mandiri.
+        foreach (['password.request', 'password.email', 'password.reset', 'password.store'] as $name) {
+            $this->assertFalse(Route::has($name), $name);
+        }
+
+        $this->get('/forgot-password')->assertNotFound();
+        $this->post('/forgot-password', ['email' => 'admin@smaba.sch.id'])->assertNotFound();
+        $this->post('/reset-password', ['token' => 'x'])->assertNotFound();
     }
 
     public function test_users_can_authenticate_using_the_login_screen(): void

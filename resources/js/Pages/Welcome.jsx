@@ -1,177 +1,146 @@
-import { Link, Head } from '@inertiajs/react';
-import { appUrl } from '@/lib/appUrl';
-import { useState } from 'react';
 import LoginModal from '@/Components/LoginModal';
-import { icons } from '@/lib/adminMenu';
+import { appUrl } from '@/lib/appUrl';
+import { Button } from '@/ui';
+import { Head, Link, usePage } from '@inertiajs/react';
+import { CheckCircle2, LogIn, MapPin, QrCode, ScanFace, Smartphone, UserSquare2 } from 'lucide-react';
+import { useState } from 'react';
 
-const steps = [
-    { icon: icons.phone, title: 'Buka aplikasi', body: 'Masuk ke aplikasi E-Presensi di HP Anda.' },
-    { icon: icons.camera, title: 'Verifikasi wajah', body: 'Hadapkan wajah ke kamera di area sekolah.' },
-    { icon: icons.check, title: 'Presensi tercatat', body: 'Kehadiran langsung masuk ke sistem sekolah.' },
+const METHODS = [
+    {
+        icon: Smartphone,
+        title: 'Aplikasi PRESENSI SMABA',
+        body: 'Untuk presensi harian datang dan pulang. Wajah dan lokasi diperiksa otomatis saat Anda berada di area sekolah.',
+    },
+    {
+        icon: QrCode,
+        title: 'QR kegiatan',
+        body: 'Untuk rapat, upacara, dan kegiatan sekali. Pindai QR yang ditampilkan panitia, pilih nama, lalu tanda tangan di HP.',
+    },
+    {
+        icon: UserSquare2,
+        title: 'QR pribadi',
+        body: 'Tunjukkan QR pribadi Anda ke petugas scanner. QR bisa dilihat setelah masuk di web.',
+    },
 ];
 
-export default function Welcome({ auth, stats: initialStats, recentScans = [], canResetPassword = true }) {
-    const { user } = auth;
-    const stats = initialStats || { total: 0, hadir: 0, belum: 0 };
-    const attendancePercentage = stats.total > 0 ? Math.round((stats.hadir / stats.total) * 100) : 0;
-    const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+const APP_STEPS = [
+    { icon: Smartphone, title: 'Masuk dengan NIP', body: 'Buka aplikasi dan masuk memakai NIP (GTT/PTT memakai ID pengganti NIP). Akun terkunci ke HP yang pertama dipakai.' },
+    { icon: MapPin, title: 'Berada di area sekolah', body: 'Presensi di luar radius sekolah atau dengan lokasi palsu ditolak.' },
+    { icon: ScanFace, title: 'Verifikasi wajah', body: 'Hadapkan wajah ke kamera depan sampai dikenali.' },
+    { icon: CheckCircle2, title: 'Kehadiran tercatat', body: 'Jam datang dan pulang langsung masuk ke rekap sekolah.' },
+];
+
+const HELP = [
+    { q: 'Lupa kata sandi', a: 'Hubungi admin sekolah untuk mengatur ulang kata sandi Anda.' },
+    { q: 'Ganti HP', a: 'Satu akun hanya untuk satu HP. Minta admin mereset kunci perangkat, lalu masuk di HP baru.' },
+    { q: 'Izin atau sakit', a: 'Ajukan lewat aplikasi atau setelah masuk di web, lengkap dengan bukti pendukung. Izin berlaku setelah disetujui admin.' },
+];
+
+/**
+ * Halaman depan publik: informasi umum saja (cara presensi dan bantuan), tanpa data kehadiran.
+ * Satu-satunya tombol masuk ada di bilah atas.
+ */
+export default function Welcome() {
+    const { auth } = usePage().props;
+    const user = auth.user;
+    const [loginOpen, setLoginOpen] = useState(false);
+    const home = user && route(user.is_admin ? 'dashboard' : 'participant.dashboard');
 
     return (
         <>
             <Head title="E-Presensi SMA Negeri 1 Babat" />
 
-            <div className="flex min-h-screen flex-col bg-canvas text-neutral-700">
-                {/* Navbar melayang (pola Material Dashboard) */}
-                <header className="sticky top-0 z-40 px-4 pt-3 sm:px-6">
-                    <div className="mx-auto flex h-14 max-w-6xl items-center justify-between rounded-lg border border-neutral-200 bg-white/80 px-4 shadow-soft backdrop-blur-md">
-                        <div className="flex items-center gap-2">
-                            <img src={appUrl('images/logo.png')} alt="" className="h-7 w-7 object-contain" />
-                            <span className="text-sm font-semibold text-neutral-800">E-Presensi SMABA</span>
-                        </div>
-                        <nav className="flex items-center gap-2">
-                            {user ? (
-                                <>
-                                    <Link href={route(user.is_admin ? 'dashboard' : 'participant.dashboard')} className="btn-brand">
-                                        {user.is_admin ? 'Buka Dashboard' : 'Beranda Saya'}
-                                    </Link>
-                                    <Link href={route('logout')} method="post" as="button" className="rounded-md px-3 py-2 text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-100 hover:text-neutral-900">
-                                        Keluar
-                                    </Link>
-                                </>
-                            ) : (
-                                <button type="button" id="btn-login-nav" onClick={() => setIsLoginModalOpen(true)} className="btn-brand">
-                                    Masuk
-                                </button>
-                            )}
-                        </nav>
-                    </div>
+            <div className="flex min-h-dvh flex-col bg-app text-ink">
+                <header className="mx-auto flex h-16 w-full max-w-5xl items-center justify-between gap-3 px-4 sm:px-6">
+                    <Link href="/" className="flex min-w-0 items-center gap-3">
+                        <img src={appUrl('images/logo.png')} alt="" className="h-9 w-9 shrink-0 object-contain" />
+                        <span className="min-w-0 leading-tight">
+                            <span className="block truncate text-sm font-semibold text-ink">E-Presensi</span>
+                            <span className="block truncate text-xs text-ink-2">SMA Negeri 1 Babat</span>
+                        </span>
+                    </Link>
+                    <nav className="flex shrink-0 items-center gap-1" aria-label="Akun">
+                        {user ? (
+                            <>
+                                <Link href={route('logout')} method="post" as="button" className="hidden h-10 items-center rounded-lg px-3 text-sm font-medium text-ink-2 hover:bg-surface-2 hover:text-ink sm:inline-flex">
+                                    Keluar
+                                </Link>
+                                <Button variant="primary" href={home}>{user.is_admin ? 'Buka dashboard' : 'Beranda saya'}</Button>
+                            </>
+                        ) : (
+                            <Button variant="primary" icon={LogIn} onClick={() => setLoginOpen(true)}>Masuk</Button>
+                        )}
+                    </nav>
                 </header>
 
-                <main className="flex flex-1 items-center px-4 py-10 sm:px-6">
-                    <div className="mx-auto grid w-full max-w-6xl grid-cols-1 items-center gap-10 lg:grid-cols-[1.618fr_1fr] lg:gap-14">
-                        {/* ── Teks utama ── */}
-                        <section data-aos="fade-up">
-                            <p className="flex items-center gap-2 text-sm text-neutral-500">
-                                <span className="relative flex h-2 w-2">
-                                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-                                    <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-                                </span>
-                                Presensi digital SMA Negeri 1 Babat
-                            </p>
-                            <h1 className="mt-3 text-4xl font-bold leading-tight tracking-tight text-neutral-900 sm:text-5xl">
-                                Presensi cepat, akurat,
-                                <br className="hidden sm:block" /> dan tercatat otomatis.
-                            </h1>
-                            <p className="mt-4 max-w-xl text-base leading-relaxed text-neutral-500">
-                                Guru dan pegawai melakukan presensi lewat aplikasi Android dengan verifikasi wajah dan lokasi.
-                                Kehadiran tercatat langsung dan dapat dipantau sekolah secara real-time.
-                            </p>
+                <main className="mx-auto w-full max-w-5xl flex-1 px-4 sm:px-6">
+                    <section className="pb-16 pt-14 sm:pb-24 sm:pt-24" data-aos="fade-up">
+                        <h1 className="max-w-3xl font-display text-4xl font-semibold leading-[1.08] tracking-tight text-ink sm:text-6xl">
+                            Presensi guru dan pegawai SMA Negeri 1 Babat
+                        </h1>
+                        <p className="mt-5 max-w-2xl text-lg leading-relaxed text-ink-2">
+                            Presensi lewat aplikasi Android dengan verifikasi wajah dan lokasi, atau lewat QR saat kegiatan sekolah. Kehadiran tercatat otomatis untuk rekap sekolah.
+                        </p>
+                    </section>
 
-                            <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
-                                {steps.map((step, index) => (
-                                    <div key={step.title} className="card-soft p-4 transition-shadow duration-200 hover:shadow-soft-lg" data-aos="fade-up" data-aos-delay={100 + index * 50}>
-                                        <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-gradient text-white shadow-dark">
-                                            <span className="h-5 w-5">{step.icon}</span>
-                                        </span>
-                                        <p className="mt-3 text-sm font-semibold text-neutral-800">
-                                            <span className="mr-1.5 tabular-nums text-neutral-400">0{index + 1}</span>
-                                            {step.title}
-                                        </p>
-                                        <p className="mt-0.5 text-xs leading-relaxed text-neutral-500">{step.body}</p>
-                                    </div>
-                                ))}
-                            </div>
-                        </section>
+                    <InfoSection title="Cara presensi" id="cara">
+                        <ul className="grid gap-8 sm:grid-cols-3">
+                            {METHODS.map(({ icon: Icon, title, body }) => (
+                                <li key={title}>
+                                    <Icon className="h-6 w-6 text-accent" strokeWidth={1.75} aria-hidden="true" />
+                                    <h3 className="mt-3 text-base font-semibold text-ink">{title}</h3>
+                                    <p className="mt-1 text-sm leading-relaxed text-ink-2">{body}</p>
+                                </li>
+                            ))}
+                        </ul>
+                    </InfoSection>
 
-                        {/* ── Kartu statistik langsung ── */}
-                        <aside data-aos="fade-up" data-aos-delay="150">
-                            <div className="card-soft">
-                                <div className="flex items-start justify-between gap-3 p-4">
-                                    <div>
-                                        <h6 className="text-base font-semibold text-neutral-800">Kehadiran Hari Ini</h6>
-                                        <p className="text-sm text-neutral-500">Statistik presensi langsung</p>
-                                    </div>
-                                    <span className="flex items-center gap-1.5 text-xs font-medium text-neutral-500">
-                                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-                                        Live
+                    <InfoSection title="Lewat aplikasi" id="aplikasi">
+                        {/* Langkah memang berurutan, jadi nomornya bermakna. */}
+                        <ol className="space-y-5">
+                            {APP_STEPS.map(({ title, body }, index) => (
+                                <li key={title} className="flex gap-4">
+                                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-line-strong text-sm font-medium tabular-nums text-ink-2" aria-hidden="true">
+                                        {index + 1}
                                     </span>
-                                </div>
-
-                                <div className="grid grid-cols-3 gap-3 px-4">
-                                    <Stat label="Hadir" value={stats.hadir} tone="text-emerald-600" />
-                                    <Stat label="Belum" value={stats.belum} tone="text-rose-500" />
-                                    <Stat label="Total" value={stats.total} tone="text-neutral-800" />
-                                </div>
-                                <div className="px-4 pt-4">
-                                    <div className="mb-1.5 flex items-baseline justify-between text-xs">
-                                        <span className="text-neutral-500">Tingkat kehadiran</span>
-                                        <span className="font-bold tabular-nums text-neutral-800">{attendancePercentage}%</span>
+                                    <div>
+                                        <h3 className="text-base font-semibold text-ink"><span className="sr-only">Langkah {index + 1}: </span>{title}</h3>
+                                        <p className="mt-0.5 text-sm leading-relaxed text-ink-2">{body}</p>
                                     </div>
-                                    <div className="h-1 overflow-hidden rounded-full bg-neutral-200">
-                                        <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-600 transition-all duration-1000 ease-out" style={{ width: `${attendancePercentage}%` }} />
-                                    </div>
-                                </div>
+                                </li>
+                            ))}
+                        </ol>
+                    </InfoSection>
 
-                                <hr className="hr-fade mt-4" />
-                                <div className="p-4">
-                                    <p className="mb-3 text-xs font-semibold uppercase text-neutral-500 opacity-70">Aktivitas terkini</p>
-                                    {recentScans.length > 0 ? (
-                                        <ol className="relative space-y-3 before:absolute before:bottom-3 before:left-[13px] before:top-3 before:w-px before:bg-neutral-200">
-                                            {recentScans.map((scan, index) => (
-                                                <li key={scan.id || index} className="relative flex items-center gap-3">
-                                                    <span className="relative z-10 flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full bg-white text-emerald-500">
-                                                        <span className="h-2.5 w-2.5 rounded-full bg-current" />
-                                                    </span>
-                                                    <p className="min-w-0 flex-1 truncate text-sm font-medium text-neutral-800">{scan.nama}</p>
-                                                    <span className="shrink-0 text-xs tabular-nums text-neutral-500">{scan.waktu}</span>
-                                                </li>
-                                            ))}
-                                        </ol>
-                                    ) : (
-                                        <p className="py-4 text-center text-sm text-neutral-400">Belum ada presensi hari ini.</p>
-                                    )}
+                    <InfoSection title="Bantuan" id="bantuan">
+                        <dl className="space-y-5">
+                            {HELP.map(({ q, a }) => (
+                                <div key={q}>
+                                    <dt className="text-base font-semibold text-ink">{q}</dt>
+                                    <dd className="mt-0.5 text-sm leading-relaxed text-ink-2">{a}</dd>
                                 </div>
-                            </div>
-
-                            {!user && (
-                                <p className="mt-4 text-center text-sm text-neutral-500">
-                                    Admin sekolah?{' '}
-                                    <button
-                                        type="button"
-                                        id="btn-login-card-prompt"
-                                        onClick={() => setIsLoginModalOpen(true)}
-                                        className="font-medium text-brand-700 underline-offset-2 hover:underline"
-                                    >
-                                        Masuk di sini
-                                    </button>
-                                </p>
-                            )}
-                        </aside>
-                    </div>
+                            ))}
+                        </dl>
+                    </InfoSection>
                 </main>
 
-                <footer className="px-4 py-4 sm:px-6">
-                    <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-1 text-sm text-neutral-500 sm:flex-row">
-                        <p>&copy; {new Date().getFullYear()} E-Presensi SMA Negeri 1 Babat</p>
-                        <p className="text-neutral-400">Dikelola oleh Tim IT Sekolah</p>
-                    </div>
+                <footer className="mx-auto mt-16 flex w-full max-w-5xl flex-col gap-1 border-t border-line px-4 py-6 text-sm text-ink-2 sm:flex-row sm:justify-between sm:px-6">
+                    <p>&copy; {new Date().getFullYear()} E-Presensi SMA Negeri 1 Babat</p>
+                    <p>Dikelola Tim IT Sekolah</p>
                 </footer>
             </div>
 
-            <LoginModal
-                isOpen={isLoginModalOpen}
-                onClose={() => setIsLoginModalOpen(false)}
-                canResetPassword={canResetPassword}
-            />
+            <LoginModal isOpen={loginOpen} onClose={() => setLoginOpen(false)} />
         </>
     );
 }
 
-function Stat({ label, value, tone }) {
+/** Bagian informasi: judul di kiri (layar lebar) dan isi di kanan, dipisah garis tipis. */
+function InfoSection({ title, id, children }) {
     return (
-        <div className="rounded-md border border-neutral-200 px-2 py-2.5 text-center">
-            <p className={`text-xl font-bold tabular-nums ${tone}`}>{value}</p>
-            <p className="text-xs text-neutral-500">{label}</p>
-        </div>
+        <section id={id} aria-labelledby={`${id}-title`} className="grid gap-6 border-t border-line py-12 lg:grid-cols-[13rem_1fr] lg:gap-12" data-aos="fade-up">
+            <h2 id={`${id}-title`} className="text-sm font-medium text-ink-2">{title}</h2>
+            <div>{children}</div>
+        </section>
     );
 }

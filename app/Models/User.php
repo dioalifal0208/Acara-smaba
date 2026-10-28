@@ -77,7 +77,8 @@ class User extends Authenticatable
      */
     public function isAdmin(): bool
     {
-        return $this->role === 'admin' || $this->email === 'admin@smaba.sch.id';
+        // Hanya dari role. Jangan dari email: peserta bisa mengubah emailnya sendiri lewat /profile.
+        return $this->role === 'admin';
     }
 
     /**
@@ -87,5 +88,4 @@ class User extends Authenticatable
     {
         return $this->belongsTo(Participant::class);
     }
-
 }

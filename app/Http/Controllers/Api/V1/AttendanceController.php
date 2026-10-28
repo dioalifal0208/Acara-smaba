@@ -149,7 +149,7 @@ class AttendanceController extends Controller
 
                 $existingAttendance = Attendance::where('workcode_id', $activeWorkcode->id)
                     ->where('participant_id', $user->participant_id)
-                    ->whereDate('created_at', now()->toDateString())
+                    ->whereDate('tanggal', now()->toDateString())
                     ->first();
 
                 $isPulang = ($existingAttendance && $activeWorkcode->kategori === 'harian');

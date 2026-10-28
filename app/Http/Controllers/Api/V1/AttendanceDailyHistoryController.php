@@ -58,15 +58,16 @@ class AttendanceDailyHistoryController extends Controller
         $tahun = $request->input('tahun');
 
         // ── Paginasi per tanggal unik ─────────────────────────────────────────
+        // Dikelompokkan per kolom tanggal (tanggal presensi), bukan created_at (kapan baris dibuat).
         $dateQuery = Attendance::query()
-            ->selectRaw('DATE(created_at) as tanggal_presensi')
+            ->selectRaw('DATE(tanggal) as tanggal_presensi')
             ->where('participant_id', $user->participant_id);
 
         if ($bulan) {
-            $dateQuery->whereMonth('created_at', $bulan);
+            $dateQuery->whereMonth('tanggal', $bulan);
         }
         if ($tahun) {
-            $dateQuery->whereYear('created_at', $tahun);
+            $dateQuery->whereYear('tanggal', $tahun);
         }
 
         $allDates = $dateQuery
@@ -79,31 +80,23 @@ class AttendanceDailyHistoryController extends Controller
         // ── Ambil semua sesi pada tanggal di halaman ini ──────────────────────
         $attendances = Attendance::with(['workcode', 'leaveRequest'])
             ->where('participant_id', $user->participant_id)
-            ->whereIn(DB::raw('DATE(created_at)'), $dates->toArray())
+            ->whereIn(DB::raw('DATE(tanggal)'), $dates->toArray())
             ->orderBy('created_at', 'desc')
             ->get();
 
         // ── Kelompokkan per tanggal ───────────────────────────────────────────
         $grouped = $attendances
-            ->groupBy(fn ($a) => $a->created_at->toDateString())
+            ->groupBy(fn ($a) => Carbon::parse($a->tanggal)->toDateString())
             ->map(function ($sessions, $tanggal) {
                 $firstSession = $sessions->first();
                 $workcode = $firstSession->workcode;
 
-                // Cari jadwal spesifik hari ini dari jadwal_per_hari workcode
-                $jadwalHariIni = null;
-                if ($workcode && is_array($workcode->jadwal_per_hari)) {
-                    $namaHari = Carbon::parse($tanggal)->locale('id')->isoFormat('dddd');
-                    foreach ($workcode->jadwal_per_hari as $jadwal) {
-                        if (
-                            isset($jadwal['hari']) &&
-                            strtolower($jadwal['hari']) === strtolower($namaHari)
-                        ) {
-                            $jadwalHariIni = $jadwal;
-                            break;
-                        }
-                    }
-                }
+                // Jadwal datang/pulang yang berlaku pada tanggal itu. jadwal_per_hari berkunci 1 (Senin)
+                // s.d. 7 (Minggu); Workcode::scheduleFor juga mengisi kolom kosong dari jam bawaan workcode.
+                // Dulu dicari lewat field 'hari' yang tidak pernah ada, sehingga selalu null.
+                $jadwalHariIni = $workcode && $workcode->kategori === 'harian'
+                    ? $workcode->scheduleFor(Carbon::parse($tanggal))
+                    : null;
 
                 $statusRingkasan = $sessions->map(fn ($s) => $s->status)->unique()->values();
 

@@ -63,7 +63,7 @@ function Assert-NoStagedSecrets {
 
     foreach ($file in $stagedFiles) {
         $normalized = $file.Replace('\', '/')
-        if ($normalized -match '(^|/)(\.env($|\.)|id_rsa|id_ed25519|.*\.(pem|p12|pfx))$' -and $normalized -notmatch '\.env\.example$') {
+        if ($normalized -match '(^|/)(\.env($|\.)|id_rsa|id_ed25519|local\.properties|signing\.properties|.*\.(pem|p12|pfx|jks|keystore))$' -and $normalized -notmatch '\.env\.example$') {
             Stop-Deploy "File sensitif terdeteksi dalam commit: $file"
         }
         if ($normalized -match 'firebase-credentials\.json$') {
@@ -83,6 +83,86 @@ function Assert-NoStagedSecrets {
     }
 }
 
+function Invoke-GitCommitAll([string]$Message) {
+    & git add -A
+    Assert-LastCommand "git add gagal."
+    Assert-NoStagedSecrets
+
+    $stagedChanges = @(git diff --cached --name-only)
+    Assert-LastCommand "Tidak dapat membaca status Git."
+    if ($stagedChanges.Count -eq 0) {
+        Write-Ok "Tidak ada perubahan baru untuk di-commit."
+        return
+    }
+    & git commit -m $Message
+    Assert-LastCommand "Commit Git gagal."
+    Write-Ok "Commit dibuat: $Message"
+}
+
+function Assert-GitOrigin([string]$Expected) {
+    $origin = (git remote get-url origin).Trim()
+    Assert-LastCommand "Remote origin tidak ditemukan."
+    if ($origin -ne $Expected) {
+        Stop-Deploy "Remote origin berbeda dari konfigurasi: $origin"
+    }
+}
+
+# Build APK rilis Android. versionCode dan versionName (patch) dinaikkan bila ada perubahan
+# yang belum di-commit, agar APK baru bisa dibedakan dari yang sudah terpasang di HP.
+# Mengembalikan info APK; versi dikembalikan seperti semula bila build gagal.
+function Invoke-AndroidBuild([string]$AndroidDir) {
+    $gradleFile = Join-Path $AndroidDir "app\build.gradle.kts"
+    $apkFile = Join-Path $AndroidDir "app\build\outputs\apk\production\release\app-production-release.apk"
+    $originalGradle = [IO.File]::ReadAllText($gradleFile)
+
+    if ($originalGradle -notmatch 'versionCode = (\d+)') {
+        Stop-Deploy "versionCode tidak ditemukan di $gradleFile"
+    }
+    $versionCode = [int]$matches[1]
+    if ($originalGradle -notmatch 'versionName = "(\d+)\.(\d+)\.(\d+)"') {
+        Stop-Deploy "versionName (format x.y.z) tidak ditemukan di $gradleFile"
+    }
+    $versionName = "$($matches[1]).$($matches[2]).$($matches[3])"
+    $nextVersionName = "$($matches[1]).$($matches[2]).$([int]$matches[3] + 1)"
+
+    $pendingChanges = @(git status --porcelain)
+    Assert-LastCommand "Tidak dapat membaca status Git Android."
+    $bumped = $false
+    if ($pendingChanges.Count -gt 0) {
+        $versionCode++
+        $versionName = $nextVersionName
+        $updatedGradle = $originalGradle `
+            -replace 'versionCode = \d+', "versionCode = $versionCode" `
+            -replace 'versionName = "[^"]+"', "versionName = `"$versionName`""
+        [IO.File]::WriteAllText($gradleFile, $updatedGradle)
+        $bumped = $true
+        Write-Ok "Versi Android dinaikkan ke $versionName (versionCode $versionCode)."
+    } else {
+        $headTime = [DateTimeOffset]::FromUnixTimeSeconds([long](git log -1 --format=%ct)).LocalDateTime
+        if ((Test-Path -LiteralPath $apkFile) -and (Get-Item -LiteralPath $apkFile).LastWriteTime -gt $headTime) {
+            Write-Ok "Tidak ada perubahan Android; APK $versionName yang ada sudah terbaru."
+            return @{ Apk = $apkFile; VersionName = $versionName; VersionCode = $versionCode; Bumped = $false }
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($env:JAVA_HOME)) {
+        $studioJbr = Join-Path $env:ProgramFiles "Android\Android Studio\jbr"
+        if (Test-Path -LiteralPath $studioJbr) {
+            $env:JAVA_HOME = $studioJbr
+        }
+    }
+
+    & (Join-Path $AndroidDir "gradlew.bat") ":app:testProductionDebugUnitTest" ":app:assembleProductionRelease" "--console=plain" "--warning-mode=none" | Out-Host
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $apkFile)) {
+        if ($bumped) {
+            [IO.File]::WriteAllText($gradleFile, $originalGradle)
+        }
+        Stop-Deploy "Test atau build Android gagal; deployment dihentikan (GitHub dan server belum diubah)."
+    }
+
+    return @{ Apk = $apkFile; VersionName = $versionName; VersionCode = $versionCode; Bumped = $bumped }
+}
+
 $config = Read-DeployConfig $ConfigFile
 $SshHost = Get-RequiredConfig $config "SSH_HOST"
 $SshPort = Get-RequiredConfig $config "SSH_PORT"
@@ -100,6 +180,17 @@ Assert-SafeValue "REMOTE_DIR" $RemoteDir '^[A-Za-z0-9._/-]+$'
 Assert-SafeValue "REMOTE_PUBLIC_DIR" $RemotePublicDir '^[A-Za-z0-9._/-]+$'
 if ($GitHubRepo -notmatch '^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\.git$') {
     Stop-Deploy "GITHUB_REPO bukan URL repository GitHub HTTPS yang valid."
+}
+
+$AndroidDir = $config["ANDROID_DIR"]
+$AndroidGitHubRepo = $config["ANDROID_GITHUB_REPO"]
+if (-not [string]::IsNullOrWhiteSpace($AndroidDir)) {
+    if (-not (Test-Path -LiteralPath (Join-Path $AndroidDir "gradlew.bat"))) {
+        Stop-Deploy "Proyek Android tidak ditemukan di ANDROID_DIR: $AndroidDir"
+    }
+    if ($AndroidGitHubRepo -notmatch '^https://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\.git$') {
+        Stop-Deploy "ANDROID_GITHUB_REPO bukan URL repository GitHub HTTPS yang valid."
+    }
 }
 
 if (-not (Test-Path -LiteralPath $SshKey)) {
@@ -183,34 +274,53 @@ try {
     Assert-LastCommand "Build frontend gagal; deployment dihentikan."
     Write-Ok "Build frontend berhasil."
 
-    Write-Step "Menyiapkan commit Git"
-    & git add -A
-    Assert-LastCommand "git add gagal."
-    Assert-NoStagedSecrets
+    if ([string]::IsNullOrWhiteSpace($CommitMessage)) {
+        $CommitMessage = "deploy: update $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
+    }
 
-    $stagedChanges = @(git diff --cached --name-only)
-    Assert-LastCommand "Tidak dapat membaca status Git."
-    if ($stagedChanges.Count -gt 0) {
-        if ([string]::IsNullOrWhiteSpace($CommitMessage)) {
-            $CommitMessage = "deploy: update $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
+    $android = $null
+    if (-not [string]::IsNullOrWhiteSpace($AndroidDir)) {
+        Write-Step "Menjalankan test dan build APK Android"
+        Push-Location $AndroidDir
+        try {
+            $androidBranch = (git branch --show-current).Trim()
+            Assert-LastCommand "Folder Android bukan repository Git yang valid."
+            if ($androidBranch -ne "main") {
+                Stop-Deploy "Repo Android harus di branch main; branch aktif: $androidBranch"
+            }
+            Assert-GitOrigin $AndroidGitHubRepo
+            $android = Invoke-AndroidBuild $AndroidDir
+        } finally {
+            Pop-Location
         }
-        & git commit -m $CommitMessage
-        Assert-LastCommand "Commit Git gagal."
-        Write-Ok "Commit dibuat: $CommitMessage"
-    } else {
-        Write-Ok "Tidak ada perubahan baru untuk di-commit."
+        Write-Ok "APK Android $($android.VersionName) siap."
     }
 
-    $origin = (git remote get-url origin).Trim()
-    Assert-LastCommand "Remote origin tidak ditemukan."
-    if ($origin -ne $GitHubRepo) {
-        Stop-Deploy "Remote origin berbeda dari konfigurasi: $origin"
-    }
+    Write-Step "Menyiapkan commit Git"
+    Invoke-GitCommitAll $CommitMessage
+    Assert-GitOrigin $GitHubRepo
 
     Write-Step "Mengirim branch main ke GitHub"
     & git push origin main
     Assert-LastCommand "Push GitHub gagal."
     Write-Ok "GitHub berhasil diperbarui."
+
+    if ($null -ne $android) {
+        Write-Step "Mengirim aplikasi Android ke GitHub"
+        Push-Location $AndroidDir
+        try {
+            $androidMessage = $CommitMessage
+            if ($android.Bumped) {
+                $androidMessage = "$CommitMessage (v$($android.VersionName))"
+            }
+            Invoke-GitCommitAll $androidMessage
+            & git push origin main
+            Assert-LastCommand "Push GitHub Android gagal."
+        } finally {
+            Pop-Location
+        }
+        Write-Ok "GitHub Android berhasil diperbarui."
+    }
 
     Write-Step "Memperbarui aplikasi di Hostinger"
     $remoteCommand = @"
@@ -276,6 +386,18 @@ echo DEPLOY_SUCCESS
         } catch {
             Write-Warning "Deployment selesai, tetapi health check gagal: $($_.Exception.Message)"
         }
+    }
+
+    if ($null -ne $android) {
+        $distDir = Join-Path $AndroidDir "dist"
+        New-Item -ItemType Directory -Path $distDir -Force | Out-Null
+        $distApk = Join-Path $distDir "Presensi-SMABA-v$($android.VersionName).apk"
+        Copy-Item -LiteralPath $android.Apk -Destination $distApk -Force
+
+        Write-Host "`n=== APK ANDROID ===" -ForegroundColor Magenta
+        Write-Host "  Versi : $($android.VersionName) (versionCode $($android.VersionCode))"
+        Write-Host "  File  : $distApk" -ForegroundColor Yellow
+        Write-Host "  Salin file ini ke HP lalu buka untuk memasang (menimpa versi lama, data tetap)."
     }
 
     Write-Host "`n=== DEPLOY SELESAI ===`n" -ForegroundColor Green

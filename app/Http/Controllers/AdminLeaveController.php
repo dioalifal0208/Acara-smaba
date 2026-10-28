@@ -5,8 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\Attendance;
 use App\Models\LeaveRequest;
 use App\Models\Participant;
-use App\Support\PrivateFile;
 use App\Services\FcmService;
+use App\Support\PrivateFile;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class AdminLeaveController extends Controller
@@ -45,13 +46,59 @@ class AdminLeaveController extends Controller
 
     public function approve(LeaveRequest $leaveRequest)
     {
-        if ($leaveRequest->status_approval !== 'pending') {
+        // Satu transaksi: status disetujui dan semua baris presensi izin tersimpan bersama, atau tidak
+        // sama sekali. Baris dikunci agar klik ganda / dua admin tidak memproses pengajuan yang sama.
+        $processed = DB::transaction(function () use ($leaveRequest) {
+            $leaveRequest = LeaveRequest::lockForUpdate()->findOrFail($leaveRequest->id);
+
+            if ($leaveRequest->status_approval !== 'pending') {
+                return false;
+            }
+
+            $leaveRequest->update(['status_approval' => 'approved']);
+            $this->recordLeaveAttendances($leaveRequest);
+            // Push FCM dikirim setelah commit (FcmService memakai DB::afterCommit).
+            $this->notifyParticipant($leaveRequest);
+
+            return true;
+        });
+
+        if (! $processed) {
             return back()->with('error', 'Pengajuan ini sudah diproses sebelumnya.');
         }
 
-        $leaveRequest->update(['status_approval' => 'approved']);
-        $this->notifyParticipant($leaveRequest);
+        if ($leaveRequest->tipe_izin === 'tidak_absen_pulang') {
+            return back()->with('success', 'Pengajuan izin tidak absen pulang berhasil disetujui.');
+        }
 
+        return back()->with('success', 'Pengajuan berhasil disetujui.');
+    }
+
+    public function reject(LeaveRequest $leaveRequest)
+    {
+        $processed = DB::transaction(function () use ($leaveRequest) {
+            $leaveRequest = LeaveRequest::lockForUpdate()->findOrFail($leaveRequest->id);
+
+            if ($leaveRequest->status_approval !== 'pending') {
+                return false;
+            }
+
+            $leaveRequest->update(['status_approval' => 'rejected']);
+            $this->notifyParticipant($leaveRequest);
+
+            return true;
+        });
+
+        if (! $processed) {
+            return back()->with('error', 'Pengajuan ini sudah diproses sebelumnya.');
+        }
+
+        return back()->with('success', 'Pengajuan ditolak.');
+    }
+
+    /** Buat/perbarui baris presensi untuk setiap tanggal dalam rentang izin yang disetujui. */
+    private function recordLeaveAttendances(LeaveRequest $leaveRequest): void
+    {
         $tanggalMulai = $leaveRequest->tanggal->copy()->startOfDay();
         $tanggalSelesai = $leaveRequest->tanggal_selesai?->copy()->startOfDay() ?? $tanggalMulai->copy();
 
@@ -90,24 +137,6 @@ class AdminLeaveController extends Controller
                 ]);
             }
         }
-
-        if ($leaveRequest->tipe_izin === 'tidak_absen_pulang') {
-            return back()->with('success', 'Pengajuan izin tidak absen pulang berhasil disetujui.');
-        }
-
-        return back()->with('success', 'Pengajuan berhasil disetujui.');
-    }
-
-    public function reject(LeaveRequest $leaveRequest)
-    {
-        if ($leaveRequest->status_approval !== 'pending') {
-            return back()->with('error', 'Pengajuan ini sudah diproses sebelumnya.');
-        }
-
-        $leaveRequest->update(['status_approval' => 'rejected']);
-        $this->notifyParticipant($leaveRequest);
-
-        return back()->with('success', 'Pengajuan ditolak.');
     }
 
     /** Push FCM `state_changed` (reason leave) ke HP peserta pemilik pengajuan. */

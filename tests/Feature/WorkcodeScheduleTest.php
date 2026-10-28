@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\Workcode;
 use App\Services\FcmService;
 use Carbon\Carbon;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -124,6 +125,64 @@ class WorkcodeScheduleTest extends TestCase
 
         $this->assertFalse($workcode->fresh()->is_active);
         $this->assertNull(Workcode::getActive());
+    }
+
+    public function test_scheduler_keeps_daily_and_other_active_workcodes_during_an_activity(): void
+    {
+        $fcmService = $this->mock(FcmService::class);
+        // Dua kegiatan terjadwal dibuka (07:00), lalu keduanya ditutup (10:00 dan 11:00): 4 push.
+        $fcmService->shouldReceive('sendWorkcodeUpdate')->times(4);
+
+        $daily = Workcode::create(['nama_workcode' => 'Harian Office', 'kategori' => 'harian', 'is_active' => true]);
+        $manual = Workcode::create(['nama_workcode' => 'Rapat Tanpa Jadwal', 'kategori' => 'workcode', 'is_active' => true]);
+        $first = $this->scheduledActivity('Upacara', '07:00', '10:00');
+        $overlapping = $this->scheduledActivity('Lomba', '07:00', '11:00');
+
+        $this->travelTo(Carbon::parse('2026-10-14 07:00:00', 'Asia/Jakarta'));
+        $this->artisan('workcode:auto-activate')->assertSuccessful();
+        // Dijalankan lagi tanpa perubahan: tidak ada push tambahan.
+        $this->artisan('workcode:auto-activate')->assertSuccessful();
+
+        $this->assertTrue($daily->fresh()->is_active);
+        $this->assertTrue($manual->fresh()->is_active);
+        $this->assertTrue($first->fresh()->is_active);
+        $this->assertTrue($overlapping->fresh()->is_active);
+        $this->assertCount(4, Workcode::getActiveWorkcodes());
+
+        $this->travelTo(Carbon::parse('2026-10-14 10:00:00', 'Asia/Jakarta'));
+        $this->artisan('workcode:auto-activate')->assertSuccessful();
+
+        $this->assertFalse($first->fresh()->is_active);
+        $this->assertTrue($overlapping->fresh()->is_active);
+        $this->assertTrue($daily->fresh()->is_active);
+
+        $this->travelTo(Carbon::parse('2026-10-14 11:00:00', 'Asia/Jakarta'));
+        $this->artisan('workcode:auto-activate')->assertSuccessful();
+
+        $this->assertFalse($overlapping->fresh()->is_active);
+        $this->assertTrue($daily->fresh()->is_active);
+        $this->assertTrue($manual->fresh()->is_active);
+    }
+
+    public function test_auto_activate_is_scheduled_every_minute(): void
+    {
+        $event = collect(app(Schedule::class)->events())
+            ->firstWhere('description', 'workcode:auto-activate');
+
+        $this->assertNotNull($event);
+        $this->assertSame('* * * * *', $event->expression);
+    }
+
+    private function scheduledActivity(string $name, string $start, string $end): Workcode
+    {
+        return Workcode::create([
+            'nama_workcode' => $name,
+            'kategori' => 'workcode',
+            'tanggal' => '2026-10-14',
+            'jam_aktif_mulai' => $start,
+            'jam_aktif_selesai' => $end,
+            'is_active' => false,
+        ]);
     }
 
     public function test_extending_an_ended_activity_reactivates_it_immediately(): void

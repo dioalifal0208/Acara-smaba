@@ -61,6 +61,100 @@ class AdminDashboardStatsTest extends TestCase
                 ->where('recentAttendances.0.metode', 'QR Peserta'));
     }
 
+    public function test_daily_kpi_counts_only_present_today(): void
+    {
+        Carbon::setTestNow('2026-10-20 10:30:00');
+        $workcode = Workcode::create(['nama_workcode' => 'Harian', 'kategori' => 'harian', 'is_active' => true]);
+
+        $budi = $this->participant('Budi');
+        $sari = $this->participant('Sari');
+        $andi = $this->participant('Andi');
+        $this->participant('Dewi');
+
+        $this->attend($workcode, $budi, '2026-10-20 07:05:00', 'wajah');
+        // Hadir kemarin, lupa absen & izin hari ini (dari scheduler/persetujuan izin) bukan hadir hari ini.
+        $this->attend($workcode, $sari, '2026-10-19 07:00:00', 'wajah');
+        $this->attend($workcode, $sari, '2026-10-20 08:30:00', 'manual', 'lupa_absen');
+        $this->attend($workcode, $andi, '2026-10-20 08:00:00', 'manual', 'izin');
+
+        $this->actingAs(User::factory()->create(['role' => 'admin']))
+            ->get(route('dashboard'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('stats.total', 4)
+                ->where('stats.hadir', 1)
+                ->where('stats.belum', 3));
+    }
+
+    public function test_event_kpi_uses_selected_participants(): void
+    {
+        Carbon::setTestNow('2026-10-20 10:30:00');
+        $workcode = Workcode::create(['nama_workcode' => 'Rapat', 'kategori' => 'workcode', 'is_active' => true]);
+
+        $budi = $this->participant('Budi');
+        $sari = $this->participant('Sari');
+        $andi = $this->participant('Andi');
+        $workcode->participants()->attach([$budi->id, $sari->id]);
+
+        $this->attend($workcode, $budi, '2026-10-20 09:00:00', 'tanda_tangan');
+        // Peserta yang tidak dipilih tidak ikut dihitung (mis. data lama sebelum pemilihan peserta).
+        $this->attend($workcode, $andi, '2026-10-20 09:05:00', 'manual');
+
+        $this->actingAs(User::factory()->create(['role' => 'admin']))
+            ->get(route('dashboard'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('stats.total', 2)
+                ->where('stats.hadir', 1)
+                ->where('stats.belum', 1));
+    }
+
+    public function test_welcome_page_exposes_no_attendance_data_to_the_public(): void
+    {
+        Carbon::setTestNow('2026-10-20 10:30:00');
+        $workcode = Workcode::create(['nama_workcode' => 'Harian', 'kategori' => 'harian', 'is_active' => true]);
+        $this->attend($workcode, $this->participant('Budi Santoso'), '2026-10-20 07:05:00', 'wajah');
+
+        // Halaman depan publik hanya berisi informasi umum: tanpa statistik, nama, jam, atau versi server.
+        $this->get('/')
+            ->assertOk()
+            ->assertDontSee('Budi')
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Welcome')
+                ->missing('stats')
+                ->missing('board')
+                ->missing('recentScans')
+                ->missing('workcodeName')
+                ->missing('laravelVersion')
+                ->missing('phpVersion'));
+    }
+
+    public function test_scanner_stats_use_today_presence(): void
+    {
+        Carbon::setTestNow('2026-10-20 10:30:00');
+        $workcode = Workcode::create(['nama_workcode' => 'Harian', 'kategori' => 'harian', 'is_active' => true]);
+
+        $budi = $this->participant('Budi');
+        $sari = $this->participant('Sari');
+        $andi = $this->participant('Andi');
+        $this->attend($workcode, $budi, '2026-10-19 07:00:00', 'wajah');
+        $this->attend($workcode, $sari, '2026-10-20 08:30:00', 'manual', 'lupa_absen');
+
+        $admin = User::factory()->create(['role' => 'admin']);
+
+        $this->actingAs($admin)
+            ->get(route('scanner'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('initialStats.total', 3)
+                ->where('initialStats.hadir', 0)
+                ->where('initialStats.belum', 3));
+
+        $this->actingAs($admin)
+            ->postJson(route('scan'), ['qr_token' => $andi->qr_token])
+            ->assertOk()
+            ->assertJsonPath('stats.total', 3)
+            ->assertJsonPath('stats.hadir', 1)
+            ->assertJsonPath('stats.belum', 2);
+    }
+
     private function participant(string $name): Participant
     {
         return Participant::create([

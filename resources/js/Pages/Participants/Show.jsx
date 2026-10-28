@@ -1,29 +1,17 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, Link, useForm, router, usePage } from '@inertiajs/react';
-import { useState, useEffect } from 'react';
-import { useToast } from '@/Components/Toast';
-import { useConfirm } from '@/Components/ConfirmDialog';
-import FaceRegistrationModal from '@/Components/FaceRegistrationModal';
 import ApproveFaceModal from '@/Components/ApproveFaceModal';
 import ApprovePhotoChangeRequestModal from '@/Components/ApprovePhotoChangeRequestModal';
 import FaceHistoryPanel from '@/Components/FaceHistoryPanel';
-
-const EMPLOYMENT_STATUSES = ['PNS', 'PPPK', 'PPPK Paruh Waktu', 'GTT', 'PTT'];
-const NON_PERMANENT_STATUSES = ['GTT', 'PTT'];
-
-const isNonPermanentStatus = (status) => NON_PERMANENT_STATUSES.includes(status);
+import FaceRegistrationModal from '@/Components/FaceRegistrationModal';
+import {
+    EMPLOYMENT_STATUSES, FaceStatus, ParticipantAvatar, isNonPermanentStatus, nipLabel, formNip, STAFF_ID_HINT,
+} from '@/Components/ParticipantBits';
+import { Button, Card, Field, Input, Section, Select, useConfirm, useToast } from '@/ui';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
+import { AlertTriangle, ChevronLeft, Download, Printer, RotateCcw, ScanFace, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
 
 const normalizeStatus = (status) => EMPLOYMENT_STATUSES.find((s) => s.toLowerCase() === (status || '').trim().toLowerCase()) ?? (status || '');
-
-const faceStatusInfo = (participant) => participant.pending_photo_change_request
-    ? ['bg-amber-500', 'Foto baru menunggu verifikasi']
-    : participant.face_status === 'approved'
-        ? ['bg-emerald-500', 'Wajah disetujui']
-        : participant.face_status === 'pending'
-            ? ['bg-amber-500', 'Wajah menunggu persetujuan']
-            : participant.face_status === 'rejected'
-                ? ['bg-rose-500', 'Wajah ditolak']
-                : ['bg-neutral-300', 'Wajah belum terdaftar'];
 
 export default function ParticipantShow({ participant }) {
     const { props: { flash }, url: pageUrl } = usePage();
@@ -34,21 +22,12 @@ export default function ParticipantShow({ participant }) {
     const [approvePhotoOpen, setApprovePhotoOpen] = useState(false);
     const [historyKey, setHistoryKey] = useState(0);
 
-    const form = useForm({
-        nama: participant.nama,
-        nis_nip: participant.nis_nip,
-        status: normalizeStatus(participant.status),
-    });
-
     useEffect(() => {
-        if (flash?.success) {
-            toast.success(flash.success);
-        } else if (flash?.error) {
-            toast.error(flash.error);
-        }
+        if (flash?.success) toast.success(flash.success);
+        else if (flash?.error) toast.error(flash.error);
     }, [flash]);
 
-    // Tautan dari notifikasi admin: ?review=photo|face langsung membuka modal verifikasi.
+    // Tautan dari notifikasi admin: ?review=photo|face langsung membuka dialog verifikasi.
     useEffect(() => {
         const review = new URLSearchParams(pageUrl.split('?')[1] ?? '').get('review');
         if (review === 'photo' && participant.pending_photo_change_request) {
@@ -65,261 +44,104 @@ export default function ParticipantShow({ participant }) {
         setHistoryKey((key) => key + 1);
     };
 
-    const handleStatusChange = (status) => {
-        form.setData({
-            ...form.data,
-            status,
-            nis_nip: isNonPermanentStatus(status)
-                ? '-'
-                : form.data.nis_nip === '-' ? '' : form.data.nis_nip,
-        });
-    };
-
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        form.put(route('participants.update', participant.id), {
-            preserveScroll: true,
-            onSuccess: () => form.setDefaults(),
-        });
-    };
-
     const handleResetQr = async () => {
         const confirmed = await confirm({
-            title: 'Reset QR Peserta',
-            message: `QR lama milik "${participant.nama}" tidak akan berlaku lagi di scanner. Gunakan bila QR diduga dipakai orang lain. Lanjutkan?`,
-            type: 'danger',
-            confirmText: 'Ya, Reset QR',
-            cancelText: 'Batal',
+            title: 'Buat QR baru?',
+            message: `QR lama milik ${participant.nama} tidak berlaku lagi di scanner. Gunakan bila QR diduga dipakai orang lain.`,
+            confirmText: 'Buat QR baru',
         });
-        if (confirmed) {
-            router.post(route('participants.qr.regenerate', participant.id), {}, { preserveScroll: true });
-        }
+        if (confirmed) router.post(route('participants.qr.regenerate', participant.id), {}, { preserveScroll: true });
     };
 
     const handleDelete = async () => {
         const confirmed = await confirm({
-            title: 'Hapus Peserta',
-            message: `Apakah Anda yakin ingin menghapus peserta "${participant.nama}"? Data yang dihapus tidak dapat dikembalikan.`,
-            type: 'danger',
-            confirmText: 'Ya, Hapus',
-            cancelText: 'Batal',
+            title: `Hapus ${participant.nama}?`,
+            message: 'Akun login, foto, dan riwayat presensinya ikut terhapus permanen dan tidak bisa dikembalikan.',
+            confirmText: 'Hapus peserta',
         });
-        if (confirmed) {
-            router.delete(route('participants.destroy', participant.id));
-        }
+        if (confirmed) router.delete(route('participants.destroy', participant.id));
     };
 
-    const handlePrintQr = () => {
-        const printWindow = window.open('', '_blank', 'width=500,height=600');
-        printWindow.document.write(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>QR Code - ${participant.nama}</title>
-                <style>
-                    * { margin: 0; padding: 0; box-sizing: border-box; }
-                    body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #fff; }
-                    .card { text-align: center; padding: 40px; border: 2px solid #e5e7eb; border-radius: 16px; max-width: 400px; }
-                    .card h2 { font-size: 20px; color: #1e1b4b; margin-bottom: 4px; }
-                    .card p { font-size: 14px; color: #2f9338; margin-bottom: 20px; font-weight: 600; }
-                    .card img { width: 280px; height: 280px; margin: 0 auto 16px; display: block; }
-                    .card .school { font-size: 11px; color: #9ca3af; margin-top: 12px; }
-                    @media print {
-                        body { background: #fff; }
-                        .card { border: none; }
-                    }
-                </style>
-            </head>
-            <body>
-                <div class="card">
-                    <h2>${participant.nama}</h2>
-                    <p>${participant.nis_nip}</p>
-                    <img src="${route('participants.qr', participant.id)}" alt="QR Code" />
-                    <div class="school">E-Presensi SMABA</div>
-                </div>
-                <script>
-                    window.onload = function() {
-                        setTimeout(function() { window.close(); }, 1500);
-                        window.print();
-                    };
-                </script>
-            </body>
-            </html>
-        `);
-        printWindow.document.close();
-    };
-
-    const [faceTone, faceLabel] = faceStatusInfo(participant);
-    const needsReview = Boolean(participant.pending_photo_change_request) || participant.face_status === 'pending';
-    const inputClass = 'w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20';
+    const pendingPhoto = Boolean(participant.pending_photo_change_request);
+    const pendingFace = participant.face_status === 'pending';
 
     return (
         <AuthenticatedLayout>
-            <Head title={`Detail Peserta - ${participant.nama}`} />
+            <Head title={`${participant.nama} · Data Peserta`} />
 
-            <div className="flex w-full flex-col px-4 py-2 pb-8 sm:px-6">
-                {/* Judul halaman */}
-                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between" data-aos="fade-up">
-                    <div className="min-w-0">
-                        <Link href={route('participants.index')} className="inline-flex items-center gap-1 text-xs font-medium text-neutral-500 transition-colors hover:text-brand-600">
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                            </svg>
-                            Data Peserta
-                        </Link>
-                        <h3 className="mt-1 truncate text-xl font-bold text-neutral-800">Detail Peserta</h3>
-                        <p className="mt-0.5 text-sm text-neutral-500">Kelola data, QR presensi, dan wajah peserta.</p>
-                    </div>
+            <div className="mx-auto w-full max-w-6xl space-y-6 px-4 py-6 sm:px-6">
+                <div>
+                    <Link href={route('participants.index')} className="-ml-1 inline-flex min-h-8 items-center gap-1 rounded-md pr-2 text-sm text-ink-2 hover:text-ink">
+                        <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+                        Data Peserta
+                    </Link>
+                    <header className="mt-2 flex items-center gap-4">
+                        <ParticipantAvatar participant={participant} size="lg" />
+                        <div className="min-w-0">
+                            <h1 className="font-display text-2xl font-semibold tracking-tight text-ink">{participant.nama}</h1>
+                            <p className="mt-0.5 text-sm tabular-nums text-ink-2">
+                                {participant.nis_nip}{participant.status ? ` · ${participant.status}` : ''}
+                            </p>
+                            <FaceStatus participant={participant} className="mt-2" />
+                        </div>
+                    </header>
                 </div>
 
-                {needsReview && (
-                    <div className="mb-4 flex flex-col gap-3 rounded-lg bg-gradient-to-b from-amber-400 to-orange-500 p-4 text-sm text-white shadow-soft sm:flex-row sm:items-center sm:justify-between" role="status" data-aos="fade-up">
-                        <p>
-                            {participant.pending_photo_change_request
-                                ? <><strong className="font-semibold">Foto wajah baru</strong> menunggu verifikasi.</>
-                                : <><strong className="font-semibold">Pendaftaran wajah</strong> menunggu persetujuan.</>}
+                {(pendingPhoto || pendingFace) && (
+                    <div className="flex flex-col gap-3 rounded-xl border border-status-telat/30 bg-status-telat-soft p-4 sm:flex-row sm:items-center" role="status">
+                        <AlertTriangle className="hidden h-5 w-5 shrink-0 text-status-telat sm:block" aria-hidden="true" />
+                        <p className="flex-1 text-sm text-ink">
+                            {pendingPhoto ? <><span className="font-semibold">Foto wajah baru</span> menunggu verifikasi.</> : <><span className="font-semibold">Pendaftaran wajah</span> menunggu persetujuan.</>}
                         </p>
                         <div className="flex gap-2">
-                            {participant.pending_photo_change_request && (
-                                <button type="button" onClick={() => setApprovePhotoOpen(true)} className="rounded-md border border-white/70 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-white hover:text-orange-600">
-                                    Verifikasi foto
-                                </button>
-                            )}
-                            {participant.face_status === 'pending' && (
-                                <button type="button" onClick={() => setApproveFaceOpen(true)} className="rounded-md border border-white/70 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-white hover:text-orange-600">
-                                    Tinjau wajah
-                                </button>
-                            )}
+                            {pendingPhoto && <Button size="sm" variant="primary" onClick={() => setApprovePhotoOpen(true)}>Verifikasi foto</Button>}
+                            {pendingFace && <Button size="sm" variant="primary" onClick={() => setApproveFaceOpen(true)}>Tinjau wajah</Button>}
                         </div>
                     </div>
                 )}
 
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                    {/* Kolom kiri: profil & QR */}
-                    <div className="space-y-4">
-                        <section className="card-soft p-5" data-aos="fade-up">
-                            <div className="flex items-center gap-4">
-                                <Avatar participant={participant} />
-                                <div className="min-w-0">
-                                    <p className="text-base font-bold text-neutral-800">{participant.nama}</p>
-                                    <p className="mt-0.5 text-xs font-medium text-neutral-500">{participant.nis_nip}</p>
-                                    {participant.status && (
-                                        <span className="mt-1.5 inline-flex rounded-md bg-gradient-to-b from-neutral-500 to-neutral-700 px-2 py-0.5 text-[10px] font-bold uppercase leading-4 text-white">
-                                            {participant.status}
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-                            <dl className="mt-5 space-y-2.5 border-t border-neutral-100 pt-4 text-sm">
-                                <InfoRow label="Status wajah">
-                                    <span className="inline-flex items-center gap-1.5">
-                                        <span className={`h-1.5 w-1.5 rounded-full ${faceTone}`} />
-                                        {faceLabel}
-                                    </span>
-                                </InfoRow>
-                                <InfoRow label="Total presensi">{participant.attendances_count} kali</InfoRow>
+                <div className="grid gap-6 lg:grid-cols-3">
+                    <div className="space-y-6">
+                        <Section title="Ringkasan">
+                            <dl className="space-y-3 text-sm">
+                                <InfoRow label="Total presensi"><span className="tabular-nums">{participant.attendances_count}</span> kali</InfoRow>
                                 <InfoRow label="Akun login">{participant.account?.username ?? 'Tidak ada'}</InfoRow>
                                 <InfoRow label="Perangkat">{participant.account?.device_model ?? 'Belum terkunci'}</InfoRow>
                                 <InfoRow label="Didaftarkan">{participant.created_at}</InfoRow>
                             </dl>
-                        </section>
+                        </Section>
 
-                        <section className="card-soft p-5" data-aos="fade-up" data-aos-delay="50">
-                            <h6 className="text-base font-semibold text-neutral-800">QR Code Presensi</h6>
-                            <p className="mt-0.5 text-xs text-neutral-500">Dipakai untuk presensi scan QR.</p>
-                            <img
-                                src={`${route('participants.qr', participant.id)}?v=${encodeURIComponent(participant.qr_token ?? '')}`}
-                                alt={`QR Code - ${participant.nama}`}
-                                className="mx-auto mt-4 h-44 w-44 rounded-md border border-neutral-200 bg-white p-2"
-                            />
-                            <div className="mt-4 flex gap-2">
-                                <button type="button" onClick={() => window.open(route('participants.download.svg', participant.id), '_blank')} className="btn-soft flex-1 justify-center">
-                                    Download
-                                </button>
-                                <button type="button" onClick={handlePrintQr} className="btn-brand flex-1 justify-center">
-                                    Cetak
-                                </button>
-                            </div>
-                            <button type="button" onClick={handleResetQr} className="mt-2 w-full rounded-md border border-rose-200 bg-white px-2 py-2 text-xs font-medium text-rose-600 transition-colors hover:bg-rose-50">
-                                Reset QR (QR lama tidak berlaku)
-                            </button>
-                        </section>
+                        <QrSection participant={participant} onReset={handleResetQr} />
                     </div>
 
-                    {/* Kolom kanan: edit, wajah, riwayat, hapus */}
-                    <div className="space-y-4 lg:col-span-2">
-                        <section className="card-soft p-5" data-aos="fade-up" data-aos-delay="50">
-                            <h6 className="text-base font-semibold text-neutral-800">Edit Data Peserta</h6>
-                            <form onSubmit={handleSubmit} className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-                                <div className="sm:col-span-2">
-                                    <label htmlFor="nama" className="mb-1 block text-sm font-bold text-slate-600">Nama Lengkap</label>
-                                    <input id="nama" type="text" value={form.data.nama} onChange={(e) => form.setData('nama', e.target.value)} className={inputClass} placeholder="Masukkan nama lengkap" required />
-                                    {form.errors.nama && <p className="mt-1 text-xs font-bold text-red-600">{form.errors.nama}</p>}
-                                </div>
-                                <div>
-                                    <label htmlFor="nis_nip" className="mb-1 block text-sm font-bold text-slate-600">NIP</label>
-                                    <input
-                                        id="nis_nip"
-                                        type="text"
-                                        value={form.data.nis_nip}
-                                        onChange={(e) => form.setData('nis_nip', e.target.value)}
-                                        readOnly={isNonPermanentStatus(form.data.status)}
-                                        className={`${inputClass} ${isNonPermanentStatus(form.data.status) ? 'cursor-not-allowed !bg-slate-100' : ''}`}
-                                        placeholder="Masukkan NIP"
-                                        required={!isNonPermanentStatus(form.data.status)}
-                                    />
-                                    {form.errors.nis_nip && <p className="mt-1 text-xs font-bold text-red-600">{form.errors.nis_nip}</p>}
-                                    {isNonPermanentStatus(form.data.status) && (
-                                        <p className="mt-1 text-[11px] font-semibold text-slate-500">NIP otomatis diisi "-" untuk GTT/PTT.</p>
-                                    )}
-                                </div>
-                                <div>
-                                    <label htmlFor="status" className="mb-1 block text-sm font-bold text-slate-600">Status Pegawai</label>
-                                    <select id="status" value={form.data.status} onChange={(e) => handleStatusChange(e.target.value)} className={inputClass}>
-                                        <option value="">-- Pilih Status --</option>
-                                        {EMPLOYMENT_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
-                                    </select>
-                                    {form.errors.status && <p className="mt-1 text-xs font-bold text-red-600">{form.errors.status}</p>}
-                                </div>
-                                <div className="flex justify-end gap-2 sm:col-span-2">
-                                    <button type="button" disabled={!form.isDirty || form.processing} onClick={() => { form.reset(); form.clearErrors(); }} className="btn-soft disabled:opacity-50">
-                                        Batalkan
-                                    </button>
-                                    <button type="submit" disabled={!form.isDirty || form.processing} className="btn-brand disabled:opacity-50">
-                                        {form.processing ? 'Menyimpan...' : 'Simpan Perubahan'}
-                                    </button>
-                                </div>
-                            </form>
-                        </section>
+                    <div className="space-y-6 lg:col-span-2">
+                        <EditSection participant={participant} />
 
-                        <section className="card-soft p-5" data-aos="fade-up" data-aos-delay="100">
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                <div>
-                                    <h6 className="text-base font-semibold text-neutral-800">Wajah Peserta</h6>
-                                    <p className="mt-0.5 text-xs text-neutral-500">Riwayat wajah yang pernah disetujui admin, terbaru di atas.</p>
-                                </div>
-                                {participant.face_status !== 'pending' && (
-                                    <button type="button" onClick={() => setFaceRegistrationOpen(true)} className="btn-soft shrink-0">
-                                        {participant.face_status === 'approved' ? 'Perbarui Wajah' : 'Registrasi Wajah'}
-                                    </button>
-                                )}
-                            </div>
-                            <div className="mt-4 max-h-[420px] overflow-y-auto border-t border-neutral-100 pt-4">
+                        <Section
+                            title="Wajah"
+                            description="Riwayat wajah yang pernah disetujui, terbaru di atas."
+                            actions={!pendingFace && (
+                                <Button size="sm" icon={ScanFace} onClick={() => setFaceRegistrationOpen(true)}>
+                                    {participant.face_status === 'approved' ? 'Perbarui wajah' : 'Daftarkan wajah'}
+                                </Button>
+                            )}
+                        >
+                            <div className="max-h-[420px] overflow-y-auto border-t border-line pt-4">
                                 <FaceHistoryPanel participant={participant} reloadKey={historyKey} />
                             </div>
-                        </section>
+                        </Section>
 
-                        <section className="card-soft border border-rose-100 p-5" data-aos="fade-up" data-aos-delay="150">
+                        <PasswordSection participant={participant} />
+
+                        <Card as="section" className="border-danger/30 p-5">
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
-                                    <h6 className="text-base font-semibold text-rose-600">Hapus Peserta</h6>
-                                    <p className="mt-0.5 text-xs text-neutral-500">Data peserta dan akun login-nya dihapus permanen, tidak dapat dikembalikan.</p>
+                                    <h2 className="text-base font-semibold text-ink">Hapus peserta</h2>
+                                    <p className="mt-0.5 text-sm text-ink-2">Akun login, foto, dan riwayat presensi ikut terhapus permanen.</p>
                                 </div>
-                                <button type="button" onClick={handleDelete} className="shrink-0 rounded-md bg-gradient-to-b from-rose-400 to-rose-600 px-4 py-2 text-sm font-medium text-white shadow-dark-sm transition-shadow hover:shadow-dark-hover">
-                                    Hapus Peserta
-                                </button>
+                                <Button variant="danger" icon={Trash2} onClick={handleDelete}>Hapus peserta</Button>
                             </div>
-                        </section>
+                        </Card>
                     </div>
                 </div>
             </div>
@@ -346,7 +168,7 @@ export default function ParticipantShow({ participant }) {
                 />
             )}
 
-            {approvePhotoOpen && participant.pending_photo_change_request && (
+            {approvePhotoOpen && pendingPhoto && (
                 <ApprovePhotoChangeRequestModal
                     participant={participant}
                     onClose={() => setApprovePhotoOpen(false)}
@@ -356,34 +178,197 @@ export default function ParticipantShow({ participant }) {
                     }}
                 />
             )}
-
-            <style>{`
-                @keyframes fadeIn {
-                    from { opacity: 0; transform: scale(0.95); }
-                    to { opacity: 1; transform: scale(1); }
-                }
-            `}</style>
         </AuthenticatedLayout>
+    );
+}
+
+function QrSection({ participant, onReset }) {
+    const qrUrl = `${route('participants.qr', participant.id)}?v=${encodeURIComponent(participant.qr_token ?? '')}`;
+
+    // Jendela cetak terpisah berisi satu kartu QR; tertutup sendiri setelah dialog cetak.
+    const handlePrint = () => {
+        const escape = (text) => String(text ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+        const printWindow = window.open('', '_blank', 'width=500,height=600');
+        printWindow.document.write(`<!DOCTYPE html><html><head><title>QR Code - ${escape(participant.nama)}</title>
+            <style>
+                * { margin: 0; padding: 0; box-sizing: border-box; }
+                body { font-family: -apple-system, BlinkMacSystemFont, Inter, 'Segoe UI', sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+                .card { text-align: center; padding: 40px; border: 1px solid #dfe3df; border-radius: 16px; max-width: 400px; }
+                h2 { font-size: 20px; color: #1b1f1c; margin-bottom: 4px; }
+                p { font-size: 14px; color: #4b544e; margin-bottom: 20px; }
+                img { width: 280px; height: 280px; margin: 0 auto 16px; display: block; }
+                .school { font-size: 12px; color: #69716b; margin-top: 12px; }
+                @media print { .card { border: none; } }
+            </style></head><body>
+            <div class="card"><h2>${escape(participant.nama)}</h2><p>${escape(participant.nis_nip)}</p>
+            <img src="${route('participants.qr', participant.id)}" alt="QR Code" />
+            <div class="school">E-Presensi SMABA · SMA Negeri 1 Babat</div></div>
+            <script>window.onload = function () { setTimeout(function () { window.close(); }, 1500); window.print(); };<\/script>
+            </body></html>`);
+        printWindow.document.close();
+    };
+
+    return (
+        <Section title="QR presensi" description="Dipindai di Scanner admin.">
+            {/* QR selalu di atas putih agar tetap terbaca kamera di mode gelap. */}
+            <img src={qrUrl} alt={`QR presensi ${participant.nama}`} className="mx-auto h-48 w-48 rounded-lg border border-line bg-white p-2" />
+            <div className="mt-4 grid grid-cols-2 gap-2">
+                <Button icon={Download} onClick={() => window.open(route('participants.download.svg', participant.id), '_blank')}>Unduh</Button>
+                <Button icon={Printer} onClick={handlePrint}>Cetak</Button>
+            </div>
+            <Button variant="ghost" icon={RotateCcw} onClick={onReset} className="mt-2 w-full text-danger hover:text-danger">
+                Buat QR baru
+            </Button>
+        </Section>
+    );
+}
+
+function EditSection({ participant }) {
+    const savedStatus = normalizeStatus(participant.status);
+    const savedNonPermanent = isNonPermanentStatus(savedStatus);
+    const form = useForm({
+        nama: participant.nama,
+        nis_nip: formNip(participant.nis_nip),
+        status: savedStatus,
+        tanggal_lahir: participant.tanggal_lahir ?? '',
+        jenis_kelamin: participant.jenis_kelamin ?? '',
+    });
+    const nonPermanent = isNonPermanentStatus(form.data.status);
+
+    // Isian NIP mengikuti status: GTT/PTT menampilkan ID tersimpan (atau kosong = dibuat saat disimpan);
+    // pegawai tetap memakai NIP tersimpan, atau kosong bila sebelumnya GTT/PTT (ID lama bukan NIP).
+    const changeStatus = (status) => {
+        let nis_nip = form.data.nis_nip; // pegawai tetap → pegawai tetap: isian tidak berubah
+        if (isNonPermanentStatus(status)) {
+            nis_nip = savedNonPermanent ? formNip(participant.nis_nip) : '';
+        } else if (nonPermanent) {
+            nis_nip = savedNonPermanent ? '' : formNip(participant.nis_nip);
+        }
+
+        form.setData({ ...form.data, status, nis_nip });
+    };
+
+    const submit = (e) => {
+        e.preventDefault();
+        form.put(route('participants.update', participant.id), { preserveScroll: true, onSuccess: () => form.setDefaults() });
+    };
+
+    return (
+        <Section title="Data peserta">
+            <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
+                <Field label="Nama lengkap" required error={form.errors.nama} className="sm:col-span-2">
+                    <Input value={form.data.nama} onChange={(e) => form.setData('nama', e.target.value)} autoComplete="off" />
+                </Field>
+                <Field label="Status pegawai" error={form.errors.status}>
+                    <Select value={form.data.status} onChange={(e) => changeStatus(e.target.value)}>
+                        <option value="">Pilih status</option>
+                        {EMPLOYMENT_STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
+                    </Select>
+                </Field>
+                <Field label={nipLabel(form.data.status)} required={!nonPermanent} error={form.errors.nis_nip} hint={nonPermanent ? STAFF_ID_HINT : undefined}>
+                    <Input
+                        value={form.data.nis_nip}
+                        onChange={(e) => form.setData('nis_nip', e.target.value)}
+                        readOnly={nonPermanent}
+                        placeholder={nonPermanent ? 'Dibuat otomatis saat disimpan' : undefined}
+                        inputMode="numeric"
+                        autoComplete="off"
+                    />
+                </Field>
+                {nonPermanent && (
+                    <>
+                        {/* Bahan ID pengganti NIP untuk GTT/PTT (dibuat server). */}
+                        <Field label="Tanggal lahir" required error={form.errors.tanggal_lahir}>
+                            <Input type="date" value={form.data.tanggal_lahir} onChange={(e) => form.setData('tanggal_lahir', e.target.value)} />
+                        </Field>
+                        <Field label="Jenis kelamin" required error={form.errors.jenis_kelamin}>
+                            <Select value={form.data.jenis_kelamin} onChange={(e) => form.setData('jenis_kelamin', e.target.value)}>
+                                <option value="">Pilih</option>
+                                <option value="L">Laki-laki</option>
+                                <option value="P">Perempuan</option>
+                            </Select>
+                        </Field>
+                    </>
+                )}
+                <div className="flex justify-end gap-2 sm:col-span-2">
+                    <Button disabled={!form.isDirty || form.processing} onClick={() => { form.reset(); form.clearErrors(); }}>Batalkan</Button>
+                    <Button variant="primary" type="submit" disabled={!form.isDirty} loading={form.processing}>Simpan perubahan</Button>
+                </div>
+            </form>
+        </Section>
+    );
+}
+
+// Kata sandi akun login peserta: kembalikan ke NIS/NIP atau atur yang baru (tidak ada reset lewat email).
+function PasswordSection({ participant }) {
+    const confirm = useConfirm();
+    const form = useForm({ mode: 'custom', password: '', password_confirmation: '', logout_sessions: false });
+
+    if (!participant.account) {
+        return (
+            <Section title="Kata sandi akun">
+                <p className="text-sm text-ink-2">
+                    {isNonPermanentStatus(participant.status)
+                        ? 'Peserta ini belum punya akun login. Lengkapi tanggal lahir dan jenis kelamin di Data peserta, lalu simpan: ID pengganti NIP dan akunnya dibuat otomatis.'
+                        : 'Peserta ini tidak punya akun login. Akun dibuat otomatis dari NIP saat data disimpan.'}
+                </p>
+            </Section>
+        );
+    }
+
+    const submit = (mode) => form.transform((data) => ({ ...data, mode })).put(route('participants.password.update', participant.id), {
+        preserveScroll: true,
+        onSuccess: () => form.reset(),
+    });
+
+    // GTT/PTT: kata sandi awal = ID pengganti NIP (server memakai nis_nip untuk keduanya).
+    const idName = isNonPermanentStatus(participant.status) ? 'ID' : 'NIP';
+
+    const handleReset = async () => {
+        const confirmed = await confirm({
+            title: `Kembalikan kata sandi ke ${idName}?`,
+            message: `Kata sandi akun ${participant.account.username} menjadi ${idName}-nya (${participant.nis_nip}).`,
+            type: 'warning',
+            confirmText: `Kembalikan ke ${idName}`,
+        });
+        if (confirmed) submit('reset');
+    };
+
+    return (
+        <Section
+            title="Kata sandi akun"
+            description={<>Akun login <span className="font-medium text-ink">{participant.account.username}</span>. Kata sandi tidak bisa dilihat, hanya diganti.</>}
+            actions={<Button size="sm" icon={RotateCcw} onClick={handleReset} disabled={form.processing}>Kembalikan ke {idName}</Button>}
+        >
+            <form onSubmit={(e) => { e.preventDefault(); submit('custom'); }} className="grid gap-4 border-t border-line pt-4 sm:grid-cols-2">
+                <Field label="Kata sandi baru" required error={form.errors.password} hint="Minimal 8 karakter.">
+                    <Input type="password" autoComplete="new-password" value={form.data.password} onChange={(e) => form.setData('password', e.target.value)} />
+                </Field>
+                <Field label="Ulangi kata sandi baru" required>
+                    <Input type="password" autoComplete="new-password" value={form.data.password_confirmation} onChange={(e) => form.setData('password_confirmation', e.target.value)} />
+                </Field>
+                <label className="flex cursor-pointer items-start gap-3 text-sm text-ink-2 sm:col-span-2">
+                    <input
+                        type="checkbox"
+                        checked={form.data.logout_sessions}
+                        onChange={(e) => form.setData('logout_sessions', e.target.checked)}
+                        className="mt-0.5 h-[18px] w-[18px] rounded border-line-strong bg-surface text-accent focus:ring-accent"
+                    />
+                    <span>Sekaligus keluarkan dari aplikasi Android dan website, jadi peserta wajib login ulang. Disarankan bila akun diduga dipakai orang lain.</span>
+                </label>
+                <div className="flex justify-end sm:col-span-2">
+                    <Button variant="primary" type="submit" disabled={!form.data.password} loading={form.processing}>Simpan kata sandi</Button>
+                </div>
+            </form>
+        </Section>
     );
 }
 
 function InfoRow({ label, children }) {
     return (
         <div className="flex items-start justify-between gap-3">
-            <dt className="shrink-0 text-neutral-500">{label}</dt>
-            <dd className="min-w-0 text-right font-medium text-neutral-800">{children}</dd>
-        </div>
-    );
-}
-
-function Avatar({ participant }) {
-    const [failed, setFailed] = useState(false);
-
-    return participant.photo_url && !failed ? (
-        <img src={participant.photo_url} alt="" className="h-16 w-16 shrink-0 rounded-lg object-cover" onError={() => setFailed(true)} />
-    ) : (
-        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-lg bg-brand-gradient text-xl font-semibold text-white">
-            {participant.nama.charAt(0).toUpperCase()}
+            <dt className="shrink-0 text-ink-2">{label}</dt>
+            <dd className="min-w-0 text-right font-medium text-ink">{children}</dd>
         </div>
     );
 }

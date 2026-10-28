@@ -4,6 +4,7 @@ namespace App\Http\Resources\Api\V1;
 
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Carbon;
 
 class AttendanceHistoryResource extends JsonResource
 {
@@ -30,6 +31,8 @@ class AttendanceHistoryResource extends JsonResource
                 'jadwal_per_hari' => $this->workcode->jadwal_per_hari,
             ] : null,
             'status' => $this->status,
+            // Tanggal presensi (Y-m-d). created_at tetap dikirim untuk aplikasi versi lama.
+            'tanggal' => $this->tanggal ? Carbon::parse($this->tanggal)->toDateString() : null,
             'waktu_hadir' => $this->waktu_hadir ? $this->waktu_hadir->toIso8601String() : null,
             'waktu_pulang' => $this->waktu_pulang ? $this->waktu_pulang->toIso8601String() : null,
             'created_at' => $this->created_at ? $this->created_at->toIso8601String() : null,

@@ -34,9 +34,10 @@ class AttendanceStateService
         $attendanceQuery = Attendance::where('workcode_id', $activeWorkcode->id)
             ->where('participant_id', $participant->id);
 
-        // Presensi harian hanya melihat catatan pada tanggal berjalan.
+        // Presensi harian hanya melihat catatan pada tanggal berjalan (kolom tanggal, bagian unique key;
+        // created_at bisa berbeda, mis. presensi manual yang dibuat/diubah admin di hari lain).
         if ($activeWorkcode->kategori === 'harian') {
-            $attendanceQuery->whereDate('created_at', now()->toDateString());
+            $attendanceQuery->whereDate('tanggal', now()->toDateString());
         }
 
         $attendance = $attendanceQuery->first();

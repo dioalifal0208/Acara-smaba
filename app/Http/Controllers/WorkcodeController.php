@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Participant;
 use App\Models\Workcode;
 use App\Services\FcmService;
+use App\Support\AdminDashboardStats;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -23,8 +24,11 @@ class WorkcodeController extends Controller
             ->get();
 
         // Setiap jadwal yang sedang berlangsung dapat aktif bersamaan.
+        // Workcode yang sedang aktif ikut membawa Papan Hadir (tepat waktu/terlambat/izin/belum).
         $workcodes->each(function (Workcode $workcode): void {
-            $workcode->setAttribute('is_effectively_active', $workcode->isEffectivelyActive());
+            $active = $workcode->isEffectivelyActive();
+            $workcode->setAttribute('is_effectively_active', $active);
+            $workcode->setAttribute('board', $active ? AdminDashboardStats::board($workcode) : null);
         });
 
         return Inertia::render('Workcodes/Index', [

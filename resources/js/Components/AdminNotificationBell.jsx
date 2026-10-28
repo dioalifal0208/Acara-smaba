@@ -1,4 +1,6 @@
 import { Link, usePage } from '@inertiajs/react';
+import { Bell } from 'lucide-react';
+import Button from '@/ui/Button';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
@@ -8,9 +10,9 @@ const SEEN_KEY = 'admin-notifications:last-opened';
 const NOTIFIED_KEY = 'admin-notifications:notified';
 
 const TYPE_STYLES = {
-    photo_change: { dot: 'bg-amber-500', chip: 'bg-amber-50 text-amber-700 border-amber-100' },
-    face_registration: { dot: 'bg-emerald-500', chip: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
-    leave: { dot: 'bg-blue-500', chip: 'bg-blue-50 text-blue-700 border-blue-100' },
+    photo_change: { dot: 'bg-status-telat', chip: 'bg-status-telat-soft text-status-telat' },
+    face_registration: { dot: 'bg-status-hadir', chip: 'bg-status-hadir-soft text-status-hadir' },
+    leave: { dot: 'bg-status-izin', chip: 'bg-status-izin-soft text-status-izin' },
 };
 
 const storage = {
@@ -175,15 +177,15 @@ export default function AdminNotificationBell({ className = '' }) {
                 ref={buttonRef}
                 type="button"
                 onClick={toggle}
-                aria-label={total > 0 ? `${total} pekerjaan menunggu verifikasi` : 'Notifikasi'}
+                aria-label={total > 0 ? `Notifikasi, ${total} menunggu verifikasi` : 'Notifikasi'}
                 aria-expanded={open}
-                className={`relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-indigo-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 ${className}`}
+                aria-haspopup="dialog"
+                title="Notifikasi"
+                className={`relative inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink ${className}`}
             >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
+                <Bell className="h-5 w-5" aria-hidden="true" />
                 {total > 0 && (
-                    <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-rose-500 px-1 text-[10px] font-black text-white">
+                    <span className="absolute right-0.5 top-0.5 min-w-5 rounded-full bg-danger px-1 text-center text-xs font-semibold leading-5 text-surface ring-2 ring-app" aria-hidden="true">
                         {total > 99 ? '99+' : total}
                     </span>
                 )}
@@ -195,31 +197,29 @@ export default function AdminNotificationBell({ className = '' }) {
                     role="dialog"
                     aria-label="Notifikasi admin"
                     style={{ top: position.top, right: position.right }}
-                    className="fixed z-[60] flex max-h-[min(32rem,calc(100vh-6rem))] w-[22rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+                    className="fixed z-[60] flex max-h-[min(32rem,calc(100dvh-6rem))] w-[22rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-xl border border-line bg-surface shadow-xl"
                 >
-                    <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                    <div className="flex items-center justify-between gap-2 border-b border-line py-2 pl-4 pr-2">
                         <div>
-                            <p className="text-sm font-extrabold text-slate-900">Notifikasi</p>
-                            <p className="text-xs font-medium text-slate-500">
+                            <p className="text-sm font-semibold text-ink">Notifikasi</p>
+                            <p className="text-xs text-ink-2">
                                 {total > 0 ? `${total} menunggu verifikasi` : 'Tidak ada yang perlu diverifikasi'}
                             </p>
                         </div>
-                        <button type="button" onClick={refresh} className="rounded-lg px-2 py-1 text-xs font-bold text-indigo-600 hover:bg-indigo-50">
-                            Muat ulang
-                        </button>
+                        <Button size="sm" variant="ghost" onClick={refresh}>Muat ulang</Button>
                     </div>
 
                     {groups.length > 0 && (
-                        <div className="flex flex-wrap gap-2 border-b border-slate-100 px-4 py-3">
+                        <div className="flex flex-wrap gap-2 border-b border-line px-4 py-3">
                             {groups.map((group) => (
                                 <Link
                                     key={group.type}
                                     href={group.url}
                                     onClick={closePanel}
-                                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-bold ${TYPE_STYLES[group.type]?.chip ?? 'bg-slate-50 text-slate-700 border-slate-100'}`}
+                                    className={`inline-flex min-h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium ${TYPE_STYLES[group.type]?.chip ?? 'bg-surface-2 text-ink-2'}`}
                                 >
                                     {group.label}
-                                    <span className="tabular-nums">{group.count}</span>
+                                    <span className="font-semibold tabular-nums">{group.count}</span>
                                 </Link>
                             ))}
                         </div>
@@ -228,28 +228,28 @@ export default function AdminNotificationBell({ className = '' }) {
                     <div className="min-h-0 flex-1 overflow-y-auto">
                         {items.length === 0 ? (
                             <div className="px-4 py-10 text-center">
-                                <p className="text-sm font-bold text-slate-700">Semua sudah diverifikasi</p>
-                                <p className="mt-1 text-xs text-slate-500">Pengajuan baru akan muncul di sini.</p>
+                                <p className="text-sm font-medium text-ink">Semua sudah diverifikasi</p>
+                                <p className="mt-1 text-xs text-ink-2">Pengajuan baru akan muncul di sini.</p>
                             </div>
                         ) : (
-                            <ul className="divide-y divide-slate-100">
+                            <ul className="divide-y divide-line">
                                 {items.map((item) => (
                                     <li key={item.id}>
                                         <Link
                                             href={item.url}
                                             onClick={closePanel}
-                                            className="flex gap-3 px-4 py-3 transition-colors hover:bg-slate-50"
+                                            className="flex gap-3 px-4 py-3 transition-colors hover:bg-surface-2"
                                         >
-                                            <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${TYPE_STYLES[item.type]?.dot ?? 'bg-slate-400'}`} />
+                                            <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${TYPE_STYLES[item.type]?.dot ?? 'bg-ink-3'}`} aria-hidden="true" />
                                             <span className="min-w-0 flex-1">
                                                 <span className="flex items-center gap-2">
-                                                    <span className="truncate text-sm font-bold text-slate-800">{item.title}</span>
+                                                    <span className="truncate text-sm font-medium text-ink">{item.title}</span>
                                                     {isNew(item) && (
-                                                        <span className="shrink-0 rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-black uppercase text-rose-600">Baru</span>
+                                                        <span className="shrink-0 rounded bg-danger-soft px-1.5 text-xs font-medium text-danger">Baru</span>
                                                     )}
                                                 </span>
-                                                <span className="mt-0.5 block text-xs text-slate-600">{item.body}</span>
-                                                <span className="mt-1 block text-[11px] font-medium text-slate-400">{relativeTime(item.created_at)}</span>
+                                                <span className="mt-0.5 block text-xs text-ink-2">{item.body}</span>
+                                                <span className="mt-1 block text-xs text-ink-3">{relativeTime(item.created_at)}</span>
                                             </span>
                                         </Link>
                                     </li>
@@ -259,11 +259,11 @@ export default function AdminNotificationBell({ className = '' }) {
                     </div>
 
                     {permission === 'default' && (
-                        <div className="border-t border-slate-100 bg-slate-50 px-4 py-3">
-                            <button type="button" onClick={enableBrowserNotifications} className="text-xs font-bold text-indigo-600 hover:underline">
+                        <div className="border-t border-line bg-surface-2 px-4 py-3">
+                            <button type="button" onClick={enableBrowserNotifications} className="text-sm font-medium text-accent hover:underline">
                                 Aktifkan notifikasi browser
                             </button>
-                            <p className="mt-0.5 text-[11px] text-slate-500">Tampilkan pemberitahuan saat ada pengajuan baru, selama halaman admin terbuka.</p>
+                            <p className="mt-0.5 text-xs text-ink-2">Tampilkan pemberitahuan saat ada pengajuan baru, selama halaman admin terbuka.</p>
                         </div>
                     )}
                 </div>,

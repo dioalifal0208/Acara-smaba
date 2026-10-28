@@ -1,7 +1,7 @@
 import { router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
-import { useToast } from '@/Components/Toast';
-import { icons } from '@/lib/adminMenu';
+import { useToast } from '@/ui';
+import { Zap } from 'lucide-react';
 
 const formatSyncTime = (iso) => new Date(iso).toLocaleString('id-ID', {
     day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
@@ -41,10 +41,11 @@ export default function SyncButton({ className = '' }) {
             onClick={sync}
             disabled={syncing}
             title={title}
-            aria-label="Sinkronkan data web dan Android"
-            className={`flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:text-amber-500 disabled:cursor-wait ${syncing ? 'text-amber-500' : ''} ${className}`}
+            aria-label={syncing ? 'Menyinkronkan data web dan Android' : 'Sinkronkan data web dan Android'}
+            aria-busy={syncing || undefined}
+            className={`inline-flex h-10 w-10 items-center justify-center rounded-lg text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink disabled:cursor-wait ${syncing ? 'text-status-telat' : ''} ${className}`}
         >
-            <span className={`h-5 w-5 ${syncing ? 'animate-pulse' : ''}`}>{icons.bolt}</span>
+            <Zap className={`h-5 w-5 ${syncing ? 'animate-pulse motion-reduce:animate-none' : ''}`} aria-hidden="true" />
         </button>
     );
 }

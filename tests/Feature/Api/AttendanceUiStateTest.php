@@ -330,6 +330,63 @@ class AttendanceUiStateTest extends TestCase
             ->assertJsonPath('data.attendance_ui.action_label', $action === 'none' ? null : ($action === 'arrival' ? 'Absen Datang' : 'Absen Pulang'));
     }
 
+    public function test_yesterday_row_created_today_is_not_today_attendance(): void
+    {
+        // Admin hari ini menambah presensi manual untuk kemarin: tanggal kemarin, created_at hari ini.
+        Carbon::setTestNow(Carbon::parse('2026-10-20 07:15:00', 'Asia/Jakarta'));
+        $participant = $this->actingParticipant();
+        $workcode = $this->createDailyWorkcode();
+        $yesterday = Attendance::create([
+            'workcode_id' => $workcode->id,
+            'participant_id' => $participant->id,
+            'tanggal' => '2026-10-19',
+            'waktu_hadir' => '2026-10-19 07:05:00',
+            'status' => 'hadir',
+            'attendance_method' => 'manual',
+        ]);
+
+        // Dulu dicari lewat created_at, sehingga dianggap sudah datang hari ini dan tombolnya "Absen Pulang".
+        $this->getJson('/api/v1/workcodes/active')
+            ->assertOk()
+            ->assertJsonPath('data.attendance_ui.action', 'arrival');
+
+        $this->postJson('/api/v1/attendance', $this->payload(), ['Idempotency-Key' => Str::uuid()->toString()])
+            ->assertCreated()
+            ->assertJsonPath('message', 'Presensi datang berhasil dicatat.');
+
+        $this->assertNull($yesterday->fresh()->waktu_pulang);
+        $this->assertSame(1, Attendance::whereDate('tanggal', '2026-10-20')->count());
+    }
+
+    public function test_today_row_created_yesterday_still_counts_as_today(): void
+    {
+        // Kebalikannya: baris untuk hari ini yang dibuat kemarin (mis. tanggal presensi manual diubah admin).
+        Carbon::setTestNow(Carbon::parse('2026-10-19 17:00:00', 'Asia/Jakarta'));
+        $participant = $this->actingParticipant();
+        $workcode = $this->createDailyWorkcode(['hari_aktif' => null]);
+        Attendance::create([
+            'workcode_id' => $workcode->id,
+            'participant_id' => $participant->id,
+            'tanggal' => '2026-10-20',
+            'waktu_hadir' => '2026-10-20 07:05:00',
+            'status' => 'hadir',
+            'attendance_method' => 'manual',
+        ]);
+
+        Carbon::setTestNow(Carbon::parse('2026-10-20 15:30:00', 'Asia/Jakarta'));
+
+        $this->getJson('/api/v1/workcodes/active')
+            ->assertOk()
+            ->assertJsonPath('data.attendance_ui.action', 'departure');
+
+        // Dulu baris itu tidak ditemukan, lalu insert baru melanggar unique (workcode, peserta, tanggal).
+        $this->postJson('/api/v1/attendance', $this->payload(), ['Idempotency-Key' => Str::uuid()->toString()])
+            ->assertOk()
+            ->assertJsonPath('message', 'Presensi pulang berhasil dicatat.');
+
+        $this->assertSame(1, Attendance::count());
+    }
+
     private function actingParticipant(): Participant
     {
         $participant = Participant::create([

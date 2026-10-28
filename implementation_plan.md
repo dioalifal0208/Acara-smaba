@@ -340,6 +340,7 @@ Belum diuji di HP:
 
 - [x] `php artisan test` hijau, termasuk test baru §4 B16. `npm run build` sukses.
 - [x] Descriptor yang sama diterima oleh web `/api/face/match` (self) **dan** Android `/api/v1/attendance` dengan aturan yang sama (L2, ≤ 0.45). Dikunci oleh `UnifiedFaceMatchTest`.
+  > **Catatan 26 Okt 2026:** presensi wajah web (`/api/face/match`) sudah dihapus. Presensi wajah kini hanya lewat Android (`POST /api/v1/attendance`). Pendaftaran wajah di web tetap ada.
 - [x] 5 kali gagal di jalur mana pun mengunci kedua jalur (`face_locked`). Dikunci oleh `FaceAttemptLimiterTest`.
 - [x] Data 512-d menghasilkan `face_reenroll_required`. Diuji di jalur Android; web memakai `faceAttendanceBlocker()` yang sama.
 - [x] Idempotency: key sama dengan descriptor berbeda → 409. Gagal sementara dievaluasi ulang.
