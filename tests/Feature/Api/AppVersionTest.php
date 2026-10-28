@@ -22,10 +22,7 @@ class AppVersionTest extends TestCase
 
     public function test_outdated_or_unversioned_app_must_update(): void
     {
-        config([
-            'attendance.android_app.min_version_code' => 2,
-            'attendance.android_app.update_url' => 'https://example.test/presensi.apk',
-        ]);
+        config(['attendance.android_app.min_version_code' => 2]);
         $this->actingAsParticipant();
 
         foreach ([[], ['X-App-Version-Code' => '1']] as $headers) {
@@ -33,7 +30,7 @@ class AppVersionTest extends TestCase
                 ->assertStatus(426)
                 ->assertJsonPath('code', 'app_update_required')
                 ->assertJsonPath('data.min_version_code', 2)
-                ->assertJsonPath('data.update_url', 'https://example.test/presensi.apk');
+                ->assertJsonPath('data.update_url', null);
         }
 
         // Login juga diblok, jadi APK lama tidak bisa masuk sama sekali.

@@ -95,16 +95,19 @@ return [
     | Versi Minimum Aplikasi Android
     |--------------------------------------------------------------------------
     |
-    | Aplikasi mengirim X-App-Version-Code di setiap request API. Request dari versi di bawah
-    | min_version_code (termasuk APK lama yang tidak mengirim header) ditolak 426 app_update_required,
-    | dan aplikasi menampilkan layar "Perbarui aplikasi" dengan tautan update_url. 0 = tidak dibatasi.
-    | Naikkan setelah APK baru siap dibagikan; versi yang dipakai tiap peserta tampil di halaman Perangkat.
+    | Aplikasi mengirim X-App-Version-Code di setiap request API. Request dari versi di bawah versi
+    | minimum (termasuk APK lama yang tidak mengirim header) ditolak 426 app_update_required, dan
+    | aplikasi menampilkan layar "Perbarui aplikasi" dengan tautan unduhan APK terbaru (/aplikasi/unduh).
+    |
+    | Versi minimum = versionCode APK terbaru - min_version_lag (jendela bergeser, lihat
+    | AppRelease::minimumVersionCode), tetapi tidak di bawah min_version_code (batas bawah manual untuk
+    | update darurat). min_version_lag 0 = tanpa jendela, hanya min_version_code.
     |
     */
 
     'android_app' => [
         'min_version_code' => (int) env('ANDROID_MIN_VERSION_CODE', 0),
-        'update_url' => env('ANDROID_UPDATE_URL'),
+        'min_version_lag' => (int) env('ANDROID_MIN_VERSION_LAG', 5),
     ],
 
 ];

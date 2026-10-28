@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdminLeaveController;
+use App\Http\Controllers\AppReleaseController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\DeviceController;
 use App\Http\Controllers\FaceRecognitionController;
@@ -15,6 +16,7 @@ use App\Http\Controllers\SettingController;
 use App\Http\Controllers\SyncController;
 use App\Http\Controllers\VerificationController;
 use App\Http\Controllers\WorkcodeController;
+use App\Models\AppRelease;
 use App\Models\Attendance;
 use App\Models\LeaveRequest;
 use App\Models\LocationIntegrityViolation;
@@ -29,7 +31,10 @@ use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 // Halaman depan publik: hanya informasi umum. Data kehadiran tidak dikirim ke publik (privasi).
-Route::get('/', fn () => Inertia::render('Welcome', ['apkUrl' => SettingController::apkUrl()]));
+Route::get('/', fn () => Inertia::render('Welcome', ['apkUrl' => AppRelease::downloadUrl()]));
+
+// APK Android terbaru, diunggah otomatis oleh deploy (php artisan apk:publish).
+Route::get('/aplikasi/unduh', [AppReleaseController::class, 'download'])->name('apk.download');
 
 Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     // Dashboard route
@@ -143,7 +148,6 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     // Settings routes
     Route::get('/admin/settings', [SettingController::class, 'edit'])->name('admin.settings');
     Route::post('/admin/settings', [SettingController::class, 'update'])->name('admin.settings.update');
-    Route::post('/admin/settings/apk', [SettingController::class, 'updateApk'])->name('admin.settings.apk');
 });
 
 Route::middleware(['auth', 'verified', 'role:participant'])->group(function () {

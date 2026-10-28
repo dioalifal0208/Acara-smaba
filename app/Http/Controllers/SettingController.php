@@ -2,31 +2,24 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AppRelease;
 use App\Models\Setting;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class SettingController extends Controller
 {
-    /** Folder Google Drive berisi APK aplikasi Android; bisa diganti admin di halaman Pengaturan. */
-    public const DEFAULT_APK_URL = 'https://drive.google.com/drive/folders/1tUWcH1BLWqDvE19nH1HbVd99uf3RAbJI?usp=sharing';
-
-    /** Link unduhan aplikasi Android untuk halaman depan; null bila admin mengosongkannya. */
-    public static function apkUrl(): ?string
-    {
-        return Setting::get('android_apk_url', self::DEFAULT_APK_URL) ?: null;
-    }
-
     public function edit()
     {
         $settings = [
             'kepala_sekolah_nama' => Setting::get('kepala_sekolah_nama', 'Muhtarom, S.Pd., M.Si.'),
             'kepala_sekolah_nip' => Setting::get('kepala_sekolah_nip', '197205172006041015'),
-            'android_apk_url' => self::apkUrl() ?? '',
         ];
 
         return Inertia::render('Admin/Settings', [
             'settings' => $settings,
+            'androidApp' => $this->androidApp(),
         ]);
     }
 
@@ -44,17 +37,32 @@ class SettingController extends Controller
         return redirect()->back()->with('success', 'Pengaturan Tanda Tangan berhasil diperbarui.');
     }
 
-    /** Simpan link unduhan APK; dikosongkan berarti tombol unduh di halaman depan disembunyikan. */
-    public function updateApk(Request $request)
+    /**
+     * APK terbaru yang diunggah deploy, versi minimum aplikasi saat ini, dan berapa peserta yang akan
+     * diminta update saat rilis berikutnya menggeser versi minimum (jendela bergeser).
+     */
+    private function androidApp(): array
     {
-        $validated = $request->validate([
-            'android_apk_url' => 'nullable|url:https|max:500',
-        ], [
-            'android_apk_url.url' => 'Masukkan link lengkap yang diawali https://, misalnya link folder Google Drive.',
-        ]);
+        $latest = AppRelease::latestRelease();
+        $nextMinimum = AppRelease::minimumFor(($latest?->version_code ?? 0) + 1);
 
-        Setting::updateOrCreate(['key' => 'android_apk_url'], ['value' => $validated['android_apk_url'] ?? '']);
-
-        return redirect()->back()->with('success', 'Link unduhan aplikasi Android berhasil diperbarui.');
+        return [
+            'latest' => $latest ? [
+                'version_name' => $latest->version_name,
+                'version_code' => $latest->version_code,
+                'size_bytes' => $latest->size_bytes,
+                'download_count' => $latest->download_count,
+                'published_at' => $latest->published_at->toIso8601String(),
+                'download_url' => route('apk.download'),
+            ] : null,
+            'min_version_code' => AppRelease::minimumVersionCode(),
+            'min_version_lag' => (int) config('attendance.android_app.min_version_lag'),
+            'next_min_version_code' => $nextMinimum,
+            // Hanya peserta yang versinya tercatat (aplikasi baru mengirim X-App-Version-Code).
+            'outdated_next_release' => User::where('role', 'participant')
+                ->whereNotNull('app_version_code')
+                ->where('app_version_code', '<', $nextMinimum)
+                ->count(),
+        ];
     }
 }

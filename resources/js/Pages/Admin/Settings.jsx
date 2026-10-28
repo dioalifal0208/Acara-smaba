@@ -1,10 +1,10 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Button, Field, Input, PageHeader, Section, useToast } from '@/ui';
+import { Button, Field, Input, PageHeader, Section, StatusPill, useToast } from '@/ui';
 import { Head, useForm } from '@inertiajs/react';
-import { ExternalLink, QrCode } from 'lucide-react';
+import { AlertTriangle, Download, QrCode, Smartphone } from 'lucide-react';
 import { useEffect } from 'react';
 
-export default function Settings({ settings, flash }) {
+export default function Settings({ settings, androidApp, flash }) {
     const { toast } = useToast();
     const { data, setData, post, processing, errors, isDirty } = useForm({
         kepala_sekolah_nama: settings?.kepala_sekolah_nama || '',
@@ -28,7 +28,7 @@ export default function Settings({ settings, flash }) {
             <Head title="Pengaturan" />
 
             <div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-6 sm:px-6">
-                <PageHeader title="Pengaturan" description="Tanda tangan laporan cetak dan link unduhan aplikasi Android." />
+                <PageHeader title="Pengaturan" description="Tanda tangan laporan cetak dan aplikasi Android." />
 
                 <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
                     <Section title="Kepala sekolah" description="Nama dan NIP di bawah QR tanda tangan pada setiap laporan yang dicetak. Tulis nama lengkap beserta gelar sesuai dokumen resmi.">
@@ -70,46 +70,68 @@ export default function Settings({ settings, flash }) {
                     </Section>
                 </div>
 
-                <ApkLinkSection initialUrl={settings?.android_apk_url || ''} />
+                <AndroidAppSection app={androidApp} />
             </div>
         </AuthenticatedLayout>
     );
 }
 
-/** Link unduhan aplikasi Android untuk tombol "Unduh aplikasi Android" di halaman depan. */
-function ApkLinkSection({ initialUrl }) {
-    const { data, setData, post, processing, errors, isDirty } = useForm({ android_apk_url: initialUrl });
+const formatSize = (bytes) => `${(bytes / 1024 / 1024).toLocaleString('id-ID', { maximumFractionDigits: 1 })} MB`;
+const formatDateTime = (iso) => new Date(iso).toLocaleString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-    const submit = (e) => {
-        e.preventDefault();
-        post(route('admin.settings.apk'), { preserveScroll: true });
-    };
+/**
+ * APK terbaru yang diunggah otomatis setiap deploy (hanya versi terakhir yang ditampilkan),
+ * beserta versi minimum aplikasi yang bergeser mengikuti rilis.
+ */
+function AndroidAppSection({ app }) {
+    const latest = app?.latest;
 
     return (
         <Section
             title="Aplikasi Android"
-            description="Tombol unduh di halaman depan membuka link ini. Untuk Google Drive, bagikan file atau foldernya sebagai “Siapa saja yang memiliki link”. Kosongkan untuk menyembunyikan tombol."
+            description="APK diunggah otomatis setiap deploy. Tombol unduh di halaman depan dan layar “Perbarui aplikasi” di HP selalu memakai versi terbaru."
         >
-            <form onSubmit={submit} className="space-y-4">
-                <Field label="Link unduhan APK" error={errors.android_apk_url}>
-                    <Input
-                        type="url"
-                        value={data.android_apk_url}
-                        onChange={(e) => setData('android_apk_url', e.target.value)}
-                        placeholder="https://drive.google.com/…"
-                        autoComplete="off"
-                        spellCheck={false}
-                    />
-                </Field>
-                <div className="flex flex-wrap items-center gap-3">
-                    <Button variant="primary" type="submit" loading={processing} disabled={!isDirty}>Simpan</Button>
-                    {data.android_apk_url && (
-                        <Button variant="ghost" icon={ExternalLink} href={data.android_apk_url} external target="_blank" rel="noopener noreferrer">
-                            Coba buka link
-                        </Button>
+            {latest ? (
+                <div className="space-y-4">
+                    <div className="flex flex-wrap items-center gap-4 rounded-xl border border-line p-4">
+                        <Smartphone className="h-8 w-8 shrink-0 text-ink-2" aria-hidden="true" />
+                        <div className="min-w-0 flex-1">
+                            <p className="text-base font-semibold text-ink">Versi {latest.version_name}</p>
+                            <p className="text-sm tabular-nums text-ink-2">
+                                versionCode {latest.version_code} · {formatSize(latest.size_bytes)} · dirilis {formatDateTime(latest.published_at)} · {latest.download_count}× diunduh
+                            </p>
+                        </div>
+                        <Button variant="primary" icon={Download} href={latest.download_url} external download>Unduh APK</Button>
+                    </div>
+
+                    <dl className="grid gap-3 text-sm sm:grid-cols-2">
+                        <div>
+                            <dt className="text-ink-2">Versi minimum saat ini</dt>
+                            <dd className="font-medium tabular-nums text-ink">
+                                {app.min_version_code > 0 ? `versionCode ${app.min_version_code}` : 'Tidak dibatasi'}
+                            </dd>
+                        </div>
+                        <div>
+                            <dt className="text-ink-2">Saat rilis berikutnya</dt>
+                            <dd className="flex flex-wrap items-center gap-2 font-medium tabular-nums text-ink">
+                                {app.next_min_version_code > 0 ? `minimum naik ke versionCode ${app.next_min_version_code}` : 'Belum ada yang wajib update'}
+                                {app.outdated_next_release > 0 && (
+                                    <StatusPill tone="alpha" icon={AlertTriangle} label={`${app.outdated_next_release} peserta perlu update`} />
+                                )}
+                            </dd>
+                        </div>
+                    </dl>
+                    {app.min_version_lag > 0 && (
+                        <p className="text-sm text-ink-2">
+                            HP boleh tertinggal paling banyak {app.min_version_lag} rilis dari versi terbaru; versi yang lebih lama diminta mengunduh APK terbaru sebelum bisa presensi.
+                        </p>
                     )}
                 </div>
-            </form>
+            ) : (
+                <p className="text-sm text-ink-2">
+                    Belum ada APK yang diunggah. APK akan tersedia otomatis setelah deploy berikutnya; sampai saat itu tombol unduh di halaman depan disembunyikan.
+                </p>
+            )}
         </Section>
     );
 }

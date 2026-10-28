@@ -322,6 +322,61 @@ try {
         Write-Ok "GitHub Android berhasil diperbarui."
     }
 
+    # APK diunggah ke storage/app/apk/incoming lalu didaftarkan apk:publish setelah migrate. Versi yang
+    # sudah ada di server tidak diunggah ulang (deploy yang hanya mengubah web tidak mengirim ~50 MB).
+    $apkPublishCommand = ""
+    if ($null -ne $android) {
+        Write-Step "Mengunggah APK Android ke server"
+        $apkName = "presensi-smaba-v$($android.VersionName)-$($android.VersionCode).apk"
+        $apkSha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $android.Apk).Hash.ToLowerInvariant()
+        $remoteApkDir = "$RemoteDir/storage/app/apk"
+
+        $previousErrorAction = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        try {
+            $apkProbe = & ssh @sshCommonArguments "mkdir -p `"`$HOME/$remoteApkDir/incoming`" && if [ -f `"`$HOME/$remoteApkDir/$apkName`" ]; then printf APK_EXISTS; else printf APK_MISSING; fi" 2>&1
+            $apkProbeExitCode = $LASTEXITCODE
+        } finally {
+            $ErrorActionPreference = $previousErrorAction
+        }
+        if ($apkProbeExitCode -ne 0) {
+            Stop-Deploy "Tidak dapat memeriksa folder APK di server. Server belum diperbarui."
+        }
+
+        if (($apkProbe -join "`n") -match 'APK_EXISTS') {
+            Write-Ok "APK $($android.VersionName) sudah ada di server; unggah dilewati."
+        } else {
+            $scpArguments = @(
+                "-q",
+                "-i", $SshKey,
+                "-o", "BatchMode=yes",
+                "-o", "IdentitiesOnly=yes",
+                "-o", "StrictHostKeyChecking=accept-new",
+                "-P", $SshPort,
+                $android.Apk,
+                "${SshUser}@${SshHost}:$remoteApkDir/incoming/$apkName.part"
+            )
+            $previousErrorAction = $ErrorActionPreference
+            $ErrorActionPreference = "Continue"
+            try {
+                & scp @scpArguments 2>&1 | ForEach-Object { Write-Host $_ }
+                $scpExitCode = $LASTEXITCODE
+                if ($scpExitCode -eq 0) {
+                    # File .part baru menjadi .apk setelah unggahan selesai utuh.
+                    & ssh @sshCommonArguments "mv `"`$HOME/$remoteApkDir/incoming/$apkName.part`" `"`$HOME/$remoteApkDir/incoming/$apkName`"" 2>&1 | ForEach-Object { Write-Host $_ }
+                    $scpExitCode = $LASTEXITCODE
+                }
+            } finally {
+                $ErrorActionPreference = $previousErrorAction
+            }
+            if ($scpExitCode -ne 0) {
+                Stop-Deploy "Unggah APK ke server gagal. Server belum diperbarui."
+            }
+            $apkPublishCommand = "php artisan apk:publish 'storage/app/apk/incoming/$apkName' --version-code=$($android.VersionCode) --version-name=$($android.VersionName) --sha256=$apkSha256"
+            Write-Ok "APK $($android.VersionName) terunggah ($([math]::Round((Get-Item -LiteralPath $android.Apk).Length / 1MB, 1)) MB)."
+        }
+    }
+
     Write-Step "Memperbarui aplikasi di Hostinger"
     $remoteCommand = @"
 set -eu
@@ -341,6 +396,7 @@ git pull --ff-only origin main
 composer install --no-dev --optimize-autoloader --no-interaction --no-scripts
 php artisan package:discover --ansi
 php artisan migrate --force
+$apkPublishCommand
 php artisan optimize:clear
 php artisan config:cache
 # route:cache dilewati: cache route hasil server rusak (GET / -> 405), route dimuat langsung dari file
@@ -386,6 +442,16 @@ echo DEPLOY_SUCCESS
         } catch {
             Write-Warning "Deployment selesai, tetapi health check gagal: $($_.Exception.Message)"
         }
+
+        if ($null -ne $android) {
+            $apkUrl = "$($PublicUrl.TrimEnd('/'))/aplikasi/unduh"
+            try {
+                $apkResponse = Invoke-WebRequest -Uri $apkUrl -Method Head -UseBasicParsing -TimeoutSec 30
+                Write-Ok "Unduhan APK tersedia (HTTP $($apkResponse.StatusCode)): $apkUrl"
+            } catch {
+                Write-Warning "Unduhan APK belum bisa diakses: $apkUrl ($($_.Exception.Message))"
+            }
+        }
     }
 
     if ($null -ne $android) {
@@ -396,8 +462,11 @@ echo DEPLOY_SUCCESS
 
         Write-Host "`n=== APK ANDROID ===" -ForegroundColor Magenta
         Write-Host "  Versi : $($android.VersionName) (versionCode $($android.VersionCode))"
-        Write-Host "  File  : $distApk" -ForegroundColor Yellow
-        Write-Host "  Salin file ini ke HP lalu buka untuk memasang (menimpa versi lama, data tetap)."
+        Write-Host "  File  : $distApk"
+        if (-not [string]::IsNullOrWhiteSpace($PublicUrl)) {
+            Write-Host "  Unduh : $($PublicUrl.TrimEnd('/'))/aplikasi/unduh" -ForegroundColor Yellow
+        }
+        Write-Host "  Peserta mengunduh dari halaman depan website; HP versi lama diarahkan ke link yang sama."
     }
 
     Write-Host "`n=== DEPLOY SELESAI ===`n" -ForegroundColor Green

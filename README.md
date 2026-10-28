@@ -297,11 +297,12 @@ Produksi berjalan di shared hosting (Hostinger) melalui SSH. Satu perintah `depl
 1. seluruh test Laravel, lalu `npm run build`;
 2. test unit dan build APK rilis Android (`ANDROID_DIR`); bila repo Android punya perubahan yang belum di-commit, `versionCode` dan patch `versionName` dinaikkan otomatis;
 3. commit perubahan dan push branch `main` web dan Android ke GitHub;
-4. di server: mode maintenance, `git pull`, `composer install --no-dev --no-scripts` + `package:discover`, `migrate --force`, cache config & view;
-5. menyalin `public/` ke folder web, mengarahkan `index.php` ke folder aplikasi, lalu mengaktifkan aplikasi kembali dan memeriksa website;
-6. menyalin APK ke `<ANDROID_DIR>/dist/Presensi-SMABA-v<versi>.apk` dan mencetak lokasinya.
+4. mengunggah APK lewat `scp` ke `storage/app/apk/incoming` di server (dilewati bila versi itu sudah ada);
+5. di server: mode maintenance, `git pull`, `composer install --no-dev --no-scripts` + `package:discover`, `migrate --force`, `apk:publish` (mendaftarkan APK, menyimpan 3 rilis terakhir), cache config & view;
+6. menyalin `public/` ke folder web, mengarahkan `index.php` ke folder aplikasi, lalu mengaktifkan aplikasi kembali dan memeriksa website serta `/aplikasi/unduh`;
+7. menyalin APK ke `<ANDROID_DIR>/dist/Presensi-SMABA-v<versi>.apk` sebagai cadangan lokal.
 
-Bila test atau build mana pun gagal, deploy berhenti sebelum ada yang dikirim ke GitHub atau server. `ANDROID_MIN_VERSION_CODE` di server tidak diubah otomatis; naikkan manual bila versi lama perlu dipaksa update.
+Bila test, build, atau unggah APK gagal, deploy berhenti sebelum server diperbarui. Peserta mengunduh APK terbaru dari tombol di halaman depan (`/aplikasi/unduh`). Versi minimum aplikasi bergeser otomatis: versionCode terbaru − `ANDROID_MIN_VERSION_LAG` (bawaan 5); `ANDROID_MIN_VERSION_CODE` hanya untuk memaksa update darurat.
 
 Persiapan sekali saja:
 

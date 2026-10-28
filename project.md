@@ -411,7 +411,7 @@ Variabel environment yang dibutuhkan (nama saja; isi dari `.env.example` dan `co
 - **Mail:** `MAIL_*`.
 - **Integrasi:** `GOOGLE_MAPS_API_KEY` (Maps JS, dibatasi referrer), `FIREBASE_CREDENTIALS` (path file service account, jangan di-commit).
 - **Seeder:** `ADMIN_PASSWORD` (opsional; bila kosong, password acak dicetak sekali).
-- **Domain presensi:** `FACE_THRESHOLD`, `FACE_ENFORCE_DIMENSIONS`, `FACE_MATCH_MAX_FAILURES`, `ATTENDANCE_LATE_TOLERANCE_MINUTES`, `ATTENDANCE_MEDIA_RETENTION_DAYS`, `DEVICE_LOCK_REQUIRE_ID`, `ANDROID_MIN_VERSION_CODE`, `ANDROID_UPDATE_URL`, `SANCTUM_EXPIRATION`.
+- **Domain presensi:** `FACE_THRESHOLD`, `FACE_ENFORCE_DIMENSIONS`, `FACE_MATCH_MAX_FAILURES`, `ATTENDANCE_LATE_TOLERANCE_MINUTES`, `ATTENDANCE_MEDIA_RETENTION_DAYS`, `DEVICE_LOCK_REQUIRE_ID`, `ANDROID_MIN_VERSION_CODE`, `ANDROID_MIN_VERSION_LAG`, `SANCTUM_EXPIRATION`.
 - **Anti fake GPS:** `ANTI_FAKE_GPS_BLOCK_FAKE_APPS`, `ANTI_FAKE_GPS_BLOCK_ROOT`, `ANTI_FAKE_GPS_BLOCK_HOOKING`, `ANTI_FAKE_GPS_REQUIRE_SIGNALS`.
 
 `FACE_MATCH_MAX_FAILURES`, `SANCTUM_EXPIRATION`, dan keempat `ANTI_FAKE_GPS_*` dibaca di `config/` tetapi **tidak tercantum** di `.env.example`.

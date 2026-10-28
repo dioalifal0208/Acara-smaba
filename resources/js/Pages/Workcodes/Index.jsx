@@ -3,7 +3,7 @@ import GoogleMap from '@/Components/GoogleMap';
 import { addTolerance, DAYS } from '@/Components/Workcodes/WeekSchedule';
 import WorkcodeEditor from '@/Components/Workcodes/WorkcodeEditor';
 import {
-    AttendanceBoard, Button, Card, Dialog, EmptyState, IconButton, PageHeader, SearchField, StatusPill, cx, useConfirm, useToast,
+    AttendanceBoard, Button, Card, Dialog, EmptyState, IconButton, PageHeader, SearchField, Segmented, Select, StatusPill, cx, useConfirm, useToast,
 } from '@/ui';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
 import { Head, router, usePage } from '@inertiajs/react';
@@ -13,6 +13,7 @@ import { useEffect, useState } from 'react';
 const todayIso = () => (new Date().getDay() === 0 ? 7 : new Date().getDay());
 const hhmm = (value) => (value ? value.substring(0, 5) : '–');
 const formatDate = (value) => new Date(value).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+const formatMonth = (yearMonth) => new Date(`${yearMonth}-01T00:00:00`).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
 
 /** Papan Hadir dari backend memakai tepat_waktu untuk "hadir". */
 const boardCounts = (board) => ({ hadir: board.tepat_waktu, terlambat: board.terlambat, izin: board.izin, belum: board.belum });
@@ -41,8 +42,20 @@ export default function WorkcodesIndex({ workcodes, participants, lateToleranceM
     };
 
     const [query, setQuery] = useState('');
+    const [type, setType] = useState('all');
+    const [month, setMonth] = useState('');
     const needle = query.trim().toLowerCase();
-    const shown = needle ? workcodes.filter((w) => w.nama_workcode.toLowerCase().includes(needle)) : workcodes;
+    // Bulan hanya berlaku untuk kegiatan (punya tanggal); presensi harian berulang sehingga tetap tampil.
+    const months = [...new Set(workcodes.filter((w) => w.kategori !== 'harian' && w.tanggal).map((w) => w.tanggal.slice(0, 7)))].sort().reverse();
+    const matchesMonth = (w) => !month || w.kategori === 'harian' || w.tanggal?.slice(0, 7) === month;
+    const byMonthAndQuery = workcodes.filter((w) => matchesMonth(w) && (!needle || w.nama_workcode.toLowerCase().includes(needle)));
+    const shown = type === 'all' ? byMonthAndQuery : byMonthAndQuery.filter((w) => (type === 'harian') === (w.kategori === 'harian'));
+    const filtered = Boolean(needle || month || type !== 'all');
+    const typeOptions = [
+        { value: 'all', label: 'Semua', count: byMonthAndQuery.length },
+        { value: 'harian', label: 'Harian', count: byMonthAndQuery.filter((w) => w.kategori === 'harian').length },
+        { value: 'workcode', label: 'Kegiatan', count: byMonthAndQuery.filter((w) => w.kategori !== 'harian').length },
+    ];
     const active = shown.filter((w) => w.is_effectively_active);
     const inactive = shown.filter((w) => !w.is_effectively_active);
 
@@ -68,12 +81,25 @@ export default function WorkcodesIndex({ workcodes, participants, lateToleranceM
                     </Card>
                 ) : (
                     <>
-                        {workcodes.length > 6 && (
-                            <SearchField value={query} onChange={setQuery} label="Cari workcode" placeholder="Cari nama workcode" className="max-w-sm" />
-                        )}
+                        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                            <Segmented label="Filter tipe workcode" value={type} onChange={setType} options={typeOptions} />
+                            <Select
+                                value={type === 'harian' ? '' : month}
+                                onChange={(e) => setMonth(e.target.value)}
+                                disabled={type === 'harian' || months.length === 0}
+                                aria-label="Filter bulan kegiatan"
+                                className="sm:w-48"
+                            >
+                                <option value="">Semua bulan</option>
+                                {months.map((m) => <option key={m} value={m}>{formatMonth(m)}</option>)}
+                            </Select>
+                            {workcodes.length > 6 && (
+                                <SearchField value={query} onChange={setQuery} label="Cari workcode" placeholder="Cari nama workcode" className="sm:ml-auto sm:w-72" />
+                            )}
+                        </div>
                         <WorkcodeGroup
                             title="Sedang aktif"
-                            empty={needle ? `Tidak ada workcode aktif yang cocok dengan "${query.trim()}".` : 'Tidak ada workcode yang aktif. Presensi terkunci sampai ada yang diaktifkan.'}
+                            empty={filtered ? 'Tidak ada workcode aktif yang cocok dengan filter.' : 'Tidak ada workcode yang aktif. Presensi terkunci sampai ada yang diaktifkan.'}
                             workcodes={active}
                             tolerance={lateToleranceMinutes}
                             onEdit={openEditor}

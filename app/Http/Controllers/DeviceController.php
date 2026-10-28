@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AppRelease;
 use App\Models\User;
 use App\Services\FcmService;
 use App\Support\DeviceLock;
@@ -38,7 +39,7 @@ class DeviceController extends Controller
         return Inertia::render('Devices/Index', [
             'devices' => $devices,
             'participantCount' => (clone $participants)->count(),
-            'minAppVersionCode' => (int) config('attendance.android_app.min_version_code'),
+            'minAppVersionCode' => AppRelease::minimumVersionCode(),
         ]);
     }
 

@@ -64,7 +64,7 @@ Aplikasi Android mengirim di **setiap** request API:
 | `X-App-Version-Code` | `2` | `versionCode` APK. Tanpa header = dianggap `0` (APK lama). |
 | `X-App-Version-Name` | `1.1.0` | Hanya untuk ditampilkan di halaman admin Perangkat. |
 
-Bila `ANDROID_MIN_VERSION_CODE` di `.env` > 0 dan `X-App-Version-Code` di bawahnya, **semua** endpoint (termasuk login) membalas:
+Versi minimum = `versionCode` APK terbaru di server − `ANDROID_MIN_VERSION_LAG` (bawaan 5), tidak di bawah `ANDROID_MIN_VERSION_CODE`. Bila versi minimum > 0 dan `X-App-Version-Code` di bawahnya, **semua** endpoint (termasuk login) membalas:
 
 ```json
 HTTP 426
@@ -72,7 +72,7 @@ HTTP 426
   "status": "error",
   "code": "app_update_required",
   "message": "Versi aplikasi Anda sudah usang. Perbarui aplikasi untuk melanjutkan.",
-  "data": { "min_version_code": 2, "update_url": "https://… (ANDROID_UPDATE_URL, boleh null)" }
+  "data": { "min_version_code": 2, "update_url": "https://…/aplikasi/unduh (APK terbaru; null bila belum ada rilis)" }
 }
 ```
 

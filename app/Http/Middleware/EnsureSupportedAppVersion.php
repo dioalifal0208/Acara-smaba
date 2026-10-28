@@ -2,13 +2,14 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\AppRelease;
 use App\Models\User;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Versi minimum aplikasi Android (config attendance.android_app). APK lama yang tidak mengirim
+ * Versi minimum aplikasi Android (AppRelease::minimumVersionCode). APK lama yang tidak mengirim
  * X-App-Version-Code dianggap versi 0. Versi yang dipakai peserta dicatat untuk halaman Perangkat.
  */
 class EnsureSupportedAppVersion
@@ -16,7 +17,7 @@ class EnsureSupportedAppVersion
     public function handle(Request $request, Closure $next): Response
     {
         $versionCode = (int) $request->header('X-App-Version-Code', '0');
-        $minVersionCode = (int) config('attendance.android_app.min_version_code');
+        $minVersionCode = AppRelease::minimumVersionCode();
 
         if ($minVersionCode > 0 && $versionCode < $minVersionCode) {
             return response()->json([
@@ -25,7 +26,7 @@ class EnsureSupportedAppVersion
                 'message' => 'Versi aplikasi Anda sudah usang. Perbarui aplikasi untuk melanjutkan.',
                 'data' => [
                     'min_version_code' => $minVersionCode,
-                    'update_url' => config('attendance.android_app.update_url'),
+                    'update_url' => AppRelease::downloadUrl(),
                 ],
             ], 426);
         }
