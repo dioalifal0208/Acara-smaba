@@ -97,7 +97,7 @@ export default function Dashboard({ boards = [], fakeGpsBlockedToday = 0, weekly
                         <EmptyState
                             icon={CalendarClock}
                             title="Belum ada workcode aktif"
-                            description="Presensi baru bisa berjalan setelah ada workcode yang aktif. Aktifkan presensi harian atau buat kegiatan baru."
+                            description="Presensi baru bisa berjalan setelah ada workcode yang aktif. Aktifkan presensi Work From Office atau buat acara baru."
                             action={<Button variant="primary" href={route('workcodes.index')}>Atur workcode</Button>}
                         />
                     </Card>
@@ -187,7 +187,7 @@ export default function Dashboard({ boards = [], fakeGpsBlockedToday = 0, weekly
                 </div>
 
                 <Section title="Tren 7 hari" description="Peserta hadir per hari, dipisah tepat waktu dan terlambat.">
-                    <TrendChart days={trend} caption="Terlambat dihitung dari presensi harian yang melewati batas jam datang. Presensi kegiatan selalu dihitung tepat waktu." />
+                    <TrendChart days={trend} caption="Terlambat dihitung dari presensi Work From Office yang melewati batas jam datang. Presensi acara selalu dihitung tepat waktu." />
                 </Section>
             </div>
         </AuthenticatedLayout>

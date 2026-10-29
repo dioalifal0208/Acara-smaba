@@ -87,6 +87,8 @@ export default function GoogleMap({
     onLocationStatusChange,
     zoom = 17,
     className = '',
+    // true: `position` hanya titik tengah tampilan; penanda & radius disembunyikan sampai titik dipilih.
+    unset = false,
 }) {
     const containerRef = useRef(null);
     const mapRef = useRef(null);
@@ -107,6 +109,13 @@ export default function GoogleMap({
     onPositionChangeRef.current = onPositionChange;
     onLocationStatusChangeRef.current = onLocationStatusChange;
     radiusRef.current = Number(radius) || 100;
+
+    const unsetRef = useRef(unset);
+    const setOverlaysVisible = (visible) => {
+        markerRef.current?.setVisible(visible);
+        circleRef.current?.setVisible(visible);
+        rippleCirclesRef.current.forEach((ripple) => ripple.setVisible(visible));
+    };
 
     const stopRadiusAnimation = () => {
         if (rippleAnimationRef.current !== null) {
@@ -204,6 +213,7 @@ export default function GoogleMap({
                 circleRef.current = circle;
                 setMapReady(true);
                 startRadiusAnimation(maps, map);
+                setOverlaysVisible(!unsetRef.current);
 
                 if (interactive) {
                     const applyManualPosition = (latLng, message) => {
@@ -257,6 +267,11 @@ export default function GoogleMap({
     useEffect(() => {
         circleRef.current?.setRadius(Number(radius) || 100);
     }, [radius]);
+
+    useEffect(() => {
+        unsetRef.current = unset;
+        setOverlaysVisible(!unset);
+    }, [unset]);
 
     const locateUser = () => {
         if (!navigator.geolocation) {

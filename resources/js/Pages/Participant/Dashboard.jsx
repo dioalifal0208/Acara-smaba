@@ -18,7 +18,9 @@ const FACE = {
 export default function ParticipantDashboard({ activeWorkcode, participant, today, todayAttendances = [], schedule, leaveWorkcodes = [] }) {
     const { auth } = usePage().props;
     const user = auth.user;
-    const [leaveOpen, setLeaveOpen] = useState(false);
+    // ?izin=1 (tombol "Ajukan lagi" di Riwayat izin) langsung membuka formulir izin.
+    const [leaveOpen, setLeaveOpen] = useState(() => typeof window !== 'undefined'
+        && new URLSearchParams(window.location.search).get('izin') === '1' && leaveWorkcodes.length > 0);
     const [faceOpen, setFaceOpen] = useState(false);
     const [qrOpen, setQrOpen] = useState(false);
 
@@ -149,7 +151,7 @@ function TodayCard({ today, schedule, attendances, activeWorkcode }) {
             ) : (
                 <p className="mt-3 flex items-center gap-2 text-sm text-ink-2">
                     <CalendarClock className="h-5 w-5 shrink-0 text-ink-3" aria-hidden="true" />
-                    Tidak ada jadwal presensi harian hari ini.
+                    Tidak ada jadwal presensi Work From Office hari ini.
                 </p>
             )}
 
@@ -169,7 +171,7 @@ function TodayCard({ today, schedule, attendances, activeWorkcode }) {
 
             {activeWorkcode && activeWorkcode.kategori !== 'harian' && !events.some((event) => event.workcode === activeWorkcode.nama_workcode) && (
                 <p className="mt-4 rounded-xl border border-line p-3 text-sm text-ink-2">
-                    <span className="font-medium text-ink">{activeWorkcode.nama_workcode}</span> sedang dibuka. Presensi lewat aplikasi Android, atau pindai QR kegiatan dari panitia.
+                    <span className="font-medium text-ink">{activeWorkcode.nama_workcode}</span> sedang dibuka. Presensi lewat aplikasi Android, atau pindai QR acara dari panitia.
                 </p>
             )}
         </Card>

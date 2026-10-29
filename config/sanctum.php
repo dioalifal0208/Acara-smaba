@@ -50,8 +50,10 @@ return [
     |
     */
 
-    // Token API (Android) kedaluwarsa setelah 30 hari (menit). Aplikasi harus login ulang saat 401.
-    'expiration' => env('SANCTUM_EXPIRATION', 60 * 24 * 30),
+    // Token API (Android) tidak kedaluwarsa (null) supaya peserta tidak logout sendiri, termasuk setelah update
+    // APK. Token tetap dicabut saat logout, ganti perangkat (DeviceLock::bind) dan admin melepas perangkat
+    // (DeviceLock::release). SANCTUM_EXPIRATION (menit) bisa diisi bila suatu saat perlu batas waktu.
+    'expiration' => env('SANCTUM_EXPIRATION'),
 
     /*
     |--------------------------------------------------------------------------

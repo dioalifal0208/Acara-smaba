@@ -9,12 +9,12 @@ const METHODS = [
     {
         icon: Smartphone,
         title: 'Aplikasi PRESENSI SMABA',
-        body: 'Untuk presensi harian datang dan pulang. Wajah dan lokasi diperiksa otomatis saat Anda berada di area sekolah.',
+        body: 'Untuk presensi Work From Office datang dan pulang. Wajah dan lokasi diperiksa otomatis saat Anda berada di area sekolah.',
     },
     {
         icon: QrCode,
-        title: 'QR kegiatan',
-        body: 'Untuk rapat, upacara, dan kegiatan sekali. Pindai QR yang ditampilkan panitia, pilih nama, lalu tanda tangan di HP.',
+        title: 'QR acara',
+        body: 'Untuk rapat, upacara, dan acara sekolah lainnya. Pindai QR yang ditampilkan panitia, pilih nama, lalu tanda tangan di HP.',
     },
     {
         icon: UserSquare2,
@@ -79,7 +79,7 @@ export default function Welcome({ apkUrl = null }) {
                             Presensi guru dan pegawai SMA Negeri 1 Babat
                         </h1>
                         <p className="mt-5 max-w-2xl text-lg leading-relaxed text-ink-2">
-                            Presensi lewat aplikasi Android dengan verifikasi wajah dan lokasi, atau lewat QR saat kegiatan sekolah. Kehadiran tercatat otomatis untuk rekap sekolah.
+                            Presensi lewat aplikasi Android dengan verifikasi wajah dan lokasi, atau lewat QR saat acara sekolah. Kehadiran tercatat otomatis untuk rekap sekolah.
                         </p>
                         {apkUrl && (
                             <div className="mt-8 flex flex-wrap items-center gap-x-4 gap-y-2">

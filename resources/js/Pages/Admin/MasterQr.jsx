@@ -13,7 +13,7 @@ const MAX_TIMEOUT_MS = 2147483647;
 const ALL = 'all';
 
 const UNAVAILABLE_MESSAGES = {
-    harian: 'Presensi harian dilakukan lewat QR pribadi peserta atau aplikasi, bukan QR presensi mandiri.',
+    harian: 'Presensi Work From Office dilakukan lewat QR pribadi peserta atau aplikasi, bukan QR presensi mandiri.',
     closed_by_selection: 'Ditutup karena ada workcode aktif lain yang pesertanya sudah dipilih. Atur peserta workcode ini agar QR-nya bisa dipakai.',
 };
 
@@ -23,7 +23,7 @@ function formatTime(time) {
 
 function formatSchedule(workcode) {
     if (!workcode.jam_aktif_mulai || !workcode.jam_aktif_selesai) {
-        return workcode.kategori === 'harian' ? 'Presensi harian' : 'Aktif manual';
+        return workcode.kategori === 'harian' ? 'Presensi Work From Office' : 'Aktif manual';
     }
 
     return `${formatTime(workcode.jam_aktif_mulai)}–${formatTime(workcode.jam_aktif_selesai)}`;
@@ -166,7 +166,7 @@ export default function MasterQr({ workcodeQrs = [], upcomingWorkcodes = [], nex
                                 <EmptyState
                                     icon={QrCode}
                                     title="Belum ada workcode aktif"
-                                    description="QR muncul otomatis di sini ketika jadwal workcode kegiatan dimulai atau workcode diaktifkan."
+                                    description="QR muncul otomatis di sini ketika jadwal workcode acara dimulai atau workcode diaktifkan."
                                 />
                             </Card>
                         ) : (

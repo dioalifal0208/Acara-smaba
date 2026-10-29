@@ -272,11 +272,11 @@ export function printReport({ workcode: selectedWorkcode, attendances: filteredA
                         <td style="font-weight: bold;">Kategori Presensi</td>
                         <td>:</td>
                         <td style="text-transform: capitalize;">${selectedWorkcode.kategori === 'harian'
-                            ? 'Presensi Harian'
+                            ? 'Presensi Work From Office'
                             : 'Presensi Sekali / Event'}</td>
                     </tr>
                     <tr>
-                        <td style="font-weight: bold;">Tanggal Kegiatan</td>
+                        <td style="font-weight: bold;">Tanggal Acara</td>
                         <td>:</td>
                         <td>${tanggalKegiatan}</td>
                     </tr>

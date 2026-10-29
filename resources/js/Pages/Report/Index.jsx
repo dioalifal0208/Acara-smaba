@@ -48,7 +48,7 @@ export default function ReportIndex({
     const [query, setQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
 
-    const [proof, setProof] = useState(null); // presensi kegiatan yang dibuka buktinya
+    const [proof, setProof] = useState(null); // presensi acara yang dibuka buktinya
     const [actionsFor, setActionsFor] = useState(null); // peserta rekap harian yang dibuka pilihannya
     const [editOpen, setEditOpen] = useState(false);
     const [editingName, setEditingName] = useState('');
@@ -250,7 +250,7 @@ export default function ReportIndex({
                 ) : (
                     <Section flush>
                         <DataTable
-                            caption={isDaily ? 'Rekap presensi harian per peserta' : 'Daftar kehadiran'}
+                            caption={isDaily ? 'Rekap presensi Work From Office per peserta' : 'Daftar kehadiran'}
                             rows={rows}
                             rowKey={(a) => a.participant_id ?? a.id}
                             filtered={filtered}
@@ -267,9 +267,16 @@ export default function ReportIndex({
                                                 onChange={(e) => router.get(route('report'), { workcode_id: e.target.value }, { preserveState: true, preserveScroll: true })}
                                                 className="md:w-80"
                                             >
-                                                {workcodes.map((w) => (
+                                                {workcodes.filter((w) => !w.archived_at).map((w) => (
                                                     <option key={w.id} value={w.id}>{w.is_active ? '● ' : ''}{w.nama_workcode} ({w.attendances_count} hadir)</option>
                                                 ))}
+                                                {workcodes.some((w) => w.archived_at) && (
+                                                    <optgroup label="Arsip">
+                                                        {workcodes.filter((w) => w.archived_at).map((w) => (
+                                                            <option key={w.id} value={w.id}>{w.nama_workcode} ({w.attendances_count} hadir)</option>
+                                                        ))}
+                                                    </optgroup>
+                                                )}
                                             </Select>
                                         </div>
                                         {singleAttendance && stats && (

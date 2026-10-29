@@ -56,8 +56,11 @@ export default function ParticipantShow({ participant }) {
     const handleDelete = async () => {
         const confirmed = await confirm({
             title: `Hapus ${participant.nama}?`,
-            message: 'Akun login, foto, dan riwayat presensinya ikut terhapus permanen dan tidak bisa dikembalikan.',
+            message: participant.attendances_count > 0
+                ? `Akun login, foto, dan ${participant.attendances_count} data presensinya ikut terhapus permanen dan tidak bisa dikembalikan.`
+                : 'Akun login dan fotonya ikut terhapus permanen dan tidak bisa dikembalikan.',
             confirmText: 'Hapus peserta',
+            requireText: participant.attendances_count > 0 ? participant.nama : undefined,
         });
         if (confirmed) router.delete(route('participants.destroy', participant.id));
     };

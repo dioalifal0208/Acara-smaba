@@ -1,7 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Card, EmptyState, PageHeader, StatusPill } from '@/ui';
+import { Button, Card, EmptyState, PageHeader, StatusPill } from '@/ui';
 import { Head } from '@inertiajs/react';
-import { FileClock } from 'lucide-react';
+import { FileClock, FilePlus2 } from 'lucide-react';
 
 const formatLabel = (value) => (value || '–').replaceAll('_', ' ').replace(/^\w/, (letter) => letter.toUpperCase());
 
@@ -37,6 +37,7 @@ export default function LeaveHistory({ leaveRequests }) {
                                             <p className="text-sm font-medium text-status-alpha">Alasan ditolak</p>
                                             <p className="mt-0.5 text-sm text-ink">{request.alasan_penolakan}</p>
                                             <p className="mt-1 text-sm text-ink-2">Perbaiki sesuai alasan ini, lalu ajukan lagi.</p>
+                                            <Button size="sm" variant="primary" icon={FilePlus2} href={route('participant.dashboard', { izin: 1 })} className="mt-3">Ajukan lagi</Button>
                                         </div>
                                     )}
                                     <p className="mt-3 text-xs text-ink-2">{formatLabel(request.tipe_izin)} · diajukan {request.created_at}</p>

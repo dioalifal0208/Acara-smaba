@@ -1,16 +1,29 @@
 import GoogleMap from '@/Components/GoogleMap';
 import { Button, Checkbox, cx, Dialog, Field, Input, Segmented, Textarea, useToast } from '@/ui';
 import { useForm } from '@inertiajs/react';
-import { LocateFixed, UserCheck, Users } from 'lucide-react';
-import { Component, useState } from 'react';
+import { History, LocateFixed, UserCheck, Users } from 'lucide-react';
+import { Component, useEffect, useState } from 'react';
 import ParticipantPicker from './ParticipantPicker';
 import WeekSchedule, { DAYS, DEFAULT_DAY } from './WeekSchedule';
 
-const DEFAULT_MAP_POSITION = { lat: -6.2088, lng: 106.8456 };
+// Hanya titik tengah tampilan peta saat lokasi belum dipilih (sekitar Babat, Lamongan); tidak pernah ikut tersimpan.
+const MAP_VIEW_CENTER = { lat: -7.1163, lng: 112.1638 };
 const INDONESIA = { south: -11.5, north: 6.5, west: 94.5, east: 141.5 };
 
 const inIndonesia = ({ lat, lng }) => Number.isFinite(lat) && Number.isFinite(lng)
     && lat >= INDONESIA.south && lat <= INDONESIA.north && lng >= INDONESIA.west && lng <= INDONESIA.east;
+
+const longDate = (iso) => (iso ? new Date(`${iso}T00:00:00`).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : null);
+
+/** Lama kegiatan dari "HH:MM" mulai–selesai, mis. "2 jam 30 menit"; null bila tidak valid. */
+const duration = (from, to) => {
+    const toMinutes = (t) => { const [h, m] = (t || '').split(':').map(Number); return h * 60 + m; };
+    const total = toMinutes(to) - toMinutes(from);
+    if (!Number.isFinite(total) || total <= 0) return null;
+    const hours = Math.floor(total / 60);
+    const minutes = total % 60;
+    return [hours && `${hours} jam`, minutes && `${minutes} menit`].filter(Boolean).join(' ');
+};
 
 const hhmm = (value, fallback) => (typeof value === 'string' && value.length >= 5 ? value.substring(0, 5) : fallback);
 
@@ -28,12 +41,12 @@ const normalizeSchedule = (schedule) => Object.fromEntries(DAYS.map((day) => {
 }));
 
 /** Isi form dari workcode yang diedit, atau bawaan untuk workcode baru. */
-function initialData(workcode) {
+function initialData(workcode, fallbackLocation) {
     if (!workcode) {
         return {
             nama_workcode: '', kategori: 'workcode', tanggal: today(), jam_aktif_mulai: '07:00', jam_aktif_selesai: '10:00',
             hari_aktif: [1, 2, 3, 4, 5], ...DEFAULT_DAY, jadwal_per_hari: defaultSchedule(),
-            latitude: '', longitude: '', radius_meters: 100, set_active: true, participant_ids: [], auto_participant_ids: [],
+            latitude: '', longitude: '', radius_meters: fallbackLocation?.radius || 100, set_active: true, participant_ids: [], auto_participant_ids: [],
         };
     }
 
@@ -73,6 +86,47 @@ class MapErrorBoundary extends Component {
     }
 }
 
+/**
+ * Lintang & bujur yang bisa diketik (alternatif keyboard untuk peta). Titik baru dipakai begitu
+ * kedua angka valid dan berada di wilayah Indonesia.
+ */
+function CoordinateFields({ position, onChange, error }) {
+    const format = (value) => (Number.isFinite(value) ? value.toFixed(6) : '');
+    const [lat, setLat] = useState(format(position?.lat));
+    const [lng, setLng] = useState(format(position?.lng));
+    const [invalid, setInvalid] = useState(false);
+
+    // Ikuti titik dari peta (klik, geser, GPS) tanpa menimpa angka yang sedang diketik.
+    useEffect(() => {
+        if (!position) return;
+        if (Number(lat) !== position.lat) setLat(format(position.lat));
+        if (Number(lng) !== position.lng) setLng(format(position.lng));
+    }, [position?.lat, position?.lng]);
+
+    const update = (nextLat, nextLng) => {
+        const next = { lat: Number(String(nextLat).replace(',', '.')), lng: Number(String(nextLng).replace(',', '.')) };
+        const ok = nextLat !== '' && nextLng !== '' && inIndonesia(next);
+        setInvalid(!ok && nextLat !== '' && nextLng !== '');
+        if (ok) onChange(next);
+    };
+
+    const message = invalid ? 'Koordinat di luar wilayah Indonesia. Contoh: -7.116300 dan 112.163800.' : error;
+
+    return (
+        <div>
+            <div className="grid grid-cols-2 gap-3">
+                <Field label="Lintang">
+                    <Input inputMode="decimal" value={lat} placeholder="-7.116300" onChange={(e) => { setLat(e.target.value); update(e.target.value, lng); }} className="tabular-nums" />
+                </Field>
+                <Field label="Bujur">
+                    <Input inputMode="decimal" value={lng} placeholder="112.163800" onChange={(e) => { setLng(e.target.value); update(lat, e.target.value); }} className="tabular-nums" />
+                </Field>
+            </div>
+            {message && <p className="mt-1.5 text-xs font-medium text-danger" role="alert">{message}</p>}
+        </div>
+    );
+}
+
 function PickerRow({ icon: Icon, title, summary, error, action, actionLabel, onClick }) {
     return (
         <div className="flex items-center gap-3 rounded-xl border border-line px-3 py-2.5">
@@ -88,17 +142,25 @@ function PickerRow({ icon: Icon, title, summary, error, action, actionLabel, onC
 }
 
 /** Buat atau ubah workcode: jenis, jadwal (kegiatan sekali / mingguan), peserta, dan titik lokasi. */
-export default function WorkcodeEditor({ workcode, participants, toleranceMinutes, onClose }) {
+export default function WorkcodeEditor({ workcode, participants, toleranceMinutes, fallbackLocation = null, onClose }) {
     const { toast } = useToast();
     const editing = Boolean(workcode);
-    const { data, setData, post, put, processing, errors, transform } = useForm(initialData(workcode));
+    const { data, setData, post, put, processing, errors, transform } = useForm(initialData(workcode, fallbackLocation));
     const [pickerOpen, setPickerOpen] = useState(false);
     const [autoPickerOpen, setAutoPickerOpen] = useState(false);
     const [locationStatus, setLocationStatus] = useState(null);
+    // null = belum ada titik. Workcode baru mulai dari lokasi workcode terakhir; workcode lama tanpa
+    // lokasi tetap tanpa lokasi (dulu titik Jakarta bawaan ikut tersimpan).
     const [mapPosition, setMapPosition] = useState(() => {
-        const stored = { lat: Number(workcode?.latitude), lng: Number(workcode?.longitude) };
-        return workcode && inIndonesia(stored) ? stored : DEFAULT_MAP_POSITION;
+        if (!workcode) return fallbackLocation ? { lat: fallbackLocation.lat, lng: fallbackLocation.lng } : null;
+        const stored = { lat: Number(workcode.latitude), lng: Number(workcode.longitude) };
+        return inIndonesia(stored) ? stored : null;
     });
+    const [locationError, setLocationError] = useState(null);
+    const choosePosition = (position) => {
+        setMapPosition(position);
+        setLocationError(null);
+    };
     const daily = data.kategori === 'harian';
     // Stakeholder tidak ditawarkan lagi di daftar peserta; memilih stakeholder mengeluarkannya dari peserta.
     const participantCandidates = daily ? participants : participants.filter((p) => !data.auto_participant_ids.includes(p.id));
@@ -119,6 +181,11 @@ export default function WorkcodeEditor({ workcode, participants, toleranceMinute
 
     const submit = (e) => {
         e.preventDefault();
+        if (!editing && !mapPosition) {
+            setLocationError('Pilih titik lokasi presensi: klik peta, tombol lokasi di peta, atau isi lintang & bujur.');
+            toast.error('Titik lokasi presensi belum dipilih.');
+            return;
+        }
         transform((form) => ({
             ...form,
             latitude: mapPosition?.lat ?? form.latitude,
@@ -135,6 +202,18 @@ export default function WorkcodeEditor({ workcode, participants, toleranceMinute
     };
 
     const saveLabel = editing ? 'Simpan perubahan' : daily && data.set_active ? 'Simpan & aktifkan' : 'Simpan';
+    const eventLength = duration(data.jam_aktif_mulai, data.jam_aktif_selesai);
+
+    const participantRow = (
+        <PickerRow
+            icon={Users}
+            title="Peserta"
+            summary={data.participant_ids.length === 0 ? 'Terbuka untuk semua peserta' : `${data.participant_ids.length} peserta dipilih`}
+            action="Pilih"
+            actionLabel="Pilih peserta"
+            onClick={() => setPickerOpen(true)}
+        />
+    );
 
     return (
         <Dialog
@@ -144,7 +223,7 @@ export default function WorkcodeEditor({ workcode, participants, toleranceMinute
             description={daily
                 ? 'Presensi datang dan pulang setiap hari kerja, dengan jam yang bisa berbeda per hari.'
                 : 'Peserta presensi sekali, misalnya untuk upacara, rapat, seminar, atau ujian.'}
-            size="6xl"
+            size="7xl"
             footer={
                 <>
                     {!editing && daily && (
@@ -159,7 +238,7 @@ export default function WorkcodeEditor({ workcode, participants, toleranceMinute
         >
             {/* Layar lebar: form di kiri, lokasi di kanan, muat satu layar tanpa gulir. */}
             {/* autoComplete off + atribut pengelola sandi: cegah username akun terisi ke nama workcode */}
-            <form id="workcode-form" onSubmit={submit} autoComplete="off" className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]">
+            <form id="workcode-form" onSubmit={submit} autoComplete="off" className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,32rem)]">
                 <div className="space-y-4">
                     <div className="grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)]">
                         <div>
@@ -168,14 +247,14 @@ export default function WorkcodeEditor({ workcode, participants, toleranceMinute
                                 label="Jenis presensi"
                                 value={data.kategori}
                                 onChange={(value) => setData('kategori', value)}
-                                options={[{ value: 'workcode', label: 'Kegiatan (sekali)' }, { value: 'harian', label: 'Harian' }]}
+                                options={[{ value: 'workcode', label: 'Workcode Acara' }, { value: 'harian', label: 'Workcode Work From Office' }]}
                             />
                         </div>
                         <Field label="Nama" required error={errors.nama_workcode}>
                             <Input
                                 value={data.nama_workcode}
                                 onChange={(e) => setData('nama_workcode', e.target.value)}
-                                placeholder={daily ? 'Contoh: Presensi harian guru & karyawan' : 'Contoh: Rapat pleno semester ganjil'}
+                                placeholder={daily ? 'Contoh: Presensi Work From Office guru & karyawan' : 'Contoh: Rapat pleno semester ganjil'}
                                 data-lpignore="true"
                                 data-1p-ignore="true"
                                 data-bwignore="true"
@@ -188,7 +267,7 @@ export default function WorkcodeEditor({ workcode, participants, toleranceMinute
                     {/* Kedua isian ditumpuk di sel yang sama agar ukuran popup tetap saat jenis diganti (layar lebar).
                         Yang tidak aktif dinonaktifkan: tidak bisa difokus dan tidak ikut validasi browser. */}
                     <div className="grid">
-                        <fieldset disabled={!daily} aria-hidden={!daily || undefined} className={cx('min-w-0 [grid-area:1/1]', !daily && 'max-lg:hidden lg:invisible')}>
+                        <fieldset disabled={!daily} aria-hidden={!daily || undefined} className={cx('flex min-w-0 flex-col gap-4 [grid-area:1/1]', !daily && 'max-lg:hidden lg:invisible')}>
                             <WeekSchedule
                                 activeDays={data.hari_aktif}
                                 schedule={data.jadwal_per_hari}
@@ -199,10 +278,13 @@ export default function WorkcodeEditor({ workcode, participants, toleranceMinute
                                 toleranceMinutes={toleranceMinutes}
                                 errors={errors}
                             />
+                            <div className="mt-auto">{participantRow}</div>
                         </fieldset>
-                        <fieldset disabled={daily} aria-hidden={daily || undefined} className={cx('min-w-0 [grid-area:1/1]', daily && 'max-lg:hidden lg:invisible')}>
-                            <legend className="mb-1 text-sm font-medium text-ink">Waktu kegiatan</legend>
-                            <p className="mb-3 text-sm text-ink-2">Workcode menyala otomatis pada jam mulai dan tertutup pada jam selesai (WIB).</p>
+                        {/* Kegiatan: waktu + ringkasan di atas, peserta di dasar sel, sehingga sel setinggi jadwal
+                            harian terisi rata tanpa ruang kosong di bawah. */}
+                        <fieldset disabled={daily} aria-hidden={daily || undefined} className={cx('flex min-w-0 flex-col gap-4 [grid-area:1/1]', daily && 'max-lg:hidden lg:invisible')}>
+                            <legend className="sr-only">Waktu acara</legend>
+                            <p className="-mb-1 text-sm font-medium text-ink" aria-hidden="true">Waktu acara</p>
                             <div className="grid gap-3 sm:grid-cols-3">
                                 <Field label="Tanggal" required error={errors.tanggal}>
                                     <Input type="date" value={data.tanggal} onChange={(e) => setData('tanggal', e.target.value)} />
@@ -214,32 +296,35 @@ export default function WorkcodeEditor({ workcode, participants, toleranceMinute
                                     <Input type="time" value={data.jam_aktif_selesai} min={data.jam_aktif_mulai || undefined} onChange={(e) => setData('jam_aktif_selesai', e.target.value)} />
                                 </Field>
                             </div>
+                            <p className="rounded-xl bg-surface-2/60 px-4 py-3 text-sm text-ink-2" aria-live="polite">
+                                {data.tanggal && eventLength ? (
+                                    <>
+                                        Menyala otomatis <span className="font-medium text-ink">{longDate(data.tanggal)}</span> pukul{' '}
+                                        <span className="font-medium tabular-nums text-ink">{data.jam_aktif_mulai}</span>, ditutup{' '}
+                                        <span className="font-medium tabular-nums text-ink">{data.jam_aktif_selesai}</span> WIB · {eventLength}.
+                                        Di luar jam ini presensi acara terkunci.
+                                    </>
+                                ) : (
+                                    'Isi tanggal serta jam mulai dan selesai. Workcode menyala dan tertutup otomatis sesuai jam ini (WIB).'
+                                )}
+                            </p>
+                            <div className="mt-auto space-y-3">
+                                {participantRow}
+                                <PickerRow
+                                    icon={UserCheck}
+                                    title="Hadir otomatis"
+                                    summary={data.auto_participant_ids.length === 0
+                                        ? 'Stakeholder seperti kepala sekolah atau pemateri'
+                                        : `${data.auto_participant_ids.length} otomatis hadir saat mulai`}
+                                    error={errors.auto_participant_ids}
+                                    action="Pilih"
+                                    actionLabel="Pilih stakeholder"
+                                    onClick={() => setAutoPickerOpen(true)}
+                                />
+                            </div>
                         </fieldset>
                     </div>
 
-                    <div className={daily ? undefined : 'grid gap-3 sm:grid-cols-2'}>
-                        <PickerRow
-                            icon={Users}
-                            title="Peserta"
-                            summary={data.participant_ids.length === 0 ? 'Terbuka untuk semua peserta' : `${data.participant_ids.length} peserta dipilih`}
-                            action="Pilih"
-                            actionLabel="Pilih peserta"
-                            onClick={() => setPickerOpen(true)}
-                        />
-                        {!daily && (
-                            <PickerRow
-                                icon={UserCheck}
-                                title="Hadir otomatis"
-                                summary={data.auto_participant_ids.length === 0
-                                    ? 'Stakeholder seperti kepala sekolah atau pemateri'
-                                    : `${data.auto_participant_ids.length} otomatis hadir saat mulai`}
-                                error={errors.auto_participant_ids}
-                                action="Pilih"
-                                actionLabel="Pilih stakeholder"
-                                onClick={() => setAutoPickerOpen(true)}
-                            />
-                        )}
-                    </div>
                 </div>
 
                 <fieldset className="flex min-h-0 flex-col gap-3 border-t border-line pt-5 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
@@ -257,17 +342,31 @@ export default function WorkcodeEditor({ workcode, participants, toleranceMinute
                         {/* absolute: di lg tinggi kotak hanya dari min-h/flex-1, sehingga h-full pada peta akan bernilai 0. */}
                         <div className="absolute inset-0">
                             <MapErrorBoundary>
-                                <GoogleMap position={mapPosition} radius={data.radius_meters || 100} interactive onPositionChange={setMapPosition} onLocationStatusChange={setLocationStatus} />
+                                <GoogleMap
+                                    position={mapPosition ?? MAP_VIEW_CENTER}
+                                    unset={!mapPosition}
+                                    radius={data.radius_meters || 100}
+                                    interactive
+                                    onPositionChange={choosePosition}
+                                    onLocationStatusChange={setLocationStatus}
+                                />
                             </MapErrorBoundary>
                         </div>
                     </div>
                     <p className="flex items-start gap-1.5 text-sm text-ink-2" role="status">
                         <LocateFixed className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                         <span className={locationStatus?.type === 'error' ? 'text-danger' : undefined}>
-                            {locationStatus?.message || 'Tombol lokasi di peta untuk GPS, atau klik/geser penanda.'}
-                            {mapPosition && <span className="block text-xs tabular-nums">Titik: {mapPosition.lat.toFixed(5)}, {mapPosition.lng.toFixed(5)}</span>}
+                            {locationStatus?.message || (mapPosition
+                                ? 'Klik peta atau geser penanda untuk memindah titik.'
+                                : 'Titik belum dipilih. Klik peta, tombol lokasi di peta, atau isi lintang & bujur.')}
                         </span>
                     </p>
+                    <CoordinateFields position={mapPosition} onChange={choosePosition} error={locationError} />
+                    {fallbackLocation && !(mapPosition?.lat === fallbackLocation.lat && mapPosition?.lng === fallbackLocation.lng) && (
+                        <Button size="sm" variant="ghost" icon={History} onClick={() => choosePosition({ lat: fallbackLocation.lat, lng: fallbackLocation.lng })} className="-ml-2 self-start">
+                            Pakai lokasi {fallbackLocation.nama}
+                        </Button>
+                    )}
                 </fieldset>
             </form>
 
@@ -286,7 +385,7 @@ export default function WorkcodeEditor({ workcode, participants, toleranceMinute
                 selected={data.auto_participant_ids}
                 onChange={setAutoParticipantIds}
                 title="Hadir otomatis"
-                description="Yang dicentang otomatis tercatat hadir pada jam mulai kegiatan dan tidak muncul lagi di daftar peserta. Bila mereka tetap scan, hasil scan menggantikan catatan otomatis."
+                description="Yang dicentang otomatis tercatat hadir pada jam mulai acara dan tidak muncul lagi di daftar peserta. Bila mereka tetap scan, hasil scan menggantikan catatan otomatis."
                 emptyLabel="Belum ada stakeholder dipilih"
             />
         </Dialog>

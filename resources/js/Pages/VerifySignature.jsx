@@ -35,11 +35,11 @@ export default function VerifySignature({ workcode, kepalaSekolahNama, kepalaSek
                         <div className="grid grid-cols-2 gap-3">
                             <div>
                                 <dt className="text-ink-2">Jenis</dt>
-                                <dd className="mt-0.5 font-medium text-ink">{daily ? 'Presensi harian' : 'Presensi kegiatan'}</dd>
+                                <dd className="mt-0.5 font-medium text-ink">{daily ? 'Presensi Work From Office' : 'Presensi acara'}</dd>
                             </div>
                             {!daily && workcode.tanggal && (
                                 <div>
-                                    <dt className="text-ink-2">Tanggal kegiatan</dt>
+                                    <dt className="text-ink-2">Tanggal acara</dt>
                                     <dd className="mt-0.5 font-medium text-ink">{formatDate(workcode.tanggal)}</dd>
                                 </div>
                             )}
@@ -55,7 +55,7 @@ export default function VerifySignature({ workcode, kepalaSekolahNama, kepalaSek
 
                 <p className="flex items-start gap-2 text-sm text-ink-2">
                     <Info className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-                    Pastikan nama kegiatan di atas sama dengan dokumen yang Anda pegang. Dokumen elektronik ini sah tanpa stempel basah.
+                    Pastikan nama acara di atas sama dengan dokumen yang Anda pegang. Dokumen elektronik ini sah tanpa stempel basah.
                 </p>
 
                 <div className="space-y-2 text-center">

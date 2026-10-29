@@ -6,6 +6,7 @@ use App\Models\Participant;
 use App\Models\User;
 use App\Models\Workcode;
 use App\Services\SelfCheckInTokenService;
+use App\Support\DeviceLock;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Carbon;
@@ -164,7 +165,7 @@ class PublicEndpointsHardeningTest extends TestCase
 
     // ── 2.5 Sanctum ─────────────────────────────────────────────────
 
-    public function test_api_tokens_expire_and_do_not_pile_up(): void
+    public function test_api_tokens_never_expire_and_do_not_pile_up(): void
     {
         // Batas login 5/menit diuji terpisah; di sini fokus pada jumlah & masa berlaku token.
         $this->withoutMiddleware(ThrottleRequests::class);
@@ -180,8 +181,20 @@ class PublicEndpointsHardeningTest extends TestCase
         $this->app['auth']->forgetGuards();
         $this->withToken($token)->getJson('/api/v1/me')->assertOk();
 
-        Carbon::setTestNow(now()->addMinutes(config('sanctum.expiration') + 1));
+        // Tanpa batas waktu: peserta tetap masuk walau aplikasi lama tidak dibuka.
+        Carbon::setTestNow(now()->addYear());
         $this->app['auth']->forgetGuards();
+        $this->withToken($token)->getJson('/api/v1/me')->assertOk();
+
+        // Token hanya berakhir bila dicabut: logout ...
+        $this->withToken($token)->postJson('/api/v1/auth/logout')->assertOk();
+        $this->app['auth']->forgetGuards();
+        $this->withToken($token)->getJson('/api/v1/me')->assertUnauthorized();
+
+        // ... atau admin melepas kunci perangkat (ganti perangkat lewat DeviceLock::bind juga mencabut semua token).
+        $token = $this->postJson('/api/v1/auth/login', ['login' => 'guru1', 'password' => 'rahasia123', 'device_name' => 'HP'])->json('data.token');
+        $this->app['auth']->forgetGuards();
+        DeviceLock::release($user->fresh());
         $this->withToken($token)->getJson('/api/v1/me')->assertUnauthorized();
     }
 }

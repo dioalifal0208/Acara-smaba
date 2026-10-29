@@ -111,6 +111,10 @@ class WorkcodeController extends Controller
      */
     public function activate(Workcode $workcode, FcmService $fcmService)
     {
+        if ($workcode->archived_at) {
+            return redirect()->back()->with('error', "Workcode '{$workcode->nama_workcode}' sedang diarsipkan. Kembalikan dari arsip dulu.");
+        }
+
         if ($workcode->hasScheduledActiveWindow() && ! $workcode->isWithinActiveWindow()) {
             return redirect()->back()->with(
                 'error',
@@ -143,6 +147,28 @@ class WorkcodeController extends Controller
     /**
      * Hapus workcode.
      */
+    /**
+     * Arsipkan workcode yang tidak sedang aktif: hilang dari daftar utama, data kehadiran tetap ada.
+     */
+    public function archive(Workcode $workcode)
+    {
+        if ($workcode->isEffectivelyActive()) {
+            return redirect()->back()->with('error', "Workcode '{$workcode->nama_workcode}' sedang aktif. Nonaktifkan dulu sebelum diarsipkan.");
+        }
+
+        $workcode->update(['archived_at' => now(), 'is_active' => false]);
+
+        return redirect()->back()->with('success', "Workcode '{$workcode->nama_workcode}' diarsipkan. Data kehadirannya tetap tersimpan.");
+    }
+
+    /** Kembalikan workcode dari arsip (tetap nonaktif sampai diaktifkan). */
+    public function unarchive(Workcode $workcode)
+    {
+        $workcode->update(['archived_at' => null]);
+
+        return redirect()->back()->with('success', "Workcode '{$workcode->nama_workcode}' dikembalikan dari arsip.");
+    }
+
     public function destroy(Workcode $workcode, FcmService $fcmService)
     {
         $nama = $workcode->nama_workcode;
@@ -252,7 +278,7 @@ class WorkcodeController extends Controller
             'max:255',
             function (string $attribute, mixed $value, \Closure $fail) use ($identities) {
                 if (is_string($value) && $identities->contains(mb_strtolower(trim($value)))) {
-                    $fail('Nama workcode tidak boleh sama dengan akun login. Kemungkinan kolom ini terisi otomatis oleh browser; ketik ulang nama kegiatan.');
+                    $fail('Nama workcode tidak boleh sama dengan akun login. Kemungkinan kolom ini terisi otomatis oleh browser; ketik ulang nama acara.');
                 }
             },
         ];

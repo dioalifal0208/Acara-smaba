@@ -27,7 +27,7 @@ const CONTENT = {
         tone: 'text-status-telat',
         title: 'QR sudah tidak berlaku',
         steps: [
-            'Pindai ulang QR terbaru yang sedang ditampilkan panitia di lokasi kegiatan.',
+            'Pindai ulang QR terbaru yang sedang ditampilkan panitia di lokasi acara.',
             'Jangan memakai foto, tangkapan layar, atau tautan QR yang dibagikan sebelumnya. QR bisa diperbarui panitia kapan saja.',
         ],
     },
@@ -36,7 +36,7 @@ const CONTENT = {
         tone: 'text-status-alpha',
         title: 'Presensi sudah ditutup',
         steps: [
-            'Waktu presensi kegiatan ini sudah selesai, jadi QR dan tautannya tidak berlaku lagi.',
+            'Waktu presensi acara ini sudah selesai, jadi QR dan tautannya tidak berlaku lagi.',
             'Jika Anda hadir tetapi belum sempat presensi, segera hubungi panitia atau admin untuk dicatat.',
         ],
     },
@@ -51,7 +51,7 @@ const CONTENT = {
         tone: 'text-status-telat',
         title: 'Presensi dihentikan sementara',
         steps: [
-            'Panitia sedang menghentikan presensi kegiatan ini.',
+            'Panitia sedang menghentikan presensi acara ini.',
             'Biarkan halaman ini terbuka. Form presensi muncul sendiri saat dibuka kembali.',
         ],
     },
@@ -60,16 +60,16 @@ const CONTENT = {
         tone: 'text-status-telat',
         title: 'Presensi ditutup sementara',
         steps: [
-            'Sedang berlangsung kegiatan lain yang hanya untuk peserta terpilih.',
-            'Jika Anda termasuk peserta terpilih, pindai QR kegiatan tersebut yang ditampilkan panitia.',
+            'Sedang berlangsung acara lain yang hanya untuk peserta terpilih.',
+            'Jika Anda termasuk peserta terpilih, pindai QR acara tersebut yang ditampilkan panitia.',
         ],
     },
     harian: {
         icon: IdCard,
         tone: 'text-status-izin',
-        title: 'Gunakan presensi harian',
+        title: 'Gunakan presensi Work From Office',
         steps: [
-            'Presensi harian tidak memakai QR presensi mandiri.',
+            'Presensi Work From Office tidak memakai QR presensi mandiri.',
             'Presensi lewat aplikasi PRESENSI SMABA di HP, atau tunjukkan QR pribadi Anda kepada petugas.',
         ],
     },
@@ -163,7 +163,7 @@ export default function Closed({ reason, message, temporary = false, workcode = 
 
                 {workcode && (
                     <Card className="p-4">
-                        <p className="text-sm text-ink-2">Kegiatan</p>
+                        <p className="text-sm text-ink-2">Acara</p>
                         <p className="mt-0.5 text-base font-semibold text-ink">{workcode.nama_workcode}</p>
                         {(workcode.tanggal || (start && end)) && (
                             <dl className="mt-3 grid grid-cols-2 gap-3 border-t border-line pt-3 text-sm">
@@ -206,7 +206,7 @@ export default function Closed({ reason, message, temporary = false, workcode = 
 
                 {hasOtherActiveWorkcode && reason !== 'harian' && (
                     <p className="rounded-xl border border-line bg-surface-2 p-4 text-sm text-ink">
-                        Ada presensi kegiatan lain yang sedang dibuka. Pindai QR terbaru yang ditampilkan panitia untuk kegiatan itu.
+                        Ada presensi acara lain yang sedang dibuka. Pindai QR terbaru yang ditampilkan panitia untuk acara itu.
                     </p>
                 )}
 

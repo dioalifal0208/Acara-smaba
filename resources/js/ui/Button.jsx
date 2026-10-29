@@ -11,8 +11,11 @@ const variants = {
     'danger-outline': 'border border-line-strong bg-surface text-danger hover:bg-danger-soft',
 };
 
+// Layar sentuh (pointer kasar): sm ikut 40px agar tetap mudah diketuk ibu jari; mouse tetap 32px rapat.
+const coarse40 = '[@media(pointer:coarse)]:h-10';
+
 const sizes = {
-    sm: 'h-8 gap-1.5 px-3 text-sm [&_svg]:h-4 [&_svg]:w-4',
+    sm: `h-8 gap-1.5 px-3 text-sm [&_svg]:h-4 [&_svg]:w-4 ${coarse40}`,
     md: 'h-10 gap-2 px-4 text-sm [&_svg]:h-4 [&_svg]:w-4',
     lg: 'h-12 gap-2 px-5 text-base [&_svg]:h-5 [&_svg]:w-5',
 };
@@ -67,7 +70,7 @@ export const IconButton = forwardRef(function IconButton(
     { icon: Icon, label, size = 'md', variant = 'ghost', className, type = 'button', ...props },
     ref,
 ) {
-    const box = { sm: 'h-8 w-8 [&_svg]:h-4 [&_svg]:w-4', md: 'h-10 w-10 [&_svg]:h-5 [&_svg]:w-5' }[size];
+    const box = { sm: `h-8 w-8 [&_svg]:h-4 [&_svg]:w-4 ${coarse40} [@media(pointer:coarse)]:w-10`, md: 'h-10 w-10 [&_svg]:h-5 [&_svg]:w-5' }[size];
 
     return (
         <button

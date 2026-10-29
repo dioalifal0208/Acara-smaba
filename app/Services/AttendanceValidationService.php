@@ -10,18 +10,17 @@ use Illuminate\Validation\ValidationException;
 
 class AttendanceValidationService
 {
-    public function validateWorkcodeActive(?Workcode $workcode, bool $isMobileApi = false)
+    /**
+     * Tolak presensi bila workcode tidak ada atau tidak sedang aktif. Dipakai Scanner admin, aplikasi
+     * Android, dan pengajuan izin Android; larangan QR mandiri untuk Work From Office ditangani
+     * SelfCheckInController (closedReason 'harian').
+     */
+    public function validateWorkcodeActive(?Workcode $workcode): void
     {
         if (! $workcode || ! $workcode->isEffectivelyActive()) {
             throw ValidationException::withMessages([
-                'workcode' => 'Belum ada Workcode yang aktif. Presensi mandiri saat ini ditutup.',
+                'workcode' => 'Belum ada workcode yang aktif, jadi presensi sedang ditutup.',
             ])->status(400);
-        }
-
-        if ($workcode->kategori === 'harian' && ! $isMobileApi) {
-            throw ValidationException::withMessages([
-                'workcode' => 'Presensi harian hanya dapat dilakukan melalui scan QR Code Pribadi oleh petugas/admin.',
-            ])->status(403);
         }
     }
 

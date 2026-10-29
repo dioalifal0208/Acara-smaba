@@ -18,16 +18,16 @@ export default function LeaveRequestModal({ show, onClose, workcodes, tanggal })
         tanggal_selesai: '',
     });
 
-    const closeModal = () => {
-        reset();
-        onClose();
-    };
+    // Ditutup (Batal, Esc, ketuk luar) tanpa mengosongkan isian: draf tetap ada saat dibuka lagi.
+    // Isian baru dikosongkan setelah pengajuan terkirim.
+    const closeModal = () => onClose();
 
     const submit = (e) => {
         e.preventDefault();
         post(route('leave.store'), {
             preserveScroll: true,
             onSuccess: () => {
+                reset();
                 closeModal();
                 toast.success('Pengajuan izin terkirim. Tunggu persetujuan admin.');
             },
@@ -108,7 +108,8 @@ export default function LeaveRequestModal({ show, onClose, workcodes, tanggal })
                     Izin lebih dari satu hari
                 </Checkbox>
 
-                <Field label="Dokumen pendukung" required hint="Foto atau PDF, maksimal 5 MB. Contoh: surat dokter atau surat tugas." error={errors.dokumen}>
+                {/* File yang sudah dipilih tetap terlampir walau popup sempat ditutup; input file browser tidak bisa diisi ulang. */}
+                <Field label="Dokumen pendukung" required={!data.dokumen} hint="Foto atau PDF, maksimal 5 MB. Contoh: surat dokter atau surat tugas." error={errors.dokumen}>
                     <input
                         type="file"
                         accept=".jpg,.jpeg,.png,.pdf"
@@ -116,6 +117,7 @@ export default function LeaveRequestModal({ show, onClose, workcodes, tanggal })
                         className="block w-full text-sm text-ink-2 file:mr-3 file:h-10 file:cursor-pointer file:rounded-lg file:border file:border-line-strong file:bg-surface file:px-4 file:text-sm file:font-medium file:text-ink hover:file:bg-surface-2"
                     />
                 </Field>
+                {data.dokumen && <p className="-mt-2 truncate text-sm text-ink">Terlampir: <span className="font-medium">{data.dokumen.name}</span></p>}
             </form>
         </Dialog>
     );

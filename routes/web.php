@@ -85,6 +85,8 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::put('/workcodes/{workcode}', [WorkcodeController::class, 'update'])->name('workcodes.update');
     Route::post('/workcodes/{workcode}/activate', [WorkcodeController::class, 'activate'])->name('workcodes.activate');
     Route::post('/workcodes/{workcode}/deactivate', [WorkcodeController::class, 'deactivate'])->name('workcodes.deactivate');
+    Route::post('/workcodes/{workcode}/archive', [WorkcodeController::class, 'archive'])->name('workcodes.archive');
+    Route::post('/workcodes/{workcode}/unarchive', [WorkcodeController::class, 'unarchive'])->name('workcodes.unarchive');
     Route::delete('/workcodes/{workcode}', [WorkcodeController::class, 'destroy'])->name('workcodes.destroy');
 
     // Tombol Sync (petir): minta semua aplikasi Android memuat ulang data dari server.

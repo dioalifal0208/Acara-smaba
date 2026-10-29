@@ -62,7 +62,7 @@ Sejak 26 Okt 2026, GTT/PTT (tanpa NIP) mendapat **ID khusus 18 digit berformat N
 |---|---|
 | Bahasa | PHP `^8.2` (CI memakai 8.3, sama dengan produksi Hostinger), JavaScript (JSX) |
 | Framework | Laravel `^12.0`, Inertia.js (`inertiajs/inertia-laravel ^2.0`, `@inertiajs/react ^2.0`), React `^18.2` |
-| Auth | Session web (scaffolding Laravel Breeze `^2.4`), Laravel Sanctum `^4.0` untuk token API Android (default berlaku 30 hari, `config/sanctum.php:54`) |
+| Auth | Session web (scaffolding Laravel Breeze `^2.4`), Laravel Sanctum `^4.0` untuk token API Android (tanpa masa berlaku; dicabut saat logout/ganti perangkat/lepas perangkat, `config/sanctum.php`) |
 | Database | MySQL (produksi/Laragon; beberapa migrasi memakai `ALTER ... ENUM` khusus non-SQLite), SQLite in-memory untuk test (`phpunit.xml`) |
 | Library backend | `kreait/laravel-firebase ^7.2` (FCM), `phpoffice/phpspreadsheet` (impor Excel), `simplesoftwareio/simple-qrcode ^4.2`, `tightenco/ziggy ^2.0` (route di JS) |
 | Library frontend | `face-api.js ^0.22.2` (pendaftaran wajah di browser), `html5-qrcode ^2.3.8` (scanner), `chart.js ^4.4.7`, `axios`, `aos`, `@headlessui/react`, Google Maps JS API |

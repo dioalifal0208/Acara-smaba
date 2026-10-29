@@ -52,7 +52,7 @@ class SelfCheckInWebTest extends TestCase
         ]);
 
         $response->assertStatus(403)
-            ->assertJson(['message' => 'Presensi harian hanya dapat dilakukan melalui scan QR Code Pribadi oleh petugas/admin.']);
+            ->assertJson(['message' => 'QR presensi mandiri hanya untuk workcode acara. Presensi Work From Office dilakukan lewat aplikasi PRESENSI SMABA, atau tunjukkan QR pribadi Anda kepada petugas scanner.']);
     }
 
     public function test_successful_check_in()

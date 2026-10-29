@@ -95,8 +95,9 @@ export default function ParticipantsIndex({ participants }) {
         const count = selected.length;
         const confirmed = await confirm({
             title: `Hapus ${count} peserta?`,
-            message: 'Akun login, foto, dan riwayat presensi mereka ikut terhapus permanen dan tidak bisa dikembalikan.',
+            message: 'Akun login, foto, wajah terdaftar, dan seluruh riwayat presensi mereka ikut terhapus permanen dan tidak bisa dikembalikan.',
             confirmText: `Hapus ${count} peserta`,
+            requireText: `${count} peserta`,
         });
         if (!confirmed) return;
 

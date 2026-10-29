@@ -114,7 +114,7 @@ function LockedScreen({ lock, activeWorkcode }) {
             {kind === 'blocked' && <AlertTriangle className="mx-auto h-14 w-14 text-status-telat" strokeWidth={1.75} aria-hidden="true" />}
             <div>
                 <h1 className="font-display text-2xl font-semibold text-ink">{title}</h1>
-                <p className="mt-1 text-sm text-ink-2">{activeWorkcode?.nama_workcode || 'Presensi kegiatan'}</p>
+                <p className="mt-1 text-sm text-ink-2">{activeWorkcode?.nama_workcode || 'Presensi acara'}</p>
             </div>
 
             <Card className="p-5 text-left">
@@ -132,8 +132,8 @@ function LockedScreen({ lock, activeWorkcode }) {
                 <div className="rounded-xl border border-line bg-surface-2 p-4 text-left text-sm text-ink-2">
                     <p className="font-medium text-ink">Bukan {nama}?</p>
                     <p className="mt-1">
-                        Satu HP hanya bisa dipakai satu orang per kegiatan, jadi presensi Anda <span className="font-medium text-ink">belum tercatat</span>.
-                        Pindai QR kegiatan dengan HP Anda sendiri, atau {SELF_SERVICE_FALLBACK}.
+                        Satu HP hanya bisa dipakai satu orang per acara, jadi presensi Anda <span className="font-medium text-ink">belum tercatat</span>.
+                        Pindai QR acara dengan HP Anda sendiri, atau {SELF_SERVICE_FALLBACK}.
                     </p>
                 </div>
             )}
@@ -526,13 +526,13 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
 
     return (
         <PublicShell>
-            <Head title="Presensi kegiatan" />
+            <Head title="Presensi acara" />
 
             {!activeWorkcode ? (
                 <div className="py-10 text-center">
                     <CalendarClock className="mx-auto h-12 w-12 text-ink-3" strokeWidth={1.5} aria-hidden="true" />
                     <h1 className="mt-4 font-display text-2xl font-semibold text-ink">Presensi belum dibuka</h1>
-                    <p className="mt-2 text-sm text-ink-2">Panitia belum mengaktifkan presensi kegiatan. Biarkan halaman ini terbuka atau hubungi panitia.</p>
+                    <p className="mt-2 text-sm text-ink-2">Panitia belum mengaktifkan presensi acara. Biarkan halaman ini terbuka atau hubungi panitia.</p>
                 </div>
             ) : result ? (
                 <div className="space-y-4 py-6 text-center" role="status">
@@ -540,7 +540,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                     <div>
                         <h1 className="font-display text-2xl font-semibold text-ink">Sudah presensi</h1>
                         <p className="mt-2 text-sm text-ink-2">
-                            <span className="font-medium text-ink">{result.nama}</span> ({result.id}) sudah tercatat hadir di kegiatan ini. Tidak perlu presensi lagi.
+                            <span className="font-medium text-ink">{result.nama}</span> ({result.id}) sudah tercatat hadir di acara ini. Tidak perlu presensi lagi.
                         </p>
                     </div>
                     <Button onClick={() => setResult(null)} className="w-full">Pilih nama lain</Button>
@@ -548,7 +548,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
             ) : (
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
-                        <p className="text-sm text-ink-2">Presensi kegiatan</p>
+                        <p className="text-sm text-ink-2">Presensi acara</p>
                         <h1 className="mt-1 font-display text-2xl font-semibold leading-tight text-ink">{activeWorkcode.nama_workcode}</h1>
                         {closesAt && <p className="mt-1 text-sm text-ink-2">Dibuka sampai pukul <span className="tabular-nums">{closesAt}</span> WIB</p>}
                     </div>
@@ -584,7 +584,6 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
                                     autoComplete="off"
                                     autoCapitalize="words"
                                     spellCheck={false}
-                                    autoFocus
                                     role="combobox"
                                     aria-expanded={showSuggestions}
                                     aria-controls="suggestions-list"
@@ -626,7 +625,7 @@ export default function SelfCheckInForm({ token, activeWorkcode }) {
 
                         {workcodes.length > 1 && (
                             <div className="mt-3">
-                                <label htmlFor="workcode-select" className="mb-1.5 block text-sm text-ink-2">Presensi untuk kegiatan</label>
+                                <label htmlFor="workcode-select" className="mb-1.5 block text-sm text-ink-2">Presensi untuk acara</label>
                                 <Select id="workcode-select" value={data.workcode_id || ''} onChange={(event) => setData('workcode_id', Number(event.target.value) || null)}>
                                     {workcodes.map((workcode) => <option key={workcode.workcode_id} value={workcode.workcode_id}>{workcode.nama_workcode}</option>)}
                                 </Select>

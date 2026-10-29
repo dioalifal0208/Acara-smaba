@@ -1,5 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Button, Card, Dialog, EmptyState, Field, PageHeader, Segmented, StatusPill, Textarea, cx, useToast } from '@/ui';
+import { Button, Card, Checkbox, Dialog, EmptyState, Field, PageHeader, Segmented, StatusPill, Textarea, cx, useToast } from '@/ui';
 import useMediaQuery from '@/ui/useMediaQuery';
 import { Head, router, usePage } from '@inertiajs/react';
 import { CalendarDays, CheckCircle2, ExternalLink, FileText, Inbox, Paperclip } from 'lucide-react';
@@ -24,6 +24,7 @@ const REJECT_PRESETS = ['Dokumen tidak terbaca', 'Dokumen tidak sesuai alasan iz
 
 // Persetujuan baru dikirim ke server setelah jeda ini, agar salah klik bisa diurungkan.
 const UNDO_SECONDS = 6;
+const SHORTCUTS_KEY = 'leave-shortcuts';
 
 const isTyping = (target) => target?.closest?.('input, textarea, select, [contenteditable="true"], [role="dialog"]');
 
@@ -52,6 +53,14 @@ export default function LeaveApprovalsIndex({ leaveRequests }) {
     const [busy, setBusy] = useState(null);
     const [rejecting, setRejecting] = useState(false);
     const [queued, setQueued] = useState(null); // { request, secondsLeft }
+    // Pintasan satu huruf bisa dimatikan (WCAG 2.1.4), misalnya untuk pengguna perangkat input suara.
+    const [shortcutsOn, setShortcutsOn] = useState(() => {
+        try { return window.localStorage.getItem(SHORTCUTS_KEY) !== 'off'; } catch { return true; }
+    });
+    const toggleShortcuts = (on) => {
+        setShortcutsOn(on);
+        try { window.localStorage.setItem(SHORTCUTS_KEY, on ? 'on' : 'off'); } catch { /* mode privat: berlaku sampai muat ulang */ }
+    };
     const queuedRef = useRef(null);
 
     useEffect(() => {
@@ -152,7 +161,7 @@ export default function LeaveApprovalsIndex({ leaveRequests }) {
 
     // Pintasan keyboard di layar lebar.
     useEffect(() => {
-        if (!wide) return undefined;
+        if (!wide || !shortcutsOn) return undefined;
         const onKey = (event) => {
             if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event.target)) return;
             const key = event.key.toLowerCase();
@@ -193,9 +202,10 @@ export default function LeaveApprovalsIndex({ leaveRequests }) {
                         options={FILTERS.map((f) => ({ ...f, count: f.value === 'all' ? visible.length : counts[f.value] - (queued && f.value === 'pending' ? 1 : 0) }))}
                     />
                     {wide && (
-                        <p className="text-sm text-ink-2">
-                            Pintasan: <Kbd>J</Kbd>/<Kbd>K</Kbd> pindah · <Kbd>A</Kbd> setujui · <Kbd>T</Kbd> tolak
-                        </p>
+                        <div className="flex flex-wrap items-center gap-x-3 text-sm text-ink-2">
+                            <Checkbox checked={shortcutsOn} onChange={(e) => toggleShortcuts(e.target.checked)}>Pintasan keyboard</Checkbox>
+                            {shortcutsOn && <p><Kbd>J</Kbd>/<Kbd>K</Kbd> pindah · <Kbd>A</Kbd> setujui · <Kbd>T</Kbd> tolak</p>}
+                        </div>
                     )}
                 </div>
 

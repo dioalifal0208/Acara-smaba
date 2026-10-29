@@ -72,7 +72,7 @@ class AttendanceController extends Controller
         }
 
         try {
-            $validationService->validateWorkcodeActive($activeWorkcode, true);
+            $validationService->validateWorkcodeActive($activeWorkcode);
         } catch (ValidationException $e) {
             return response()->json([
                 'status' => 'error',
@@ -230,7 +230,7 @@ class AttendanceController extends Controller
      */
     public function report(Request $request)
     {
-        $workcodes = Workcode::orderByDesc('created_at')->get();
+        $workcodes = Workcode::withCount('attendances')->orderByDesc('created_at')->get();
         $activeWorkcodes = Workcode::getActiveWorkcodes();
 
         $selectedWorkcodeId = $request->input('workcode_id');

@@ -25,7 +25,7 @@ class SelfCheckInController extends Controller
         'not_started' => 'Sesi presensi workcode ini belum dimulai.',
         'inactive' => 'Presensi workcode ini sedang dinonaktifkan sementara oleh panitia.',
         'closed_by_selection' => 'Presensi workcode ini ditutup karena ada workcode aktif lain yang pesertanya sudah dipilih.',
-        'harian' => 'Presensi harian hanya dapat dilakukan melalui scan QR Code Pribadi oleh petugas/admin.',
+        'harian' => 'QR presensi mandiri hanya untuk workcode acara. Presensi Work From Office dilakukan lewat aplikasi PRESENSI SMABA, atau tunjukkan QR pribadi Anda kepada petugas scanner.',
     ];
 
     /** Alasan yang bersifat sementara: halaman informasi memeriksa ulang dan kembali ke form bila workcode aktif lagi. */

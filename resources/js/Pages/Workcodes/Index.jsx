@@ -7,8 +7,8 @@ import {
 } from '@/ui';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
 import { Head, router, usePage } from '@inertiajs/react';
-import { CalendarClock, CalendarDays, Clock, ExternalLink, MapPin, MoreHorizontal, Pencil, Plus, Power, PowerOff, Trash2, Users } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Archive, ArchiveRestore, CalendarClock, CalendarDays, Clock, ExternalLink, MapPin, MoreHorizontal, Pencil, Plus, Power, PowerOff, Trash2, Users } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
 const todayIso = () => (new Date().getDay() === 0 ? 7 : new Date().getDay());
 const hhmm = (value) => (value ? value.substring(0, 5) : '–');
@@ -32,14 +32,31 @@ export default function WorkcodesIndex({ workcodes, participants, lateToleranceM
 
     const openEditor = (workcode = null) => setEditor({ workcode, key: Date.now() });
 
+    // Titik awal workcode baru: lokasi workcode terbaru yang punya koordinat.
+    const fallbackLocation = useMemo(() => {
+        const last = [...workcodes]
+            .filter((w) => Number(w.latitude) && Number(w.longitude))
+            .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+        return last ? { lat: Number(last.latitude), lng: Number(last.longitude), radius: Number(last.radius_meters) || 100, nama: last.nama_workcode } : null;
+    }, [workcodes]);
+
     const handleDelete = async (workcode) => {
+        const count = workcode.attendances_count;
         const confirmed = await confirm({
             title: `Hapus ${workcode.nama_workcode}?`,
-            message: `${workcode.attendances_count} data kehadiran di workcode ini ikut terhapus permanen dan tidak bisa dikembalikan.`,
-            confirmText: 'Hapus workcode',
+            message: count > 0
+                ? `${count} data kehadiran di workcode ini ikut terhapus permanen dan tidak bisa dikembalikan. Agar datanya tetap ada, pilih Arsipkan saja.`
+                : 'Workcode ini belum punya data kehadiran. Penghapusan tidak bisa dibatalkan.',
+            confirmText: count > 0 ? `Hapus beserta ${count} data kehadiran` : 'Hapus workcode',
+            // Ada data kehadiran: wajib mengetik nama workcode agar tidak terhapus karena salah klik.
+            requireText: count > 0 ? workcode.nama_workcode : undefined,
         });
         if (confirmed) router.delete(route('workcodes.destroy', workcode.id), { preserveScroll: true });
     };
+
+    const handleArchive = (workcode) => router.post(route('workcodes.archive', workcode.id), {}, { preserveScroll: true });
+    const handleUnarchive = (workcode) => router.post(route('workcodes.unarchive', workcode.id), {}, { preserveScroll: true });
+    const [archiveOpen, setArchiveOpen] = useState(false);
 
     const [query, setQuery] = useState('');
     const [type, setType] = useState('all');
@@ -53,11 +70,13 @@ export default function WorkcodesIndex({ workcodes, participants, lateToleranceM
     const filtered = Boolean(needle || month || type !== 'all');
     const typeOptions = [
         { value: 'all', label: 'Semua', count: byMonthAndQuery.length },
-        { value: 'harian', label: 'Harian', count: byMonthAndQuery.filter((w) => w.kategori === 'harian').length },
-        { value: 'workcode', label: 'Kegiatan', count: byMonthAndQuery.filter((w) => w.kategori !== 'harian').length },
+        { value: 'harian', label: 'Work From Office', count: byMonthAndQuery.filter((w) => w.kategori === 'harian').length },
+        { value: 'workcode', label: 'Acara', count: byMonthAndQuery.filter((w) => w.kategori !== 'harian').length },
     ];
-    const active = shown.filter((w) => w.is_effectively_active);
-    const inactive = shown.filter((w) => !w.is_effectively_active);
+    const active = shown.filter((w) => !w.archived_at && w.is_effectively_active);
+    const inactive = shown.filter((w) => !w.archived_at && !w.is_effectively_active);
+    const archived = shown.filter((w) => w.archived_at);
+    const handlers = { tolerance: lateToleranceMinutes, onEdit: openEditor, onDelete: handleDelete, onArchive: handleArchive, onUnarchive: handleUnarchive, onMap: setMapWorkcode };
 
     return (
         <AuthenticatedLayout>
@@ -66,7 +85,7 @@ export default function WorkcodesIndex({ workcodes, participants, lateToleranceM
             <div className="mx-auto w-full max-w-7xl space-y-8 px-4 py-6 sm:px-6">
                 <PageHeader
                     title="Workcode"
-                    description="Jadwal presensi harian dan kegiatan, beserta batas lokasinya."
+                    description="Jadwal presensi Work From Office dan acara, beserta batas lokasinya."
                     actions={<Button variant="primary" icon={Plus} onClick={() => openEditor()}>Workcode baru</Button>}
                 />
 
@@ -75,7 +94,7 @@ export default function WorkcodesIndex({ workcodes, participants, lateToleranceM
                         <EmptyState
                             icon={CalendarClock}
                             title="Belum ada workcode"
-                            description="Buat presensi harian untuk guru & karyawan, atau kegiatan sekali seperti rapat dan upacara."
+                            description="Buat presensi Work From Office untuk guru & karyawan, atau acara seperti rapat dan upacara."
                             action={<Button variant="primary" icon={Plus} onClick={() => openEditor()}>Workcode baru</Button>}
                         />
                     </Card>
@@ -87,7 +106,7 @@ export default function WorkcodesIndex({ workcodes, participants, lateToleranceM
                                 value={type === 'harian' ? '' : month}
                                 onChange={(e) => setMonth(e.target.value)}
                                 disabled={type === 'harian' || months.length === 0}
-                                aria-label="Filter bulan kegiatan"
+                                aria-label="Filter bulan acara"
                                 className="sm:w-48"
                             >
                                 <option value="">Semua bulan</option>
@@ -101,20 +120,16 @@ export default function WorkcodesIndex({ workcodes, participants, lateToleranceM
                             title="Sedang aktif"
                             empty={filtered ? 'Tidak ada workcode aktif yang cocok dengan filter.' : 'Tidak ada workcode yang aktif. Presensi terkunci sampai ada yang diaktifkan.'}
                             workcodes={active}
-                            tolerance={lateToleranceMinutes}
-                            onEdit={openEditor}
-                            onDelete={handleDelete}
-                            onMap={setMapWorkcode}
+                            {...handlers}
                         />
-                        {inactive.length > 0 && (
-                            <WorkcodeGroup
-                                title="Tidak aktif"
-                                workcodes={inactive}
-                                tolerance={lateToleranceMinutes}
-                                onEdit={openEditor}
-                                onDelete={handleDelete}
-                                onMap={setMapWorkcode}
-                            />
+                        {inactive.length > 0 && <WorkcodeGroup title="Tidak aktif" workcodes={inactive} {...handlers} />}
+                        {archived.length > 0 && (
+                            <section aria-label="Arsip workcode">
+                                <Button variant="ghost" icon={Archive} aria-expanded={archiveOpen} onClick={() => setArchiveOpen(!archiveOpen)} className="-ml-3">
+                                    {archiveOpen ? 'Sembunyikan arsip' : 'Tampilkan arsip'} <span className="tabular-nums">({archived.length})</span>
+                                </Button>
+                                {archiveOpen && <div className="mt-3"><WorkcodeGroup title="Arsip" workcodes={archived} {...handlers} /></div>}
+                            </section>
                         )}
                     </>
                 )}
@@ -126,6 +141,7 @@ export default function WorkcodesIndex({ workcodes, participants, lateToleranceM
                     workcode={editor.workcode}
                     participants={participants}
                     toleranceMinutes={lateToleranceMinutes}
+                    fallbackLocation={fallbackLocation}
                     onClose={() => setEditor(null)}
                 />
             )}
@@ -152,7 +168,7 @@ function WorkcodeGroup({ title, empty, workcodes, ...handlers }) {
     );
 }
 
-function WorkcodeCard({ workcode, tolerance, onEdit, onDelete, onMap }) {
+function WorkcodeCard({ workcode, tolerance, onEdit, onDelete, onArchive, onUnarchive, onMap }) {
     const daily = workcode.kategori === 'harian';
     const day = todayIso();
     const workingToday = workcode.hari_aktif?.includes(day);
@@ -168,7 +184,7 @@ function WorkcodeCard({ workcode, tolerance, onEdit, onDelete, onMap }) {
                 title: `Nonaktifkan ${workcode.nama_workcode}?`,
                 message: daily
                     ? 'Guru dan pegawai tidak bisa presensi datang maupun pulang sampai workcode ini diaktifkan lagi.'
-                    : 'Peserta tidak bisa presensi ke kegiatan ini sampai diaktifkan lagi. Data yang sudah tercatat tetap aman.',
+                    : 'Peserta tidak bisa presensi ke acara ini sampai diaktifkan lagi. Data yang sudah tercatat tetap aman.',
                 confirmText: 'Nonaktifkan',
             });
             if (!confirmed) return;
@@ -182,13 +198,16 @@ function WorkcodeCard({ workcode, tolerance, onEdit, onDelete, onMap }) {
                 <div className="flex items-start gap-2 p-5 pb-3">
                     <div className="min-w-0 flex-1">
                         <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-                            {workcode.is_effectively_active
-                                ? <StatusPill status="approved" label="Aktif" />
-                                : <StatusPill tone="netral" icon={PowerOff} label="Nonaktif" />}
-                            <StatusPill tone="netral" icon={daily ? Clock : CalendarDays} label={daily ? 'Harian' : 'Kegiatan'} />
+                            {workcode.archived_at
+                                ? <StatusPill tone="netral" icon={Archive} label="Diarsipkan" />
+                                : workcode.is_effectively_active
+                                    ? <StatusPill status="approved" label="Aktif" />
+                                    : <StatusPill tone="netral" icon={PowerOff} label="Nonaktif" />}
+                            <StatusPill tone="netral" icon={daily ? Clock : CalendarDays} label={daily ? 'Work From Office' : 'Acara'} />
                         </div>
-                        <h3 className="line-clamp-2 text-base font-semibold text-ink">{workcode.nama_workcode}</h3>                    </div>
-                    <CardMenu workcode={workcode} onEdit={onEdit} onDelete={onDelete} />
+                        <h3 className="line-clamp-2 text-base font-semibold text-ink">{workcode.nama_workcode}</h3>
+                    </div>
+                    <CardMenu workcode={workcode} onEdit={onEdit} onDelete={onDelete} onArchive={onArchive} onUnarchive={onUnarchive} />
                 </div>
 
                 <dl className="space-y-2 px-5 pb-4 text-sm">
@@ -235,7 +254,9 @@ function WorkcodeCard({ workcode, tolerance, onEdit, onDelete, onMap }) {
                         <p className="text-sm text-ink-2"><span className="font-semibold tabular-nums text-ink">{workcode.attendances_count}</span> kehadiran tercatat</p>
                     )}
                     <div className="mt-3 flex justify-end">
-                        {autoManaged ? (
+                        {workcode.archived_at ? (
+                            <Button size="sm" icon={ArchiveRestore} onClick={() => onUnarchive(workcode)}>Kembalikan dari arsip</Button>
+                        ) : autoManaged ? (
                             <p className="text-xs text-ink-2">Aktif dan nonaktif mengikuti jam otomatis.</p>
                         ) : workcode.is_active ? (
                             <Button size="sm" icon={PowerOff} onClick={toggleActive}>Nonaktifkan</Button>
@@ -249,7 +270,7 @@ function WorkcodeCard({ workcode, tolerance, onEdit, onDelete, onMap }) {
     );
 }
 
-function CardMenu({ workcode, onEdit, onDelete }) {
+function CardMenu({ workcode, onEdit, onDelete, onArchive, onUnarchive }) {
     const item = 'flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm data-[focus]:bg-surface-2';
 
     return (
@@ -261,6 +282,19 @@ function CardMenu({ workcode, onEdit, onDelete }) {
                         <Pencil className="h-4 w-4 text-ink-2" aria-hidden="true" />Ubah
                     </button>
                 </MenuItem>
+                {workcode.archived_at ? (
+                    <MenuItem>
+                        <button type="button" onClick={() => onUnarchive(workcode)} className={cx(item, 'text-ink')}>
+                            <ArchiveRestore className="h-4 w-4 text-ink-2" aria-hidden="true" />Kembalikan
+                        </button>
+                    </MenuItem>
+                ) : !workcode.is_effectively_active && (
+                    <MenuItem>
+                        <button type="button" onClick={() => onArchive(workcode)} className={cx(item, 'text-ink')}>
+                            <Archive className="h-4 w-4 text-ink-2" aria-hidden="true" />Arsipkan
+                        </button>
+                    </MenuItem>
+                )}
                 <MenuItem>
                     <button type="button" onClick={() => onDelete(workcode)} className={cx(item, 'text-danger')}>
                         <Trash2 className="h-4 w-4" aria-hidden="true" />Hapus

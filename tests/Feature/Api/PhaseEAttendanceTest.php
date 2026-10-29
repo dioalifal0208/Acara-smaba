@@ -406,7 +406,7 @@ class PhaseEAttendanceTest extends TestCase
         ]);
 
         $response->assertStatus(400)
-            ->assertJson(['message' => 'Belum ada Workcode yang aktif. Presensi mandiri saat ini ditutup.']);
+            ->assertJson(['message' => 'Belum ada workcode yang aktif, jadi presensi sedang ditutup.']);
     }
 
     public function test_admin_scan_qr_pribadi_harian_success()

@@ -29,6 +29,7 @@ class Workcode extends Model
     }
 
     protected $fillable = [
+        'archived_at',
         'nama_workcode',
         'deskripsi',
         'kategori',
@@ -49,6 +50,7 @@ class Workcode extends Model
 
     protected $casts = [
         'is_active' => 'boolean',
+        'archived_at' => 'datetime',
         'latitude' => 'decimal:8',
         'longitude' => 'decimal:8',
         'radius_meters' => 'integer',
@@ -292,6 +294,7 @@ class Workcode extends Model
     {
         $now = now();
         $workcodes = static::query()
+            ->whereNull('archived_at')
             ->where(function ($query) use ($now): void {
                 $query->where('is_active', true)
                     ->orWhere(function ($scheduled) use ($now): void {
