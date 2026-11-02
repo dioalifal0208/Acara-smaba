@@ -1,7 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Button, Card, Checkbox, Dialog, EmptyState, Field, PageHeader, Segmented, StatusPill, Textarea, cx, useToast } from '@/ui';
+import { Button, Card, Checkbox, Dialog, EmptyState, Field, PageHeader, SearchField, Segmented, Select, StatusPill, Textarea, cx, useToast } from '@/ui';
 import useMediaQuery from '@/ui/useMediaQuery';
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { CalendarDays, CheckCircle2, ExternalLink, FileText, Inbox, Paperclip } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -26,6 +26,8 @@ const REJECT_PRESETS = ['Dokumen tidak terbaca', 'Dokumen tidak sesuai alasan iz
 const UNDO_SECONDS = 6;
 const SHORTCUTS_KEY = 'leave-shortcuts';
 
+const formatMonth = (yearMonth) => new Date(`${yearMonth}-01T00:00:00`).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+
 const isTyping = (target) => target?.closest?.('input, textarea, select, [contenteditable="true"], [role="dialog"]');
 
 /** Kirim persetujuan yang masih tertunda saat halaman ditinggalkan (keepalive tetap jalan saat pindah halaman). */
@@ -44,12 +46,24 @@ function flushApproval(id) {
  * atau detail dalam dialog (HP). Setelah memutuskan, pengajuan menunggu berikutnya langsung terbuka.
  * Setujui bisa diurungkan beberapa detik; Tolak wajib beralasan. Layar lebar: J/K pindah, A setujui, T tolak.
  */
-export default function LeaveApprovalsIndex({ leaveRequests }) {
+export default function LeaveApprovalsIndex({ leaveRequests, initialId = null }) {
     const { flash } = usePage().props;
     const { toast } = useToast();
     const wide = useMediaQuery('(min-width: 1024px)');
-    const [filter, setFilter] = useState('pending');
-    const [selectedId, setSelectedId] = useState(null);
+    // ?id= (dari riwayat izin di detail peserta): buka pengajuan itu pada tab statusnya.
+    const initialRequest = initialId ? leaveRequests.find((request) => request.id === initialId) : null;
+    const [filter, setFilter] = useState(initialRequest?.status_approval ?? 'pending');
+    const [selectedId, setSelectedId] = useState(initialRequest?.id ?? null);
+    const [query, setQuery] = useState('');
+    const [month, setMonth] = useState('');
+
+    // Hapus ?id= setelah dibaca: setujui/tolak kembali ke URL ini, dan antrean harus lanjut seperti biasa.
+    useEffect(() => {
+        if (!initialId) return;
+        const url = new URL(window.location.href);
+        url.searchParams.delete('id');
+        window.history.replaceState(window.history.state, '', url);
+    }, []);
     const [busy, setBusy] = useState(null);
     const [rejecting, setRejecting] = useState(false);
     const [queued, setQueued] = useState(null); // { request, secondsLeft }
@@ -68,13 +82,21 @@ export default function LeaveApprovalsIndex({ leaveRequests }) {
         else if (flash?.error) toast.error(flash.error);
     }, [flash]);
 
-    const counts = useMemo(() => leaveRequests.reduce(
+    // Bulan yang dicakup tanggal izin (bukan tanggal pengajuan), terbaru di atas.
+    const months = useMemo(() => [...new Set(leaveRequests.flatMap((request) => request.months))].sort().reverse(), [leaveRequests]);
+    const needle = query.trim().toLowerCase();
+    const matching = useMemo(() => leaveRequests.filter((request) => (
+        (!month || request.months.includes(month))
+        && (!needle || `${request.participant_name} ${request.participant_nip}`.toLowerCase().includes(needle))
+    )), [leaveRequests, month, needle]);
+
+    const counts = useMemo(() => matching.reduce(
         (result, request) => ({ ...result, [request.status_approval]: (result[request.status_approval] || 0) + 1 }),
         { pending: 0, approved: 0, rejected: 0 },
-    ), [leaveRequests]);
+    ), [matching]);
 
     // Pengajuan yang sedang menunggu jeda urungkan disembunyikan dari daftar.
-    const visible = queued ? leaveRequests.filter((request) => request.id !== queued.request.id) : leaveRequests;
+    const visible = queued ? matching.filter((request) => request.id !== queued.request.id) : matching;
     const rows = filter === 'all' ? visible : visible.filter((request) => request.status_approval === filter);
 
     // Layar lebar: selalu ada yang terbuka (yang dipilih, atau yang pertama di daftar).
@@ -195,12 +217,31 @@ export default function LeaveApprovalsIndex({ leaveRequests }) {
                 />
 
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                    <Segmented
-                        label="Filter status pengajuan"
-                        value={filter}
-                        onChange={(value) => { setFilter(value); setSelectedId(null); }}
-                        options={FILTERS.map((f) => ({ ...f, count: f.value === 'all' ? visible.length : counts[f.value] - (queued && f.value === 'pending' ? 1 : 0) }))}
-                    />
+                    <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center lg:w-auto">
+                        <Segmented
+                            label="Filter status pengajuan"
+                            value={filter}
+                            onChange={(value) => { setFilter(value); setSelectedId(null); }}
+                            options={FILTERS.map((f) => ({ ...f, count: f.value === 'all' ? visible.length : counts[f.value] - (queued && f.value === 'pending' && matching.some((r) => r.id === queued.request.id) ? 1 : 0) }))}
+                        />
+                        <Select
+                            value={month}
+                            onChange={(e) => { setMonth(e.target.value); setSelectedId(null); }}
+                            disabled={months.length === 0}
+                            aria-label="Filter bulan izin"
+                            className="sm:w-44"
+                        >
+                            <option value="">Semua bulan</option>
+                            {months.map((m) => <option key={m} value={m}>{formatMonth(m)}</option>)}
+                        </Select>
+                        <SearchField
+                            value={query}
+                            onChange={(value) => { setQuery(value); setSelectedId(null); }}
+                            label="Cari nama peserta"
+                            placeholder="Cari nama atau NIP"
+                            className="sm:w-64"
+                        />
+                    </div>
                     {wide && (
                         <div className="flex flex-wrap items-center gap-x-3 text-sm text-ink-2">
                             <Checkbox checked={shortcutsOn} onChange={(e) => toggleShortcuts(e.target.checked)}>Pintasan keyboard</Checkbox>
@@ -210,7 +251,11 @@ export default function LeaveApprovalsIndex({ leaveRequests }) {
                 </div>
 
                 {rows.length === 0 ? (
-                    <Card><EmptyState {...EMPTY[filter]} /></Card>
+                    <Card>
+                        {needle || month
+                            ? <EmptyState icon={Inbox} title="Tidak ada pengajuan yang cocok" description="Ubah kata kunci atau pilih bulan lain." />
+                            : <EmptyState {...EMPTY[filter]} />}
+                    </Card>
                 ) : (
                     <div className="grid gap-6 lg:grid-cols-5">
                         <Card className="overflow-hidden lg:col-span-2">
@@ -298,13 +343,22 @@ function LeaveDetail({ request, busy, rejecting, onStartReject, onCancelReject, 
                     <header className="flex items-start gap-3">
                         <Initial name={request.participant_name} large />
                         <div className="min-w-0 flex-1">
-                            <h2 className="text-lg font-semibold text-ink">{request.participant_name}</h2>
+                            <h2 className="text-lg font-semibold text-ink">
+                                <Link href={route('participants.show', request.participant_id)} className="hover:text-accent hover:underline">{request.participant_name}</Link>
+                            </h2>
                             <p className="text-sm tabular-nums text-ink-2">{request.participant_nip}</p>
                         </div>
                         <StatusPill status={request.status_approval} />
                     </header>
                 )}
-                {compact && <StatusPill status={request.status_approval} />}
+                {compact && (
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <StatusPill status={request.status_approval} />
+                        <Link href={route('participants.show', request.participant_id)} className="inline-flex min-h-10 items-center text-sm font-medium text-accent hover:underline">
+                            Profil & riwayat izin
+                        </Link>
+                    </div>
+                )}
 
                 <dl className="grid gap-4 sm:grid-cols-2">
                     <Detail icon={FileText} label="Jenis">

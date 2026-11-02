@@ -105,6 +105,7 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::post('/participants/{participant}/qr/regenerate', [ParticipantController::class, 'regenerateQrToken'])->name('participants.qr.regenerate');
     Route::put('/participants/{participant}/password', [ParticipantController::class, 'updatePassword'])->name('participants.password.update');
     Route::get('/participants/{participant}/face-history', [ParticipantController::class, 'faceHistory'])->name('participants.face-history');
+    Route::get('/participants/{participant}/leave-history', [AdminLeaveController::class, 'participantHistory'])->name('participants.leave-history');
     Route::delete('/participants/{participant}', [ParticipantController::class, 'destroy'])->name('participants.destroy');
 
     // Face Registration routes (Admin)

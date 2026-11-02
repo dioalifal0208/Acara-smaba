@@ -363,6 +363,7 @@ class SelfCheckInController extends Controller
     {
         return Workcode::query()
             ->where('kategori', 'workcode')
+            ->whereNull('archived_at')
             ->whereDate('tanggal', now()->toDateString())
             ->whereNotNull('jam_aktif_mulai')
             ->whereNotNull('jam_aktif_selesai')

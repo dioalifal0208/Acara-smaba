@@ -6,43 +6,43 @@ use App\Models\Attendance;
 use App\Models\LeaveRequest;
 use App\Models\Participant;
 use App\Services\FcmService;
-use App\Support\PrivateFile;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 
 class AdminLeaveController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         $leaveRequests = LeaveRequest::with(['participant', 'workcode'])
             ->orderBy('created_at', 'desc')
             ->get()
-            ->map(function ($req) {
-                $tanggalMulai = $req->tanggal->format('d M Y');
-                $tanggalSelesai = $req->tanggal_selesai?->format('d M Y');
-
-                return [
-                    'id' => $req->id,
-                    'participant_name' => $req->participant->nama ?? 'Unknown',
-                    'participant_nip' => $req->participant->nis_nip ?? '-',
-                    'workcode_name' => $req->workcode->nama_workcode ?? 'Unknown',
-                    'tanggal' => $tanggalSelesai ? "{$tanggalMulai} s.d. {$tanggalSelesai}" : $tanggalMulai,
-                    'kategori' => 'Izin',
-                    'tipe_izin' => $req->tipe_izin,
-                    'tipe_izin_label' => $this->tipeIzinLabel($req->tipe_izin),
-                    'jenis_izin' => $req->jenis_izin,
-                    'jenis_izin_label' => $this->jenisIzinLabel($req->jenis_izin),
-                    'keterangan' => $req->keterangan ?? $req->alasan,
-                    'bukti_url' => PrivateFile::url('leave-document', $req),
-                    'status_approval' => $req->status_approval,
-                    'alasan_penolakan' => $req->alasan_penolakan,
-                    'created_at' => $req->created_at->format('d M Y H:i'),
-                ];
-            });
+            ->map(fn (LeaveRequest $leaveRequest) => $leaveRequest->toAdminArray());
 
         return Inertia::render('LeaveApprovals/Index', [
             'leaveRequests' => $leaveRequests,
+            // ?id= dari tombol "Tinjau di Perizinan" pada riwayat izin di detail peserta.
+            'initialId' => $request->integer('id') ?: null,
+        ]);
+    }
+
+    /** Riwayat izin satu peserta (semua status, terbaru di atas) untuk halaman detail peserta. */
+    public function participantHistory(Participant $participant): JsonResponse
+    {
+        $leaveRequests = LeaveRequest::with(['participant', 'workcode'])
+            ->where('participant_id', $participant->id)
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return response()->json([
+            'summary' => [
+                'pending' => $leaveRequests->where('status_approval', 'pending')->count(),
+                'approved' => $leaveRequests->where('status_approval', 'approved')->count(),
+                'rejected' => $leaveRequests->where('status_approval', 'rejected')->count(),
+                'approved_days' => $leaveRequests->where('status_approval', 'approved')->sum(fn (LeaveRequest $item) => $item->days()),
+            ],
+            'items' => $leaveRequests->map(fn (LeaveRequest $item) => $item->toAdminArray())->values(),
         ]);
     }
 
@@ -154,29 +154,5 @@ class AdminLeaveController extends Controller
         if ($participant = Participant::find($leaveRequest->participant_id)) {
             app(FcmService::class)->sendStateChanged($participant, 'leave');
         }
-    }
-
-    private function tipeIzinLabel(?string $tipeIzin): string
-    {
-        return match ($tipeIzin) {
-            'izin_penuh' => 'Izin penuh',
-            'tidak_absen_datang' => 'Tidak absen datang',
-            'tidak_absen_pulang' => 'Tidak absen pulang',
-            default => 'Izin',
-        };
-    }
-
-    private function jenisIzinLabel(?string $jenisIzin): ?string
-    {
-        return match ($jenisIzin) {
-            'izin_sakit' => 'Izin sakit',
-            'force_majeure' => 'Force majeure',
-            'tidak_masuk_kerja_dengan_keterangan' => 'Tidak masuk kerja dengan keterangan',
-            'perjalanan_dinas_dalam_kota' => 'Perjalanan dinas dalam kota',
-            'perjalanan_dinas_luar_kota' => 'Perjalanan dinas luar kota',
-            'cuti' => 'Cuti',
-            'diklat_dan_pelatihan' => 'Diklat dan pelatihan',
-            default => null,
-        };
     }
 }

@@ -6,8 +6,10 @@ use App\Models\Attendance;
 use App\Models\Participant;
 use App\Models\User;
 use App\Models\Workcode;
+use App\Services\AttendanceValidationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class WorkcodeArchiveTest extends TestCase
@@ -39,6 +41,38 @@ class WorkcodeArchiveTest extends TestCase
 
         $this->actingAs($admin)->post(route('workcodes.unarchive', $workcode))->assertSessionHas('success');
         $this->assertNull($workcode->fresh()->archived_at);
+    }
+
+    public function test_archived_scheduled_activity_stays_closed_when_its_time_comes(): void
+    {
+        Carbon::setTestNow('2026-10-29 09:00:00');
+        $admin = User::factory()->create(['role' => 'admin']);
+        $stakeholder = Participant::create(['nama' => 'Kepala Sekolah', 'nis_nip' => '3001']);
+        $workcode = Workcode::create([
+            'nama_workcode' => 'Rapat dibatalkan',
+            'kategori' => 'workcode',
+            'tanggal' => '2026-10-29',
+            'jam_aktif_mulai' => '10:00:00',
+            'jam_aktif_selesai' => '12:00:00',
+            'is_active' => false,
+        ]);
+        $workcode->autoAttendees()->sync([$stakeholder->id]);
+
+        // Belum mulai, jadi boleh diarsipkan.
+        $this->actingAs($admin)->post(route('workcodes.archive', $workcode))->assertSessionHas('success');
+
+        Carbon::setTestNow('2026-10-29 10:30:00');
+        $this->artisan('workcode:auto-activate')->assertSuccessful();
+
+        $workcode->refresh();
+        $this->assertFalse($workcode->is_active);
+        $this->assertFalse($workcode->isEffectivelyActive());
+        $this->assertTrue(Workcode::getActiveWorkcodes()->isEmpty());
+        $this->assertDatabaseCount('attendances', 0);
+
+        // Presensi yang mengirim workcode_id arsip ditolak.
+        $this->expectException(ValidationException::class);
+        app(AttendanceValidationService::class)->validateWorkcodeActive($workcode);
     }
 
     public function test_active_workcode_cannot_be_archived(): void

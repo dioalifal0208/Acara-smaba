@@ -86,6 +86,11 @@ class Workcode extends Model
      */
     public function syncAutoAttendance(?CarbonInterface $moment = null): void
     {
+        // Arsip dibekukan: tidak menambah catatan otomatis, dan catatan lama tetap tersimpan.
+        if ($this->archived_at) {
+            return;
+        }
+
         $moment ??= now();
         $startsAt = $this->activeWindowStartsAt();
         $ids = $startsAt && $moment->greaterThanOrEqualTo($startsAt)
@@ -272,6 +277,11 @@ class Workcode extends Model
      */
     public function isEffectivelyActive(?Carbon $moment = null): bool
     {
+        // Workcode yang diarsipkan tidak pernah aktif, termasuk kegiatan terjadwal yang jamnya tiba.
+        if ($this->archived_at) {
+            return false;
+        }
+
         // Workcode kegiatan tidak bergantung pada scheduler/cron untuk menjadi aktif.
         // Statusnya selalu dihitung dari jadwal yang tersimpan dan waktu server saat ini.
         if ($this->hasScheduledActiveWindow()) {

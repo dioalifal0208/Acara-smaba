@@ -3,6 +3,7 @@ import ApproveFaceModal from '@/Components/ApproveFaceModal';
 import ApprovePhotoChangeRequestModal from '@/Components/ApprovePhotoChangeRequestModal';
 import FaceHistoryPanel from '@/Components/FaceHistoryPanel';
 import FaceRegistrationModal from '@/Components/FaceRegistrationModal';
+import LeaveHistoryPanel from '@/Components/LeaveHistoryPanel';
 import {
     EMPLOYMENT_STATUSES, FaceStatus, ParticipantAvatar, isNonPermanentStatus, nipLabel, formNip, STAFF_ID_HINT,
 } from '@/Components/ParticipantBits';
@@ -103,7 +104,8 @@ export default function ParticipantShow({ participant }) {
                     </div>
                 )}
 
-                <div className="grid gap-6 lg:grid-cols-3">
+                {/* Kiri: data & akun peserta. Kanan: riwayat (wajah, izin). Di HP urutannya mengikuti kiri lalu kanan. */}
+                <div className="grid items-start gap-6 lg:grid-cols-2">
                     <div className="space-y-6">
                         <Section title="Ringkasan">
                             <dl className="space-y-3 text-sm">
@@ -114,12 +116,14 @@ export default function ParticipantShow({ participant }) {
                             </dl>
                         </Section>
 
-                        <QrSection participant={participant} onReset={handleResetQr} />
-                    </div>
-
-                    <div className="space-y-6 lg:col-span-2">
                         <EditSection participant={participant} />
 
+                        <QrSection participant={participant} onReset={handleResetQr} />
+
+                        <PasswordSection participant={participant} />
+                    </div>
+
+                    <div className="space-y-6">
                         <Section
                             title="Wajah"
                             description="Riwayat wajah yang pernah disetujui, terbaru di atas."
@@ -134,19 +138,27 @@ export default function ParticipantShow({ participant }) {
                             </div>
                         </Section>
 
-                        <PasswordSection participant={participant} />
-
-                        <Card as="section" className="border-danger/30 p-5">
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                <div>
-                                    <h2 className="text-base font-semibold text-ink">Hapus peserta</h2>
-                                    <p className="mt-0.5 text-sm text-ink-2">Akun login, foto, dan riwayat presensi ikut terhapus permanen.</p>
-                                </div>
-                                <Button variant="danger" icon={Trash2} onClick={handleDelete}>Hapus peserta</Button>
+                        <Section
+                            title="Riwayat izin"
+                            description="Semua pengajuan izin, terbaru di atas. Persetujuan dilakukan di halaman Perizinan."
+                        >
+                            <div className="max-h-[520px] overflow-y-auto border-t border-line pt-4">
+                                <LeaveHistoryPanel participant={participant} />
                             </div>
-                        </Card>
+                        </Section>
                     </div>
                 </div>
+
+                {/* Zona bahaya terpisah di akhir halaman, lebar penuh. */}
+                <Card as="section" className="border-danger/30 p-5">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <h2 className="text-base font-semibold text-ink">Hapus peserta</h2>
+                            <p className="mt-0.5 text-sm text-ink-2">Akun login, foto, dan riwayat presensi ikut terhapus permanen.</p>
+                        </div>
+                        <Button variant="danger" icon={Trash2} onClick={handleDelete}>Hapus peserta</Button>
+                    </div>
+                </Card>
             </div>
 
             {faceRegistrationOpen && (

@@ -507,10 +507,10 @@ class PhaseEAttendanceTest extends TestCase
         $response->assertStatus(426)
             ->assertJson(['status' => 'app_update_required', 'message' => 'Versi aplikasi Anda sudah usang. Wajib update ke versi terbaru di Play Store untuk mendukung sistem presensi Face Recognition.']);
     }
+
     /** @return list<float> */
     private function descriptor(): array
     {
         return array_fill(0, 128, 1.0);
     }
-
 }

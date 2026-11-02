@@ -32,6 +32,7 @@ class AutoActivateWorkcode extends Command
         // Jam aktif tidak melewati tengah malam (validasi after:jam_aktif_mulai), jadi cukup
         // kegiatan hari ini dan kegiatan yang masih tercatat aktif.
         $scheduled = Workcode::where('kategori', 'workcode')
+            ->whereNull('archived_at')
             ->whereNotNull('tanggal')
             ->whereNotNull('jam_aktif_mulai')
             ->whereNotNull('jam_aktif_selesai')
@@ -62,6 +63,7 @@ class AutoActivateWorkcode extends Command
 
         // Stakeholder kegiatan hari ini otomatis tercatat hadir begitu jam aktif mulai tercapai.
         Workcode::where('kategori', 'workcode')
+            ->whereNull('archived_at')
             ->whereDate('tanggal', $now->toDateString())
             ->whereHas('autoAttendees')
             ->get()
