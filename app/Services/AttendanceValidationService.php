@@ -69,6 +69,38 @@ class AttendanceValidationService
         return ['start' => $startCarbon, 'end' => $endCarbon, 'closes_at' => $closesAt, 'start_time' => $start, 'end_time' => $end];
     }
 
+    /**
+     * Presensi harian (WFO) berikutnya adalah presensi pulang bila datang sudah tercatat, atau bila
+     * presensi datang sudah ditutup (jam datang selesai + toleransi terlambat lewat): peserta itu
+     * dianggap tidak absen datang dan langsung masuk tahap pulang, tanpa menunggu scheduler.
+     */
+    public function isDeparturePhase(Workcode $workcode, ?Attendance $attendance, ?Carbon $now = null): bool
+    {
+        if ($workcode->kategori !== 'harian') {
+            return false;
+        }
+        if ($attendance) {
+            return true;
+        }
+
+        $now ??= now();
+        $arrival = $this->windowBounds($workcode, false, $now);
+
+        return $arrival !== null && $now->gt($arrival['closes_at']);
+    }
+
+    /**
+     * Catatan "tidak absen datang" (lupa_absen tanpa jam datang) untuk presensi pulang setelah
+     * toleransi datang habis. createOrFirst: aman bila scheduler membuat baris yang sama bersamaan.
+     */
+    public function recordMissedArrival(Workcode $workcode, int $participantId): Attendance
+    {
+        return Attendance::createOrFirst(
+            ['workcode_id' => $workcode->id, 'participant_id' => $participantId, 'tanggal' => now()->toDateString()],
+            ['status' => 'lupa_absen']
+        );
+    }
+
     public function validateTimeWindow(Workcode $workcode, bool $isPulang): void
     {
         if ($workcode->kategori === 'workcode') {
@@ -240,14 +272,16 @@ class AttendanceValidationService
             return $this->uiState($now, 'none', 'completed', 'Presensi datang dan pulang hari ini sudah tercatat.', $schedule);
         }
 
-        $isPulang = $attendance !== null;
+        $isPulang = $this->isDeparturePhase($workcode, $attendance, $now);
         $window = $this->windowBounds($workcode, $isPulang, $now);
         $action = $isPulang ? 'departure' : 'arrival';
 
         // Record tanpa jam datang (mis. lupa_absen dari attendance:calculate-alpha setelah toleransi habis):
         // peserta tetap bisa presensi pulang, tetapi pesannya tidak boleh menyebut presensi datang tercatat.
-        $missedArrival = $isPulang && $attendance->waktu_hadir === null
-            ? 'Anda tidak melakukan presensi datang hari ini'.($attendance->status === 'lupa_absen' ? ' (tercatat lupa absen)' : '').'.'
+        // Tanpa baris sama sekali = toleransi terlambat sudah lewat; scheduler akan mencatatnya lupa absen.
+        $missedArrival = $isPulang && $attendance?->waktu_hadir === null
+            ? 'Anda tidak melakukan presensi datang hari ini'
+                .(! $attendance || $attendance->status === 'lupa_absen' ? ' (tercatat lupa absen)' : '').'.'
             : null;
 
         if (! $window || $now->between($window['start'], $window['end'])) {

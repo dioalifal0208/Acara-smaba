@@ -142,6 +142,7 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
 
     // Manual Attendance Management (Admin)
     Route::post('/admin/attendances', [AttendanceController::class, 'manualStore'])->name('admin.attendances.store');
+    Route::post('/admin/workcodes/{workcode}/mark-present', [AttendanceController::class, 'markPresent'])->name('admin.workcodes.mark-present');
     Route::put('/admin/attendances/{attendance}', [AttendanceController::class, 'manualUpdate'])->name('admin.attendances.update');
     Route::delete('/admin/attendances/{attendance}', [AttendanceController::class, 'manualDestroy'])->name('admin.attendances.destroy');
 

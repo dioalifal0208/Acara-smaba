@@ -35,7 +35,7 @@ class WorkcodeController extends Controller
         return Inertia::render('Workcodes/Index', [
             'workcodes' => $workcodes,
             'participants' => Participant::orderBy('nama')->get(['id', 'nama', 'nis_nip', 'status']),
-            'lateToleranceMinutes' => config('attendance.late_tolerance_minutes', 60),
+            'lateToleranceMinutes' => Workcode::lateToleranceMinutes(),
         ]);
     }
 
@@ -74,7 +74,7 @@ class WorkcodeController extends Controller
         $isDaily = $validated['kategori'] === 'harian';
 
         if ($isDaily) {
-            $this->ensureDailyScheduleDoesNotOverlap($validated);
+            $this->ensureDailyScheduleIsValid($validated);
         }
 
         $workcode = Workcode::create([
@@ -213,7 +213,7 @@ class WorkcodeController extends Controller
         $shouldActivate = $isActivity && $this->scheduledWindowIsOpen($validated);
 
         if ($isDaily) {
-            $this->ensureDailyScheduleDoesNotOverlap($validated);
+            $this->ensureDailyScheduleIsValid($validated);
         }
 
         $updates = [
@@ -239,6 +239,9 @@ class WorkcodeController extends Controller
 
         $workcode->update($updates);
         $this->syncParticipants($workcode, $validated, $isActivity);
+        // Jadwal baru belum lewat batasnya: lupa absen/alpha otomatis dari jadwal lama dicabut sekarang,
+        // tidak menunggu scheduler berikutnya.
+        $workcode->purgeStaleAutomaticStatuses();
 
         // Kirim FCM notification ke semua subscriber
         $fcmService->sendWorkcodeUpdate('updated', $workcode);
@@ -305,25 +308,45 @@ class WorkcodeController extends Controller
     }
 
     /**
-     * Tolak jadwal presensi harian yang bentrok: presensi pulang tidak boleh dibuka sebelum presensi
+     * Validasi jadwal WFO per hari aktif: keempat jam wajib, mulai < selesai, dan tidak bentrok — presensi pulang tidak boleh dibuka sebelum presensi
      * datang ditutup (jam datang selesai + toleransi terlambat). Diperiksa per hari aktif memakai
      * jadwal hari itu (jadwal_per_hari), lalu jam bawaan workcode, sama seperti Workcode::scheduleFor.
      */
-    private function ensureDailyScheduleDoesNotOverlap(array $data): void
+    private function ensureDailyScheduleIsValid(array $data): void
     {
         $dayNames = [1 => 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
-        $tolerance = config('attendance.late_tolerance_minutes', 60);
+        $tolerance = Workcode::lateToleranceMinutes();
         $errors = [];
 
         foreach (($data['hari_aktif'] ?? null) ?: array_keys($dayNames) as $day) {
             $daySchedule = $data['jadwal_per_hari'][$day] ?? [];
             $time = fn (string $key) => filled($daySchedule[$key] ?? null) ? $daySchedule[$key] : ($data[$key] ?? null);
-            $datangSelesai = $time('jam_datang_selesai');
-            $pulangMulai = $time('jam_pulang_mulai');
+            $dayName = $dayNames[(int) $day] ?? $day;
+            $fieldKey = fn (string $key) => filled($daySchedule[$key] ?? null) ? "jadwal_per_hari.{$day}.{$key}" : $key;
 
-            if (! $datangSelesai || ! $pulangMulai) {
+            // Jam datang & pulang WFO wajib: tanpa jam, presensi tidak dibatasi waktu, tidak ada hitungan
+            // terlambat, dan scheduler tidak pernah mencatat lupa absen/alpha.
+            $missing = false;
+            foreach (['jam_datang_mulai' => 'Jam datang mulai', 'jam_datang_selesai' => 'Jam datang selesai',
+                'jam_pulang_mulai' => 'Jam pulang mulai', 'jam_pulang_selesai' => 'Jam pulang selesai'] as $key => $label) {
+                if (! $time($key)) {
+                    $errors[$key] ??= "{$label} wajib diisi untuk Work From Office (jadwal {$dayName} belum lengkap).";
+                    $missing = true;
+                }
+            }
+            if ($missing) {
                 continue;
             }
+
+            foreach (['jam_datang' => 'datang', 'jam_pulang' => 'pulang'] as $prefix => $label) {
+                if (Carbon::today()->setTimeFromTimeString($time("{$prefix}_mulai"))
+                    ->greaterThanOrEqualTo(Carbon::today()->setTimeFromTimeString($time("{$prefix}_selesai")))) {
+                    $errors[$fieldKey("{$prefix}_selesai")] = "Jadwal {$dayName}: jam {$label} selesai harus setelah jam {$label} mulai.";
+                }
+            }
+
+            $datangSelesai = $time('jam_datang_selesai');
+            $pulangMulai = $time('jam_pulang_mulai');
 
             $arrivalClosesAt = Workcode::withLateTolerance(Carbon::today()->setTimeFromTimeString($datangSelesai));
 

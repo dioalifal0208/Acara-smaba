@@ -137,7 +137,7 @@ class AttendanceController extends Controller
             )
             ->first();
 
-        $isPulang = ($existingAttendance && $activeWorkcode->kategori === 'harian');
+        $isPulang = $validationService->isDeparturePhase($activeWorkcode, $existingAttendance);
 
         try {
             $validationService->validateTimeWindow($activeWorkcode, $isPulang);
@@ -159,6 +159,8 @@ class AttendanceController extends Controller
 
         // Proses pulang
         if ($isPulang) {
+            // Toleransi datang sudah lewat tanpa presensi datang: catat "tidak absen datang", lalu pulang.
+            $existingAttendance ??= $validationService->recordMissedArrival($activeWorkcode, $participant->id);
             $existingAttendance->update(['waktu_pulang' => now()]);
 
             return $this->scanJsonResponse('success', $participant, $activeWorkcode, 'Presensi pulang berhasil dicatat.');
@@ -304,6 +306,14 @@ class AttendanceController extends Controller
             'period' => $period,
             'attendances' => $attendances,
             'participants' => $participants,
+            // Tandai hadir peserta yang tidak presensi: acara lewat/tidak aktif saja. Peserta terpilih
+            // (null = semua peserta) dibatasi di server juga.
+            'markPresent' => $selectedWorkcode?->canMarkPresent() ? [
+                'tanggal' => $selectedWorkcode->eventDate(),
+                'jam' => $selectedWorkcode->jam_aktif_mulai ? substr($selectedWorkcode->jam_aktif_mulai, 0, 5) : null,
+                'eligible_ids' => $selectedWorkcode->participants()->exists()
+                    ? $selectedWorkcode->eligibleParticipants()->pluck('id') : null,
+            ] : null,
             'kepalaSekolahNama' => $namaKepsek,
             'kepalaSekolahNip' => $nipKepsek,
         ]);
@@ -404,6 +414,52 @@ class AttendanceController extends Controller
         ]);
 
         return redirect()->back()->with('success', 'Data presensi berhasil ditambahkan.');
+    }
+
+    /**
+     * Tandai hadir peserta yang tidak presensi pada acara yang sudah lewat/tidak aktif (laporan).
+     * Hanya peserta yang wajib di acara itu dan belum punya catatan; catatan yang ada (presensi asli,
+     * izin, absen otomatis stakeholder) tidak ditimpa. Tercatat sebagai presensi manual admin.
+     */
+    public function markPresent(Request $request, Workcode $workcode)
+    {
+        if (! $workcode->canMarkPresent()) {
+            throw ValidationException::withMessages([
+                'participant_ids' => 'Tandai hadir hanya untuk acara yang sudah selesai atau tidak aktif.',
+            ]);
+        }
+
+        $validated = $request->validate([
+            'participant_ids' => 'required|array|min:1|max:1000',
+            'participant_ids.*' => 'integer|distinct',
+            'jam' => 'required|date_format:H:i',
+        ], [
+            'participant_ids.required' => 'Pilih minimal satu peserta.',
+            'jam.required' => 'Jam hadir wajib diisi.',
+            'jam.date_format' => 'Format jam hadir tidak valid.',
+        ]);
+
+        $tanggal = $workcode->eventDate();
+        $eligibleIds = $workcode->eligibleParticipants()->whereKey($validated['participant_ids'])->pluck('id');
+        $recordedIds = Attendance::where('workcode_id', $workcode->id)->whereIn('participant_id', $eligibleIds)->pluck('participant_id');
+        $newIds = $eligibleIds->diff($recordedIds);
+
+        foreach ($newIds as $participantId) {
+            Attendance::createOrFirst(
+                ['workcode_id' => $workcode->id, 'participant_id' => $participantId, 'tanggal' => $tanggal],
+                [
+                    'waktu_hadir' => Carbon::parse("{$tanggal} {$validated['jam']}"),
+                    'status' => 'hadir',
+                    'attendance_method' => 'manual',
+                    'ip_address' => $request->ip(),
+                ]
+            );
+        }
+
+        $skipped = count($validated['participant_ids']) - $newIds->count();
+
+        return redirect()->back()->with('success', $newIds->count().' peserta ditandai hadir.'
+            .($skipped > 0 ? " {$skipped} dilewati karena sudah tercatat atau bukan peserta acara ini." : ''));
     }
 
     /**

@@ -31,19 +31,18 @@ class CalculateAttendanceStatus extends Command
             ->filter(fn (Workcode $workcode) => $workcode->isEffectivelyActive());
 
         foreach ($workcodes as $workcode) {
+            // Jadwal bisa diubah admin setelah status otomatis tercatat: cabut yang tidak berlaku lagi dulu.
+            $workcode->purgeStaleAutomaticStatuses();
+
             $hariAktif = $workcode->hari_aktif ?? [];
             if (! empty($hariAktif) && ! in_array($today->dayOfWeekIso, $hariAktif)) {
                 continue; // Tidak aktif hari ini
             }
 
-            // Batas hari ini mengikuti jadwal_per_hari, bukan hanya jam bawaan workcode.
-            $schedule = $workcode->scheduleFor($today);
-            // Lupa absen datang baru dicatat setelah toleransi terlambat habis, agar peserta yang datang
-            // terlambat masih tercatat sebagai presensi datang (bukan dianggap presensi pulang).
-            $jamDatangSelesai = $schedule['jam_datang_selesai']
-                ? Workcode::withLateTolerance($today->copy()->setTimeFromTimeString($schedule['jam_datang_selesai']))->format('H:i:s')
-                : null;
-            $jamPulangSelesai = $schedule['jam_pulang_selesai'];
+            // Batas hari ini mengikuti jadwal_per_hari, bukan hanya jam bawaan workcode. Lupa absen datang
+            // baru dicatat setelah toleransi terlambat habis, agar peserta yang datang terlambat masih
+            // tercatat sebagai presensi datang (bukan dianggap presensi pulang).
+            ['arrival' => $jamDatangSelesai, 'departure' => $jamPulangSelesai] = $workcode->statusDeadlinesFor($today);
 
             // Hanya peserta yang wajib presensi di workcode ini (peserta terpilih, atau semua bila tidak dibatasi).
             $participantIds = $workcode->eligibleParticipants()->pluck('id');

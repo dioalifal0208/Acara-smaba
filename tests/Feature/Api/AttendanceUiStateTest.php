@@ -81,9 +81,10 @@ class AttendanceUiStateTest extends TestCase
         $workcode = $this->createDailyWorkcode();
         $this->assertUi('none', 'arrival_not_open');
 
-        // Jam datang selesai 08:00 + toleransi terlambat 60 menit: ditutup setelah 09:00.
+        // Jam datang selesai 08:00 + toleransi terlambat 60 menit: ditutup setelah 09:00. Peserta
+        // dianggap tidak absen datang dan langsung masuk tahap pulang (belum dibuka).
         Carbon::setTestNow(Carbon::parse('2026-10-20 09:01:00', 'Asia/Jakarta'));
-        $this->assertUi('none', 'arrival_closed');
+        $this->assertUi('none', 'departure_not_open');
 
         // Sudah datang, tetapi jendela pulang belum dibuka / sudah ditutup.
         $this->checkIn($workcode, $participant);
@@ -295,7 +296,7 @@ class AttendanceUiStateTest extends TestCase
         // Jam umum (07:00–08:00) tidak berlaku hari ini karena ada jadwal per hari (06:30 + toleransi = 07:30).
         Carbon::setTestNow(Carbon::parse('2026-10-20 07:31:00', 'Asia/Jakarta'));
         Attendance::query()->delete();
-        $this->assertUi('none', 'arrival_closed');
+        $this->assertUi('none', 'departure_not_open');
         $this->postJson('/api/v1/attendance', $this->payload(), ['Idempotency-Key' => Str::uuid()->toString()])
             ->assertStatus(400);
     }
@@ -319,6 +320,67 @@ class AttendanceUiStateTest extends TestCase
         $this->assertTrue($face['can_enroll']);
         $this->assertFalse($face['locked']);
         $this->assertNull($face['retry_after_seconds']);
+    }
+
+    public function test_late_arrival_within_tolerance_is_recorded_as_late(): void
+    {
+        // Datang 07:00–08:00, toleransi 60 menit: 08:30 masih boleh datang, terlambat 30 menit.
+        Carbon::setTestNow(Carbon::parse('2026-10-20 08:30:00', 'Asia/Jakarta'));
+        $this->actingParticipant();
+        $this->createDailyWorkcode();
+        $this->assertUi('arrival', 'arrival_open');
+
+        $this->postJson('/api/v1/attendance', $this->payload(), ['Idempotency-Key' => Str::uuid()->toString()])
+            ->assertCreated()
+            ->assertJsonPath('data.attendance.late_minutes', 30);
+    }
+
+    public function test_after_tolerance_participant_skips_arrival_and_can_check_out(): void
+    {
+        $participant = $this->actingParticipant();
+        Carbon::setTestNow(Carbon::parse('2026-10-20 15:10:00', 'Asia/Jakarta'));
+        $workcode = $this->createDailyWorkcode();
+
+        // Tanpa catatan dan tanpa menunggu scheduler: langsung tahap pulang.
+        $this->assertUi('departure', 'departure_open');
+        $this->postJson('/api/v1/attendance', $this->payload(), ['Idempotency-Key' => Str::uuid()->toString()])
+            ->assertOk()
+            ->assertJsonPath('status', 'success');
+
+        $row = Attendance::where('workcode_id', $workcode->id)->where('participant_id', $participant->id)->sole();
+        $this->assertSame('lupa_absen', $row->status);
+        $this->assertNull($row->waktu_hadir);
+        $this->assertNotNull($row->waktu_pulang);
+    }
+
+    public function test_departure_window_closes_exactly_at_end_without_tolerance(): void
+    {
+        $participant = $this->actingParticipant();
+        Carbon::setTestNow(Carbon::parse('2026-10-20 07:30:00', 'Asia/Jakarta'));
+        $workcode = $this->createDailyWorkcode();
+        $this->checkIn($workcode, $participant);
+
+        // Pulang 15:00–16:00 tanpa toleransi: 16:01 sudah ditutup.
+        Carbon::setTestNow(Carbon::parse('2026-10-20 16:01:00', 'Asia/Jakarta'));
+        $this->assertUi('none', 'departure_closed');
+        $this->postJson('/api/v1/attendance', $this->payload(), ['Idempotency-Key' => Str::uuid()->toString()])
+            ->assertStatus(400);
+    }
+
+    public function test_late_tolerance_is_capped_at_one_hour_and_only_for_wfo_arrival(): void
+    {
+        config(['attendance.late_tolerance_minutes' => 180]);
+        Carbon::setTestNow(Carbon::parse('2026-10-20 07:00:00', 'Asia/Jakarta'));
+        $this->assertSame(60, Workcode::lateToleranceMinutes());
+
+        $service = app(AttendanceValidationService::class);
+        $workcode = $this->createDailyWorkcode();
+        $this->assertSame('09:00', $service->windowBounds($workcode, false)['closes_at']->format('H:i'));
+        $this->assertSame('16:00', $service->windowBounds($workcode, true)['closes_at']->format('H:i'));
+
+        $acara = Workcode::create(['nama_workcode' => 'Acara', 'kategori' => 'workcode', 'is_active' => true,
+            'tanggal' => '2026-10-20', 'jam_aktif_mulai' => '06:00:00', 'jam_aktif_selesai' => '08:00:00']);
+        $this->assertFalse($acara->isLateAt(Carbon::parse('2026-10-20 07:59:00', 'Asia/Jakarta')));
     }
 
     private function assertUi(string $action, string $reason): void

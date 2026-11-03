@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Attendance;
 use App\Models\Participant;
 use App\Models\Workcode;
+use App\Services\AttendanceValidationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
@@ -107,6 +108,52 @@ class CalculateAttendanceStatusTest extends TestCase
 
         $this->assertSame(1, Attendance::count());
         $this->assertDatabaseHas('attendances', ['participant_id' => $dio->id, 'status' => 'lupa_absen']);
+    }
+
+    public function test_schedule_moved_later_revokes_automatic_lupa_absen(): void
+    {
+        // Workcode dibuat dengan jadwal pagi; scheduler siang hari langsung mencatat lupa absen.
+        $workcode = $this->workcode();
+        $dio = $this->participant('Dio');
+        Carbon::setTestNow('2026-10-22 14:20:00');
+        $this->artisan('attendance:calculate-alpha')->assertSuccessful();
+        $this->assertDatabaseHas('attendances', ['participant_id' => $dio->id, 'status' => 'lupa_absen']);
+
+        // Admin lalu menggeser jam datang ke 14:30–15:00 (lewat jadwal_per_hari, Kamis = 4).
+        $workcode->update(['jadwal_per_hari' => [4 => [
+            'jam_datang_mulai' => '14:30', 'jam_datang_selesai' => '15:00',
+            'jam_pulang_mulai' => '16:30', 'jam_pulang_selesai' => '22:00',
+        ]]]);
+        Carbon::setTestNow('2026-10-22 14:46:00');
+        $this->artisan('attendance:calculate-alpha')->assertSuccessful();
+
+        $this->assertSame(0, Attendance::count());
+        $ui = app(AttendanceValidationService::class)->attendanceUi($workcode->fresh(), null);
+        $this->assertSame('arrival', $ui['action']);
+    }
+
+    public function test_purge_keeps_valid_and_non_automatic_rows(): void
+    {
+        $workcode = $this->workcode();
+        $auto = $this->participant('Auto');
+        $manual = $this->participant('Manual');
+        $present = $this->participant('Hadir');
+
+        Carbon::setTestNow('2026-10-22 16:01:00');
+        Attendance::create(['workcode_id' => $workcode->id, 'participant_id' => $manual->id, 'tanggal' => '2026-10-22',
+            'status' => 'lupa_absen', 'attendance_method' => 'manual']);
+        Attendance::create(['workcode_id' => $workcode->id, 'participant_id' => $present->id, 'tanggal' => '2026-10-22',
+            'status' => 'lupa_absen', 'waktu_hadir' => '2026-10-22 07:10:00']);
+        $this->artisan('attendance:calculate-alpha')->assertSuccessful();
+        $this->assertDatabaseHas('attendances', ['participant_id' => $auto->id, 'status' => 'alpha']);
+
+        // Batas pulang digeser ke 22:00: alpha otomatis turun jadi lupa_absen (datang tetap terlewat).
+        $workcode->update(['jam_pulang_selesai' => '22:00:00']);
+        $this->assertSame(1, $workcode->purgeStaleAutomaticStatuses());
+        $this->assertDatabaseHas('attendances', ['participant_id' => $auto->id, 'status' => 'lupa_absen']);
+        // Baris manual (status dari scheduler lama) dan baris berjam datang tidak disentuh pembersih.
+        $this->assertDatabaseHas('attendances', ['participant_id' => $manual->id, 'status' => 'alpha', 'attendance_method' => 'manual']);
+        $this->assertDatabaseHas('attendances', ['participant_id' => $present->id, 'status' => 'lupa_absen']);
     }
 
     private function workcode(): Workcode

@@ -44,7 +44,8 @@ class AttendanceStateService
         $attendance = $attendanceQuery->first();
         $attendanceUi = $this->validationService->attendanceUi($activeWorkcode, $attendance);
 
-        if ($attendanceUi['action'] === 'arrival' && $deviceHash !== null
+        // Kunci perangkat berlaku untuk presensi pertama hari ini (datang, atau pulang tanpa datang).
+        if ($attendanceUi['action'] !== 'none' && $attendance === null && $deviceHash !== null
             && $this->validationService->deviceUsedByOther($activeWorkcode, $deviceHash, $participant->id)) {
             $attendanceUi = $this->validationService->deviceUsedUi($activeWorkcode);
         }

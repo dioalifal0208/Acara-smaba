@@ -1,7 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import AttendanceCalendarModal from '@/Components/AttendanceCalendarModal';
 import {
-    AttendanceStatus, LogsDialog, ManualEditDialog, ParticipantActionsDialog, ProofDialog, ProofThumb,
+    AttendanceStatus, LogsDialog, ManualEditDialog, MarkPresentDialog, ParticipantActionsDialog, ProofDialog, ProofThumb,
 } from '@/Components/Report/ReportDialogs';
 import { appUrl } from '@/lib/appUrl';
 import { backgroundReload, jitteredInterval } from '@/lib/backgroundReload';
@@ -10,7 +10,7 @@ import {
     AttendanceBoard, Button, Card, DataTable, EmptyState, IconButton, PageHeader, SearchField, Section, Select, useConfirm, useToast,
 } from '@/ui';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
-import { ChevronRight, FileBarChart, FileDown, Pencil, Printer, Trash2 } from 'lucide-react';
+import { ChevronRight, FileBarChart, FileDown, Pencil, Printer, Trash2, UserCheck } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 const EMPLOYMENT_STATUSES = ['PNS', 'PPPK', 'PPPK Paruh Waktu', 'GTT', 'PTT'];
@@ -38,6 +38,7 @@ export default function ReportIndex({
     period = null,
     attendances = [],
     participants = [],
+    markPresent = null,
     kepalaSekolahNama = '',
     kepalaSekolahNip = '',
 }) {
@@ -58,6 +59,8 @@ export default function ReportIndex({
     const [calendarOpen, setCalendarOpen] = useState(false);
     const [calendarParticipant, setCalendarParticipant] = useState(null);
 
+    const [markPresentFor, setMarkPresentFor] = useState(null); // null = tertutup, [] = dialog tanpa pilihan awal
+
     const editForm = useForm({ id: null, tanggal: '', jam_masuk: '', jam_pulang: '', status: 'hadir' });
 
     const isDaily = selectedWorkcode?.kategori === 'harian';
@@ -65,7 +68,7 @@ export default function ReportIndex({
 
     // Presensi dari Android/scanner masuk terus: segarkan rekap di latar belakang, kecuali saat
     // dialog terbuka (agar form ubah tidak tertimpa).
-    const dialogOpen = editOpen || logsOpen || calendarOpen || proof !== null || actionsFor !== null;
+    const dialogOpen = editOpen || logsOpen || calendarOpen || proof !== null || actionsFor !== null || markPresentFor !== null;
     useEffect(() => {
         if (dialogOpen) return undefined;
         const reload = () => backgroundReload({ only: ['stats', 'attendances', 'participants', 'activeWorkcodes'], preserveScroll: true, preserveState: true });
@@ -95,6 +98,14 @@ export default function ReportIndex({
     }, [attendances, query, statusFilter]);
 
     const filtered = Boolean(query || statusFilter);
+
+    // Acara yang sudah selesai/tidak aktif: peserta wajib tanpa catatan bisa ditandai hadir oleh admin.
+    const markPresentCandidates = useMemo(() => {
+        if (!markPresent) return [];
+        const eligible = markPresent.eligible_ids ? new Set(markPresent.eligible_ids) : null;
+        return attendances.filter((a) => !a.id && (!eligible || eligible.has(a.participant_id)));
+    }, [attendances, markPresent]);
+    const canMarkPresent = (a) => markPresentCandidates.some((c) => c.participant_id === a.participant_id);
     const signatory = { kepalaSekolahNama, kepalaSekolahNip };
 
     const fetchLogs = async ({ id, nama, nis_nip, status_pegawai }) => {
@@ -207,7 +218,11 @@ export default function ReportIndex({
             align: 'right',
             cell: (a) => (
                 <div className="flex justify-end gap-1">
-                    <IconButton icon={Pencil} size="sm" label={`Ubah presensi ${a.nama}`} onClick={() => openEdit(a, a.nama)} disabled={!a.id} />
+                    {canMarkPresent(a) ? (
+                        <IconButton icon={UserCheck} size="sm" label={`Tandai ${a.nama} hadir`} onClick={() => setMarkPresentFor([a.participant_id])} />
+                    ) : (
+                        <IconButton icon={Pencil} size="sm" label={`Ubah presensi ${a.nama}`} onClick={() => openEdit(a, a.nama)} disabled={!a.id} />
+                    )}
                     <IconButton icon={Trash2} size="sm" label={`Hapus presensi ${a.nama}`} onClick={() => deleteAttendance(a.id, a.nama, a.waktu_hadir)} disabled={!a.id} className="hover:bg-danger-soft hover:text-danger" />
                 </div>
             ),
@@ -226,6 +241,11 @@ export default function ReportIndex({
                         : 'Rekap kehadiran per workcode, lengkap dengan bukti presensi.'}
                     actions={selectedWorkcodeId && (
                         <>
+                            {markPresentCandidates.length > 0 && (
+                                <Button icon={UserCheck} onClick={() => setMarkPresentFor([])}>
+                                    Tandai hadir ({markPresentCandidates.length})
+                                </Button>
+                            )}
                             <Button icon={FileDown} href={route('workcodes.export', { workcode: selectedWorkcodeId, ...(period ? { bulan: period.month } : {}) })} external>Ekspor Excel</Button>
                             <Button
                                 variant="primary"
@@ -330,6 +350,7 @@ export default function ReportIndex({
                                         <ProofThumb attendance={a} onOpen={() => setProof(a)} />
                                     </div>
                                     {a.id && <Button size="sm" variant="ghost" icon={Pencil} onClick={() => openEdit(a, a.nama)} className="-ml-3">Ubah presensi</Button>}
+                                    {canMarkPresent(a) && <Button size="sm" variant="ghost" icon={UserCheck} onClick={() => setMarkPresentFor([a.participant_id])} className="-ml-3">Tandai hadir</Button>}
                                 </div>
                             ))}
                             columns={isDaily ? dailyColumns : eventColumns}
@@ -356,6 +377,18 @@ export default function ReportIndex({
                 singleAttendance={singleAttendance}
                 onSubmit={submitEdit}
             />
+
+            {markPresent && (
+                <MarkPresentDialog
+                    open={markPresentFor !== null}
+                    onClose={() => setMarkPresentFor(null)}
+                    workcodeId={selectedWorkcodeId}
+                    candidates={markPresentCandidates}
+                    initialSelected={markPresentFor}
+                    tanggal={markPresent.tanggal}
+                    defaultJam={markPresent.jam}
+                />
+            )}
 
             <LogsDialog
                 open={logsOpen}

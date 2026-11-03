@@ -1,7 +1,7 @@
-import { Button, Dialog, Field, Input, Select, StatusPill, cx } from '@/ui';
-import { usePage } from '@inertiajs/react';
+import { Button, Checkbox, Dialog, Field, Input, SearchField, Select, StatusPill, cx } from '@/ui';
+import { useForm, usePage } from '@inertiajs/react';
 import { CalendarDays, ClipboardList, ImageOff, Pencil, Printer, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 export const formatAttendanceDate = (date) => (date
     ? new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(`${date}T00:00:00`))
@@ -131,6 +131,106 @@ export function ManualEditDialog({ open, onClose, form, participantName, singleA
                         )}
                     </div>
                 )}
+            </form>
+        </Dialog>
+    );
+}
+
+/**
+ * Tandai hadir peserta yang tidak presensi pada acara yang sudah selesai/tidak aktif. Satu jam hadir
+ * untuk semua yang dipilih; server melewati peserta yang sudah punya catatan.
+ */
+export function MarkPresentDialog({ open, onClose, workcodeId, candidates, initialSelected, tanggal, defaultJam }) {
+    const form = useForm({ participant_ids: [], jam: defaultJam || '07:00' });
+    const [query, setQuery] = useState('');
+
+    useEffect(() => {
+        if (!open) return;
+        form.setData({ participant_ids: initialSelected ?? [], jam: defaultJam || '07:00' });
+        form.clearErrors();
+        setQuery('');
+    }, [open]);
+
+    const selected = new Set(form.data.participant_ids);
+    const visible = useMemo(() => {
+        const q = query.trim().toLowerCase();
+        return candidates.filter((c) => !q || (c.nama || '').toLowerCase().includes(q) || (c.nis_nip || '').toLowerCase().includes(q));
+    }, [candidates, query]);
+    const visibleSelected = visible.filter((c) => selected.has(c.participant_id)).length;
+
+    const toggle = (id) => form.setData('participant_ids', selected.has(id)
+        ? form.data.participant_ids.filter((x) => x !== id)
+        : [...form.data.participant_ids, id]);
+    const toggleVisible = () => {
+        const ids = visible.map((c) => c.participant_id);
+        form.setData('participant_ids', visibleSelected === visible.length
+            ? form.data.participant_ids.filter((id) => !ids.includes(id))
+            : [...new Set([...form.data.participant_ids, ...ids])]);
+    };
+
+    const submit = (e) => {
+        e.preventDefault();
+        form.post(route('admin.workcodes.mark-present', workcodeId), { preserveScroll: true, onSuccess: onClose });
+    };
+    const count = form.data.participant_ids.length;
+
+    return (
+        <Dialog
+            open={open}
+            onClose={onClose}
+            title="Tandai hadir"
+            description={`Acara ${formatAttendanceDate(tanggal)} · tercatat sebagai presensi manual admin`}
+            size="lg"
+            footer={
+                <>
+                    <Button onClick={onClose}>Batal</Button>
+                    <Button variant="primary" type="submit" form="mark-present" loading={form.processing} disabled={count === 0}>
+                        {count > 0 ? `Tandai ${count} peserta hadir` : 'Pilih peserta'}
+                    </Button>
+                </>
+            }
+        >
+            <form id="mark-present" onSubmit={submit} className="space-y-4">
+                <Field label="Jam hadir" required error={form.errors.jam} hint="Dipakai untuk semua peserta yang dipilih.">
+                    <Input type="time" value={form.data.jam} onChange={(e) => form.setData('jam', e.target.value)} className="sm:w-40" />
+                </Field>
+                <div className="space-y-2">
+                    <SearchField value={query} onChange={setQuery} label="Cari peserta" placeholder="Cari nama atau NIP…" />
+                    <div className="flex items-center justify-between gap-3 px-1">
+                        <Checkbox
+                            checked={visible.length > 0 && visibleSelected === visible.length}
+                            indeterminate={visibleSelected > 0 && visibleSelected < visible.length}
+                            onChange={toggleVisible}
+                            disabled={visible.length === 0}
+                        >
+                            Pilih semua{query ? ' hasil pencarian' : ''} ({visible.length})
+                        </Checkbox>
+                        <span className="text-sm tabular-nums text-ink-2" aria-live="polite">{count} dipilih</span>
+                    </div>
+                    <ul className="max-h-[45dvh] divide-y divide-line overflow-y-auto rounded-xl border border-line">
+                        {visible.length === 0 ? (
+                            <li className="px-4 py-6 text-center text-sm text-ink-2">
+                                {candidates.length === 0 ? 'Semua peserta sudah tercatat.' : 'Tidak ada peserta yang cocok.'}
+                            </li>
+                        ) : visible.map((c) => (
+                            <li key={c.participant_id}>
+                                <Checkbox
+                                    checked={selected.has(c.participant_id)}
+                                    onChange={() => toggle(c.participant_id)}
+                                    className="w-full px-4 hover:bg-surface-2"
+                                >
+                                    <span className="min-w-0">
+                                        <span className="block font-medium text-ink">{c.nama}</span>
+                                        <span className="block text-xs tabular-nums text-ink-2">
+                                            {c.nis_nip && c.nis_nip !== '-' ? c.nis_nip : 'Tanpa NIP'}{c.status_pegawai ? ` · ${c.status_pegawai}` : ''}
+                                        </span>
+                                    </span>
+                                </Checkbox>
+                            </li>
+                        ))}
+                    </ul>
+                    {(form.errors.participant_ids) && <p className="text-sm text-danger">{form.errors.participant_ids}</p>}
+                </div>
             </form>
         </Dialog>
     );

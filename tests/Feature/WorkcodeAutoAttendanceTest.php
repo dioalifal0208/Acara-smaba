@@ -111,6 +111,8 @@ class WorkcodeAutoAttendanceTest extends TestCase
         $this->store([
             'kategori' => 'harian', 'tanggal' => null, 'jam_aktif_mulai' => null, 'jam_aktif_selesai' => null,
             'hari_aktif' => [1, 2, 3, 4, 5], 'auto_participant_ids' => [$stakeholder->id],
+            'jam_datang_mulai' => '06:00', 'jam_datang_selesai' => '07:00',
+            'jam_pulang_mulai' => '15:00', 'jam_pulang_selesai' => '17:00',
         ])->assertSessionHasNoErrors();
 
         $this->assertSame(0, Workcode::firstOrFail()->autoAttendees()->count());

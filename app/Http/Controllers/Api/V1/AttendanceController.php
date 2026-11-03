@@ -152,7 +152,7 @@ class AttendanceController extends Controller
                     ->whereDate('tanggal', now()->toDateString())
                     ->first();
 
-                $isPulang = ($existingAttendance && $activeWorkcode->kategori === 'harian');
+                $isPulang = $validationService->isDeparturePhase($activeWorkcode, $existingAttendance);
                 $deviceHash = hash('sha256', $request->input('installation_id'));
                 $gpsData = $request->only(['latitude', 'longitude', 'accuracy']);
 
@@ -175,7 +175,7 @@ class AttendanceController extends Controller
                         throw new \Exception(json_encode(FaceAttemptLimiter::lockedPayload($user->participant)), 429);
                     }
 
-                    if (! $isPulang) {
+                    if (! $existingAttendance) {
                         $validationService->validateDeviceLock($activeWorkcode, $deviceHash, $user->participant_id);
                     }
                     $validationService->validateGpsAndRadius($activeWorkcode, $gpsData);
@@ -190,6 +190,12 @@ class AttendanceController extends Controller
                         return $this->storeIdempotencyAndReturn($user->participant_id, $idempotencyKey, $requestHash, $code >= 400 && $code <= 599 ? $code : 400, $errorData);
                     }
                     throw $e;
+                }
+
+                // Toleransi datang sudah lewat tanpa presensi datang: catat "tidak absen datang", lalu pulang.
+                if ($isPulang && ! $existingAttendance) {
+                    $existingAttendance = AttendanceObserver::withoutStatePush(
+                        fn () => $validationService->recordMissedArrival($activeWorkcode, $user->participant_id));
                 }
 
                 if ($existingAttendance) {

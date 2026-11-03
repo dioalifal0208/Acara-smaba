@@ -167,6 +167,71 @@ class Workcode extends Model
      *
      * @return array{jam_datang_mulai: ?string, jam_datang_selesai: ?string, jam_pulang_mulai: ?string, jam_pulang_selesai: ?string}
      */
+    /**
+     * Batas jam (H:i:s) yang dipakai attendance:calculate-alpha hari ini: lupa absen datang dicatat
+     * setelah 'arrival' (jam datang selesai + toleransi), alpha setelah 'departure' (jam pulang selesai).
+     *
+     * @return array{arrival: ?string, departure: ?string}
+     */
+    public function statusDeadlinesFor(CarbonInterface $date): array
+    {
+        $schedule = $this->scheduleFor($date);
+
+        return [
+            'arrival' => $schedule['jam_datang_selesai']
+                ? self::withLateTolerance($date->copy()->startOfDay()->setTimeFromTimeString($schedule['jam_datang_selesai']))->format('H:i:s')
+                : null,
+            'departure' => $schedule['jam_pulang_selesai']
+                ? Carbon::createFromTimeString($schedule['jam_pulang_selesai'])->format('H:i:s')
+                : null,
+        ];
+    }
+
+    /**
+     * Cabut status lupa_absen/alpha otomatis hari ini yang tidak lagi berlaku, mis. karena admin
+     * mengubah jadwal setelah scheduler mencatatnya (jadwal lama 06:00–07:00 sudah lewat, jadwal
+     * baru 14:30–15:00 belum). Tanpa ini peserta terkunci "lupa absen" walau jam datang masih buka.
+     * Hanya baris buatan scheduler yang disentuh: tanpa jam datang/pulang, tanpa izin, tanpa metode
+     * (input admin selalu bermetode 'manual' atau berjam). Mengembalikan jumlah baris yang diubah.
+     */
+    public function purgeStaleAutomaticStatuses(?CarbonInterface $now = null): int
+    {
+        $now ??= now();
+        $rows = Attendance::where('workcode_id', $this->id)
+            ->whereDate('tanggal', $now->toDateString())
+            ->whereIn('status', ['lupa_absen', 'alpha'])
+            ->whereNull('waktu_hadir')->whereNull('waktu_pulang')
+            ->whereNull('leave_request_id')->whereNull('attendance_method')
+            ->get();
+
+        if ($rows->isEmpty()) {
+            return 0;
+        }
+
+        $hariAktif = $this->hari_aktif ?? [];
+        $workday = $this->kategori === 'harian' && (empty($hariAktif) || in_array($now->dayOfWeekIso, $hariAktif));
+        $deadlines = $this->statusDeadlinesFor($now);
+        $time = $now->format('H:i:s');
+        $arrivalPassed = $workday && $deadlines['arrival'] && $time > $deadlines['arrival'];
+        $departurePassed = $workday && $deadlines['departure'] && $time > $deadlines['departure'];
+
+        $changed = 0;
+        foreach ($rows as $row) {
+            $valid = $row->status === 'alpha' ? $departurePassed : ($arrivalPassed || $departurePassed);
+            if ($valid) {
+                continue;
+            }
+            if ($row->status === 'alpha' && $arrivalPassed) {
+                $row->update(['status' => 'lupa_absen']);
+            } else {
+                $row->delete();
+            }
+            $changed++;
+        }
+
+        return $changed;
+    }
+
     public function scheduleFor(CarbonInterface $date): array
     {
         $day = $this->jadwal_per_hari[$date->dayOfWeekIso] ?? [];
@@ -199,10 +264,16 @@ class Workcode extends Model
      */
     public static function withLateTolerance(CarbonInterface $deadline): CarbonInterface
     {
-        $closesAt = $deadline->copy()->addMinutes(config('attendance.late_tolerance_minutes', 60));
+        $closesAt = $deadline->copy()->addMinutes(self::lateToleranceMinutes());
         $endOfDay = $deadline->copy()->endOfDay();
 
         return $closesAt->greaterThan($endOfDay) ? $endOfDay : $closesAt;
+    }
+
+    /** Toleransi terlambat presensi datang WFO: dari config, dikunci 0–60 menit (maksimal 1 jam). */
+    public static function lateToleranceMinutes(): int
+    {
+        return max(0, min(60, (int) config('attendance.late_tolerance_minutes', 60)));
     }
 
     /** Lama keterlambatan untuk ditampilkan, mis. "25 menit" atau "1 jam 5 menit". */
@@ -257,6 +328,31 @@ class Workcode extends Model
     }
 
     /** Awal jadwal aktif kegiatan (null bila tidak terjadwal). */
+    /**
+     * Admin boleh menandai hadir peserta yang tidak presensi (laporan) hanya untuk acara yang sudah
+     * lewat atau tidak aktif: bukan yang sedang berjalan (peserta masih bisa presensi sendiri) dan
+     * bukan yang terjadwal belum dimulai. Work From Office diatur per hari lewat kalender peserta.
+     */
+    public function canMarkPresent(?Carbon $now = null): bool
+    {
+        $now ??= now();
+        if ($this->kategori !== 'workcode' || $this->isEffectivelyActive($now)) {
+            return false;
+        }
+
+        $startsAt = $this->activeWindowStartsAt();
+
+        return $this->archived_at !== null || $startsAt === null || $startsAt->lessThanOrEqualTo($now);
+    }
+
+    /** Tanggal acara untuk catatan presensi: kolom tanggal, atau tanggal dibuat untuk acara lama. */
+    public function eventDate(): string
+    {
+        return $this->tanggal
+            ? Carbon::parse($this->tanggal)->toDateString()
+            : $this->created_at->copy()->timezone(config('app.timezone'))->toDateString();
+    }
+
     public function activeWindowStartsAt(): ?Carbon
     {
         return $this->hasScheduledActiveWindow()
