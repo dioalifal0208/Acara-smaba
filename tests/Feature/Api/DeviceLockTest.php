@@ -106,6 +106,30 @@ class DeviceLockTest extends TestCase
             ->assertJsonPath('code', 'app_update_required');
     }
 
+    public function test_unbound_token_from_before_the_lock_must_log_in_again_once_device_id_is_required(): void
+    {
+        $user = $this->participantUser();
+        $token = $this->login($user, null)->assertOk()->json('data.token');
+
+        // Masa transisi: token tanpa kunci perangkat tetap dipakai.
+        $this->withToken($token)->getJson('/api/v1/me')->assertOk();
+
+        config(['attendance.device_lock.require_device_id' => true]);
+        $this->app['auth']->forgetGuards();
+
+        $this->withToken($token)->getJson('/api/v1/me')
+            ->assertUnauthorized()
+            ->assertJsonPath('code', 'device_not_bound');
+        $this->assertCount(0, $user->tokens()->get());
+
+        // Login ulang dengan device_id mengunci akun dan memberi token yang berlaku.
+        $this->app['auth']->forgetGuards();
+        $newToken = $this->login($user, self::HP_LAMA)->assertOk()->json('data.token');
+        $this->assertSame(DeviceLock::hash(self::HP_LAMA), $user->fresh()->device_id_hash);
+        $this->app['auth']->forgetGuards();
+        $this->withToken($newToken)->getJson('/api/v1/me')->assertOk();
+    }
+
     public function test_admin_reset_releases_lock_and_next_login_binds_new_device(): void
     {
         $user = $this->participantUser();

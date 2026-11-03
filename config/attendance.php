@@ -74,8 +74,8 @@ return [
     |
     | Aplikasi mengirim sinyal integritas lokasi; server menolak presensi dan mencatatnya
     | (tabel location_integrity_violations, halaman admin Perangkat). Lokasi mock dan mock app
-    | yang aktif selalu ditolak. require_signals=true menolak aplikasi lama yang belum mengirim
-    | sinyal (426) — aktifkan setelah APK baru tersebar ke semua peserta.
+    | yang aktif selalu ditolak. require_signals=true (bawaan sejak 2 Nov 2026) menolak aplikasi
+    | versi 1 yang belum mengirim sinyal (426). Semua APK versionCode >= 2 sudah mengirimnya.
     |
     */
 
@@ -83,11 +83,13 @@ return [
         'block_fake_apps' => (bool) env('ANTI_FAKE_GPS_BLOCK_FAKE_APPS', true),
         'block_root' => (bool) env('ANTI_FAKE_GPS_BLOCK_ROOT', true),
         'block_hooking' => (bool) env('ANTI_FAKE_GPS_BLOCK_HOOKING', true),
-        'require_signals' => (bool) env('ANTI_FAKE_GPS_REQUIRE_SIGNALS', false),
+        'require_signals' => (bool) env('ANTI_FAKE_GPS_REQUIRE_SIGNALS', true),
     ],
 
+    // Bawaan wajib sejak 2 Nov 2026: semua APK versionCode >= 2 mengirim device_id saat login.
+    // Token peserta yang belum terkunci ke HP dicabut dan diminta login ulang (EnsureDeviceBound).
     'device_lock' => [
-        'require_device_id' => (bool) env('DEVICE_LOCK_REQUIRE_ID', false),
+        'require_device_id' => (bool) env('DEVICE_LOCK_REQUIRE_ID', true),
     ],
 
     /*

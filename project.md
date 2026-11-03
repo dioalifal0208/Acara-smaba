@@ -1,6 +1,6 @@
 # E-Presensi SMABA — Dokumentasi Project
 
-> Hasil analisis kode per **2 November 2026** (commit `66939d4` di repo web plus perubahan yang belum di-commit, `b045009` di repo Android).
+> Hasil analisis kode per **2 November 2026** (commit `66e78f3` + pembersihan 2 Nov di repo web, `a82e6a6` di repo Android; perubahan 2 Nov setelah `66e78f3` belum di-deploy).
 > Analisis sebelumnya: 26 Oktober 2026. Perubahan sejak itu dirangkum di §0.
 > Semua isi di bawah diambil dari kode yang ada. Bagian yang tidak bisa dipastikan ditandai **Belum jelas**, beserta file yang diperiksa.
 
@@ -19,7 +19,7 @@ Commit web `5808896` (deploy 28 Okt) s.d. `66939d4` (29 Okt), Android `6e20323` 
 
 | Perubahan | Commit | File utama |
 |---|---|---|
-| Semua perbaikan 26 Okt (§9.3 no. 1–11) ikut ter-deploy | `5808896` | lihat §9.3 |
+| Semua perbaikan 26 Okt (§13 no. 1–11) ikut ter-deploy | `5808896` | lihat §13 |
 | Redesign web selesai: komponen `@/ui` + token warna, mode gelap global + toggle | `5808896` | `resources/js/ui/*`, `resources/css/tokens.css`, `tailwind.config.js` |
 | **Auto presensi stakeholder** di workcode kegiatan: peserta yang dipilih admin otomatis tercatat `hadir` saat jam aktif dimulai; scan mereka menimpa catatan otomatis | `8370d4b` | `Workcode::syncAutoAttendance`, `Attendance::METHOD_AUTO` (`otomatis`), `createOrReplaceAutomatic`, tabel `workcode_auto_attendees`, `WorkcodeAutoAttendanceTest` |
 | Kolom deskripsi workcode dihapus dari form (kolom DB masih ada) | `8370d4b` | `WorkcodeController` |
@@ -31,7 +31,11 @@ Commit web `5808896` (deploy 28 Okt) s.d. `66939d4` (29 Okt), Android `6e20323` 
 | Token Sanctum **tidak kedaluwarsa** lagi (sebelumnya 30 hari), supaya peserta tidak logout sendiri setelah update APK | `66939d4` | `config/sanctum.php` |
 | Pesan validasi diseragamkan. Cek "harian hanya lewat QR pribadi" dipindah dari `validateWorkcodeActive` ke `SelfCheckInController` | `66939d4` | `AttendanceValidationService` |
 | Android v1.2.1–1.2.2: redesign UI (token sama dengan web, mode gelap ikut HP), lokasi peta dari workcode terakhir, duplikat `feature/attendance/Location*.kt` dihapus | Android `6e20323`, `b045009` | `core/ui/theme/*`, `DashboardViewModel` |
-| **Belum di-commit:** riwayat izin per peserta di Detail Peserta (ringkasan menunggu/disetujui/ditolak/jumlah hari), filter bulan dan tautan `?id=` di halaman Perizinan, label izin dipindah ke model | — | `AdminLeaveController::participantHistory`, `LeaveRequest::toAdminArray/days/months`, `Components/LeaveHistoryPanel.jsx`, `ParticipantLeaveHistoryTest` |
+| Arsip workcode terjadwal tidak pernah aktif, format Pint dirapikan (§13 no. 12–13) | `66e78f3` (2 Nov) | `Workcode::isEffectivelyActive`, `AutoActivateWorkcode`, `WorkcodeArchiveTest` |
+| Pembersihan: throttle `/aplikasi/unduh` (30/menit per IP), `.env.example` dilengkapi, artefak usang dihapus/dipindah (§10.3), `implementation_plan.md` root → `docs/implementation/face-fcm-integration-plan.md`, project.md dirapikan (riwayat bug ke §13) | 2 Nov, Android `a82e6a6` | `routes/web.php`, `.env.example`, `AppReleaseTest` |
+| **Kunci perangkat & sinyal anti fake GPS diwajibkan** (bawaan config `true`); token peserta yang belum terkunci ke HP dicabut agar login ulang (`EnsureDeviceBound`) | 2 Nov | `app/Http/Middleware/EnsureDeviceBound.php`, `routes/api.php`, `config/attendance.php`, `phpunit.xml`, `DeviceLockTest` |
+| **Wajib ganti password awal di website**: peserta yang password-nya masih NIS/NIP diarahkan ke Profil; password baru tidak boleh sama dengan NIS/NIP | 2 Nov | `app/Support/DefaultPassword.php`, `Middleware/EnsurePasswordChanged.php`, `Auth/PasswordController`, `Profile/Edit.jsx`, `DefaultPasswordChangeTest` |
+| Riwayat izin per peserta di Detail Peserta (ringkasan menunggu/disetujui/ditolak/jumlah hari), filter bulan dan tautan `?id=` di halaman Perizinan, label izin dipindah ke model | `66e78f3` (2 Nov) | `AdminLeaveController::participantHistory`, `LeaveRequest::toAdminArray/days/months`, `Components/LeaveHistoryPanel.jsx`, `ParticipantLeaveHistoryTest` |
 
 ---
 
@@ -125,7 +129,7 @@ acara-smaba/
 │   ├── Http/
 │   │   ├── Controllers/       # Controller web (Inertia) + Auth/ (Breeze)
 │   │   │   └── Api/V1/        # Controller REST API untuk Android
-│   │   ├── Middleware/        # admin, role, SecurityHeaders, EnsureSupportedAppVersion, BumpWebSyncOnWrite
+│   │   ├── Middleware/        # admin, role, SecurityHeaders, EnsureSupportedAppVersion, BumpWebSyncOnWrite, EnsureDeviceBound, EnsurePasswordChanged
 │   │   ├── Requests/          # LoginRequest, ProfileUpdateRequest
 │   │   └── Resources/Api/V1/  # JSON Resource untuk API
 │   ├── Logging/               # RedactSensitiveData: redaksi data sensitif di log
@@ -142,7 +146,7 @@ acara-smaba/
 │   ├── seeders/               # DatabaseSeeder (admin + 3 contoh peserta), SettingSeeder (data kepala sekolah)
 │   └── factories/             # UserFactory
 ├── deploy/                    # Skrip deploy Hostinger (deploy.ps1, deploy-server.sh, server-setup.sh, .htaccess varian)
-├── docs/                      # API_CONTRACT, kompatibilitas descriptor, rencana fase 0–6, security.md, audit, face-parity
+├── docs/                      # API_CONTRACT, kompatibilitas descriptor, rencana fase 0–6 + face-fcm-integration-plan, security.md, audit, ux
 ├── public/                    # index.php, build/ (aset Vite yang di-commit), models/ (bobot face-api.js), images/
 ├── resources/
 │   ├── css/tokens.css         # Token warna/gerak terang + gelap (dipakai tailwind.config.js)
@@ -157,13 +161,11 @@ acara-smaba/
 ├── scripts/                   # Utilitas: face-parity (konversi TFLite, fixture), audit pra-migrasi, check-contrast.mjs (kontras token)
 ├── storage/app/apk/           # APK Android hasil deploy (3 rilis terakhir, tidak dilacak Git)
 ├── tests/Feature/             # 61 file test (Api/, Auth/, fitur web)
-├── scratch/                   # File coba-coba lokal (tidak dilacak Git)
-├── backups/                   # Backup lokal (tidak dilacak Git)
+├── backups/                   # Backup lokal, scratch/ dan audit lama (tidak dilacak Git)
 ├── .venv-tflite/              # Virtualenv Python untuk konversi model (diabaikan Git)
 ├── README.md                  # Dokumentasi utama (instalasi, konfigurasi, deploy)
-├── implementation_plan.md     # Rencana integrasi wajah web↔Android + FCM (berbeda dari docs/implementation/implementation_plan.md)
-├── business_logic_audit.md, face_recognition_analysis.md   # Catatan analisis lama di root
-└── start_server.bat           # File kosong (0 byte)
+├── project.md                 # Dokumen ini
+└── CLAUDE.md                  # Instruksi untuk agent (jangan baca Workcodes/Index.jsx utuh)
 ```
 
 ### 3.2 Android
@@ -191,8 +193,7 @@ presensi_smaba_mobile/
 │       ├── androidTest/             # Test paritas wajah di perangkat, LoginScreenTest
 │       ├── dev/, deviceDev/         # Manifest overlay: izinkan cleartext HTTP untuk server lokal
 ├── docs/android-face-integration.md
-├── local.properties.example         # Contoh konfigurasi lokal (URL API, path signing)
-└── scratch_test.kt                  # Skrip coba-coba di root (bukan bagian aplikasi)
+└── local.properties.example         # Contoh konfigurasi lokal (URL API, path signing, MAPS_API_KEY)
 ```
 
 ---
@@ -205,9 +206,9 @@ Status: **Selesai** (ada di kode, ada test, dipakai), **Sebagian** (berjalan tap
 |---|---|---|---|
 | Login web (username NIS/NIP atau email) | Selesai | `app/Http/Requests/Auth/LoginRequest.php`, `routes/auth.php` | Kunci setelah 5 percobaan per username+IP. Halaman `/login` dialihkan ke `/` (form ada di modal halaman depan) |
 | Login API + token Sanctum | Selesai | `Api/V1/AuthController.php`, `routes/api.php` | Throttle 5/menit, maksimal 5 token per user, ability `role:<role>` |
-| Kunci perangkat (1 akun = 1 HP) | Selesai | `app/Support/DeviceLock.php`, `DeviceController.php`, `Pages/Devices/Index.jsx` | Hanya HMAC ANDROID_ID yang disimpan. Reset satuan dan massal oleh admin. Pengajuan pindah HP dihapus (migrasi `2026_10_22_100000`). Wajib kirim `device_id` masih **opsional** (`DEVICE_LOCK_REQUIRE_ID=false`) |
+| Kunci perangkat (1 akun = 1 HP) | Selesai | `app/Support/DeviceLock.php`, `DeviceController.php`, `Pages/Devices/Index.jsx` | Hanya HMAC ANDROID_ID yang disimpan. Reset satuan dan massal oleh admin. Pengajuan pindah HP dihapus (migrasi `2026_10_22_100000`). Sejak 2 Nov 2026 **wajib** (bawaan `DEVICE_LOCK_REQUIRE_ID=true`): login tanpa `device_id` ditolak 426, dan token peserta yang belum terkunci ke HP dicabut lewat middleware `EnsureDeviceBound` (401 `device_not_bound`), sehingga aplikasi login ulang dan akun langsung terkunci. Test: `DeviceLockTest` |
 | Lupa password / reset via email | Dihapus (26 Okt 2026) | `routes/auth.php`, `Components/LoginModal.jsx`, `tests/Feature/Auth/AuthenticationTest.php` | Akun dibuat dan diubah admin, dan email tidak pernah terkirim (`MAIL_MAILER=log`). Route `forgot-password`/`reset-password`, `PasswordResetLinkController`, `NewPasswordController`, halaman `ForgotPassword.jsx`/`ResetPassword.jsx`, tautan "Lupa password?", dan `PasswordResetTest` dihapus |
-| Reset / ganti password peserta oleh admin | Selesai (26 Okt 2026) | `ParticipantController::updatePassword`, `PUT /participants/{id}/password`, `Pages/Participants/Show.jsx` (kartu "Password Akun"), `tests/Feature/ParticipantPasswordTest.php` | Di halaman Detail Peserta. Dua pilihan: reset ke NIS/NIP (password awal), atau password baru (min. 8 karakter, diulang). Opsional: sekaligus keluarkan semua sesi (token aplikasi Android + sesi web). Password tidak dicatat ke log. Peserta GTT/PTT tidak punya akun, jadi kartunya hanya berisi keterangan |
+| Reset / ganti password peserta oleh admin | Selesai (26 Okt 2026) | `ParticipantController::updatePassword`, `PUT /participants/{id}/password`, `Pages/Participants/Show.jsx` (kartu "Password Akun"), `tests/Feature/ParticipantPasswordTest.php` | Di halaman Detail Peserta. Dua pilihan: reset ke NIS/NIP (password awal), atau password baru (min. 8 karakter, diulang). Opsional: sekaligus keluarkan semua sesi (token aplikasi Android + sesi web). Password tidak dicatat ke log. Peserta GTT/PTT tanpa data lahir belum punya akun, jadi kartunya hanya berisi keterangan. Sejak 2 Nov 2026, reset ke NIS/NIP membuat peserta wajib mengganti password saat membuka website (`EnsurePasswordChanged`, `DefaultPasswordChangeTest`) |
 | Verifikasi email | Sebagian | `routes/auth.php`, `app/Models/User.php` | Route ada, tetapi `User` tidak mengimplementasikan `MustVerifyEmail` (baris 5 dikomentari), jadi middleware `verified` tidak memblokir apa pun |
 | Registrasi publik | Belum (sengaja ditutup) | `routes/auth.php` | Admin baru dibuat via `php artisan user:make-admin` |
 | Presensi wajah Android (datang/pulang) | Selesai | `Api/V1/AttendanceController.php`, `Support/FaceMatcher.php`, Android `feature/attendance/` | Descriptor 128-d (face-api.js), L2, threshold 0.45. Kunci 15 menit setelah 5 kali gagal. Idempotency-Key wajib |
@@ -215,28 +216,28 @@ Status: **Selesai** (ada di kode, ada test, dipakai), **Sebagian** (berjalan tap
 | Pendaftaran wajah + persetujuan admin | Selesai | `FaceRecognitionController.php`, `Api/V1/FaceEnrollmentController.php`, `Components/FaceEnrollmentCamera.jsx`, `Utils/liveness.js` | Web: multi-sampel + liveness (senyum/3D pasif). Android: `POST /me/face-enrollment`. Riwayat wajah di `face_histories` |
 | Ganti foto profil (pengajuan) | Selesai | `Api/V1/PhotoController.php`, `PhotoChangeRequestController.php` | Foto aktif baru berubah setelah disetujui |
 | Validasi lokasi GPS + radius | Selesai | `AttendanceValidationService::validateGpsAndRadius` | Haversine. Menolak akurasi ≤0 atau >120 m dan jam HP yang selisih >2 menit. Radius per workcode (default 50 m) |
-| Anti fake GPS (mock, aplikasi fake GPS, root, hooking) | Selesai | `Support/LocationIntegrity.php`, `LocationIntegrityLogController.php`, Android `core/location/LocationIntegrityChecker.kt` | Dicatat di `location_integrity_violations`. Opsi pengembang hanya dicatat. Wajib kirim sinyal masih **opsional** (`ANTI_FAKE_GPS_REQUIRE_SIGNALS=false`) |
+| Anti fake GPS (mock, aplikasi fake GPS, root, hooking) | Selesai | `Support/LocationIntegrity.php`, `LocationIntegrityLogController.php`, Android `core/location/LocationIntegrityChecker.kt` | Dicatat di `location_integrity_violations`. Opsi pengembang hanya dicatat. Sejak 2 Nov 2026 sinyal **wajib** (bawaan `ANTI_FAKE_GPS_REQUIRE_SIGNALS=true`): presensi tanpa sinyal ditolak 426. Semua APK versionCode ≥ 2 sudah mengirim sinyal |
 | Foto/selfie presensi | Selesai | `Support/AttendanceFaceCapture.php`, `Console/Commands/PruneAttendanceMedia.php` | Disimpan di disk privat, foto datang & pulang terpisah, dihapus setelah 30 hari |
 | Toleransi terlambat | Selesai | `Models/Workcode.php` (`isLateAt`, `withLateTolerance`), `config/attendance.php` | Default 60 menit, hanya untuk datang harian |
 | Scanner QR pribadi (admin) | Selesai | `AttendanceController::scan`, `Pages/Scanner/Index.jsx` | Ada input NIP manual. Papan menampilkan terlambat & izin. Scan menimpa catatan otomatis stakeholder |
 | Self check-in Master QR + tanda tangan | Selesai | `SelfCheckInController.php`, `Pages/SelfCheckIn/*`, `Pages/Admin/MasterQr.jsx` | Hanya untuk workcode kegiatan (Work From Office ditolak lewat `closedReason 'harian'`). Layar untuk HP bersama, cek GPS lebih awal, daftar nama bisa dipakai keyboard. Throttle per IP. Identitas peserta tidak diverifikasi (lihat §10) |
 | Presensi manual oleh admin (tambah/ubah/hapus) | Selesai | `AttendanceController::manualStore/Update/Destroy` | Tanpa log audit |
-| Status otomatis alpha / lupa absen | Selesai | `Console/Commands/CalculateAttendanceStatus.php`, `routes/console.php` | Pemilihan peserta dan hari libur nasional diperhitungkan sejak 26 Okt 2026 (lihat §9.3 no. 3) |
+| Status otomatis alpha / lupa absen | Selesai | `Console/Commands/CalculateAttendanceStatus.php`, `routes/console.php` | Pemilihan peserta dan hari libur nasional diperhitungkan sejak 26 Okt 2026 (§13 no. 3) |
 | Workcode: CRUD, kategori, jadwal per hari, lokasi | Selesai | `WorkcodeController.php`, `Pages/Workcodes/Index.jsx`, `Components/Workcodes/*` | Beberapa workcode bisa aktif bersamaan. Ada pemilihan peserta, pencarian, konfirmasi nonaktifkan, dan konfirmasi ketik nama saat menghapus. Deskripsi tidak lagi diisi di form (28 Okt) |
-| Arsip workcode | Selesai (29 Okt 2026, celah jadwal ditutup 2 Nov) | `WorkcodeController::archive/unarchive`, `workcodes.archived_at`, `Workcode::isEffectivelyActive`, `tests/Feature/WorkcodeArchiveTest.php` | Hanya workcode yang tidak aktif. Arsip tidak pernah aktif: tidak bisa diaktifkan manual, tidak dinyalakan scheduler walau jadwalnya tiba, tanpa presensi otomatis stakeholder (§9.3 no. 12) |
+| Arsip workcode | Selesai (29 Okt 2026, celah jadwal ditutup 2 Nov) | `WorkcodeController::archive/unarchive`, `workcodes.archived_at`, `Workcode::isEffectivelyActive`, `tests/Feature/WorkcodeArchiveTest.php` | Hanya workcode yang tidak aktif. Arsip tidak pernah aktif: tidak bisa diaktifkan manual, tidak dinyalakan scheduler walau jadwalnya tiba, tanpa presensi otomatis stakeholder (§13 no. 12) |
 | Auto presensi stakeholder (kegiatan) | Selesai (28 Okt 2026) | `Workcode::syncAutoAttendance`, `Attendance::createOrReplaceAutomatic`, `AutoActivateWorkcode`, `tests/Feature/WorkcodeAutoAttendanceTest.php` | Stakeholder tercatat `hadir` (metode `otomatis`) pada jam mulai. Presensi yang sudah ada tidak disentuh. Catatan otomatis dihapus bila centang dilepas atau jadwal berubah. Bila workcode membatasi peserta, stakeholder ikut ditambahkan ke peserta terpilih |
-| Aktivasi otomatis workcode terjadwal | Selesai | `Models/Workcode::isEffectivelyActive`, `Console/Commands/AutoActivateWorkcode.php`, `routes/console.php` | Status aktif dihitung dari jadwal. Sejak 26 Okt 2026 `workcode:auto-activate` terjadwal tiap menit, menyamakan `is_active`, dan mengirim FCM tanpa mematikan workcode lain (§9.3 no. 4) |
+| Aktivasi otomatis workcode terjadwal | Selesai | `Models/Workcode::isEffectivelyActive`, `Console/Commands/AutoActivateWorkcode.php`, `routes/console.php` | Status aktif dihitung dari jadwal. Sejak 26 Okt 2026 `workcode:auto-activate` terjadwal tiap menit, menyamakan `is_active`, dan mengirim FCM tanpa mematikan workcode lain (§13 no. 4) |
 | Data master peserta (CRUD, impor Excel + preview, hapus massal, detail) | Selesai | `ParticipantController.php`, `Pages/Participants/Index.jsx`, `Show.jsx`, `Components/ImportModal.jsx` | Template unduhan tersedia. Nama dikapitalisasi (title case) |
 | QR pribadi peserta (SVG/PNG, regenerasi) | Selesai | `ParticipantController::qrCode/downloadSvg/downloadPng`, `Services/QrCodeService.php` | Hanya untuk admin atau pemilik |
 | Manajemen user admin di UI | Belum | — | Admin hanya bisa dibuat lewat command `user:make-admin` |
 | Izin (izin, sakit, tidak absen pulang; rentang tanggal; bukti) | Selesai | `LeaveRequestController.php`, `Api/V1/LeaveRequestController.php`, `AdminLeaveController.php`, `Pages/LeaveApprovals/Index.jsx`, Android `feature/leave/` | Persetujuan membuat/memperbarui baris presensi `izin`, dalam satu transaksi DB sejak 26 Okt 2026. Sejak 28 Okt penolakan **wajib** berisi alasan (`alasan_penolakan`, maks. 500 karakter), yang tampil ke peserta di riwayat izin web dan Android. Izin bisa diajukan ke workcode harian walau tidak ada presensi yang sedang dibuka |
-| Riwayat izin per peserta (admin) | Sebagian (belum di-commit) | `AdminLeaveController::participantHistory`, `GET /participants/{id}/leave-history`, `Components/LeaveHistoryPanel.jsx`, `tests/Feature/ParticipantLeaveHistoryTest.php` | Di Detail Peserta: ringkasan dan daftar semua pengajuan, filter status, tombol "Tinjau di Perizinan" (`/admin/leaves?id=`). Halaman Perizinan mendapat filter bulan (`LeaveRequest::months`). Kode ada di working tree, belum di-commit/deploy |
+| Riwayat izin per peserta (admin) | Selesai (2 Nov 2026) | `AdminLeaveController::participantHistory`, `GET /participants/{id}/leave-history`, `Components/LeaveHistoryPanel.jsx`, `tests/Feature/ParticipantLeaveHistoryTest.php` | Di Detail Peserta: ringkasan dan daftar semua pengajuan, filter status, tombol "Tinjau di Perizinan" (`/admin/leaves?id=`). Halaman Perizinan mendapat filter bulan (`LeaveRequest::months`). |
 | Cuti | Selesai (sebagai jenis izin) | `app/Models/LeaveRequest.php` (`JENIS_IZIN` memuat `cuti`), `AdminLeaveController.php` (label "Cuti"), `Components/LeaveRequestModal.jsx:87`, Android `feature/leave/LeaveScreen.kt:66` | Dipastikan 26 Okt 2026: cuti adalah salah satu `jenis_izin`, bukan fitur terpisah. Alurnya sama dengan izin dan tercatat `izin` di presensi. Tidak ada kuota/saldo cuti, jenis cuti (tahunan, melahirkan, …), atau persetujuan berjenjang |
-| Hari libur nasional | Sebagian | `Support/Holidays.php`, `HolidayController.php`, `Components/AttendanceCalendarModal.jsx` | ICS Google, dipakai kalender dan `attendance:calculate-alpha`. Laporan masih hanya menandai Sabtu/Minggu sebagai `libur`. Kegagalan fetch di-cache 7 hari sebagai kosong (§9.3 no. 5) |
+| Hari libur nasional | Sebagian | `Support/Holidays.php`, `HolidayController.php`, `Components/AttendanceCalendarModal.jsx` | ICS Google, dipakai kalender dan `attendance:calculate-alpha`. Laporan masih hanya menandai Sabtu/Minggu sebagai `libur`. Bila Google gagal, salinan terakhir yang valid dipakai (§13 no. 5) |
 | Rekap / laporan per workcode + rekap individu | Selesai | `AttendanceController::report/getIndividualRecap/exportAttendance`, `Pages/Report/Index.jsx`, `lib/reportPrint.js`, `tests/Feature/DailyReportPeriodTest.php` | Polling ±20 detik. Sejak 26 Okt 2026 rekap **harian** dihitung per bulan (bawaan bulan berjalan, `?bulan=YYYY-MM` untuk bulan lain). "Tanggal Kegiatan" saat dicetak = tanggal 1 s.d. akhir bulan. Peserta GTT/PTT tidak masuk laporan/ekspor harian. Hitung ganda izin (baris presensi + pengajuan) diperbaiki, dan izin sakit kini masuk kolom Sakit. Laporan kegiatan tidak berubah |
 | Cetak laporan + tanda tangan QR kepala sekolah | Selesai | `Report/Index.jsx` (`window.print`), `AttendanceController::qrSignature`, `VerificationController.php`, `SettingController.php` | Verifikasi lewat URL bertanda tangan |
 | Ekspor laporan | Sebagian | `AttendanceController::exportAttendance` | Ekspor `.xlsx` sungguhan sejak 26 Okt 2026 (dulu CSV). Ekspor PDF: Belum |
-| Dashboard admin (KPI, grafik mingguan, keterlambatan, metode) | Selesai | `routes/web.php`, `Support/AdminDashboardStats.php`, `Pages/Dashboard.jsx` | KPI hadir diperbaiki 26 Okt 2026 (lihat §9.3 no. 1) |
+| Dashboard admin (KPI, grafik mingguan, keterlambatan, metode) | Selesai | `routes/web.php`, `Support/AdminDashboardStats.php`, `Pages/Dashboard.jsx` | KPI hadir diperbaiki 26 Okt 2026 (§13 no. 1) |
 | Notifikasi push ke HP (FCM) | Selesai | `Services/FcmService.php`, `Observers/AttendanceObserver.php`, Android `WorkcodeFirebaseMessagingService.kt` | Push saat workcode berubah, Sync penuh, perubahan status (presensi, izin, wajah, foto), dan sesi dicabut |
 | Notifikasi admin (lonceng) | Selesai | `Support/AdminNotifications.php`, `Components/AdminNotificationBell.jsx` | Pengajuan wajah, foto, dan izin yang menunggu |
 | Sinkronisasi Android → web (tarik ke bawah) | Selesai | `WebSyncController.php`, `Support/WebSync.php`, `routes/signal.php`, `lib/webSyncSignal.js` | Sinyal versi lewat cache file, tanpa session |
@@ -289,7 +290,7 @@ Kontrak lengkap dan katalog status error ada di `docs/api/API_CONTRACT.md`.
 | Method | Route | Fungsi | Auth | Status |
 |---|---|---|---|---|
 | GET | `/` | Halaman depan: informasi umum + tombol unduh APK (prop `apkUrl`). Statistik/aktivitas presensi tidak lagi dikirim ke publik | Tidak | Selesai |
-| GET/HEAD | `/aplikasi/unduh` | Unduh APK terbaru (`apk.download`) | Tidak, **tanpa throttle** | Selesai (28 Okt 2026) |
+| GET/HEAD | `/aplikasi/unduh` | Unduh APK terbaru (`apk.download`) | Tidak (throttle 30/menit per IP sejak 2 Nov) | Selesai (28 Okt 2026) |
 | GET | `/dashboard` | Dashboard admin | `auth, verified, admin` | Selesai (KPI diperbaiki 26 Okt 2026) |
 | GET | `/admin/notifications` | Ringkasan lonceng notifikasi | admin | Selesai |
 | GET/POST | `/admin/leaves(?id=)`, `/admin/leaves/{id}/approve\|reject` | Perizinan. `reject` wajib `alasan_penolakan` | admin | Selesai |
@@ -297,7 +298,7 @@ Kontrak lengkap dan katalog status error ada di `docs/api/API_CONTRACT.md`.
 | POST | `/sync` | Push FCM sync penuh ke semua HP | admin | Selesai |
 | GET/POST/PUT/DELETE | `/participants`, `/participants/import(/preview\|/confirm)`, `/participants/bulk-delete`, `/participants/template`, `/participants/{id}/qr/regenerate`, `/participants/{id}/face-history` | Data peserta | admin | Selesai |
 | PUT | `/participants/{id}/password` | Reset password ke NIS/NIP atau atur password baru (opsional keluarkan semua sesi) | admin | Selesai |
-| GET | `/participants/{id}/leave-history` | Riwayat izin satu peserta (JSON) | admin | Belum di-commit |
+| GET | `/participants/{id}/leave-history` | Riwayat izin satu peserta (JSON) | admin | Selesai (2 Nov 2026) |
 | POST/DELETE | `/api/participants/{id}/face` | Daftar/hapus wajah oleh admin | admin | Selesai |
 | POST | `/admin/participants/{id}/face/approve\|reject` | Persetujuan wajah | admin | Selesai |
 | POST | `/admin/photo-change-requests/{id}/approve\|reject` | Persetujuan foto | admin | Selesai |
@@ -427,7 +428,7 @@ Bottom navigation: Beranda, Riwayat, Izin, Profil.
 
 - 31 file unit test di `app/src/test`: repository, ViewModel, interceptor, serialisasi DTO, anti fake GPS, logika wajah.
 - Instrumented test di `app/src/androidTest`: `FaceParityInstrumentedTest`, `LoginScreenTest`.
-- `implementation_plan.md` §6a mencatat 116 unit test lulus pada 19 Okt 2026. **Tidak dijalankan ulang** dalam analisis ini.
+- `docs/implementation/face-fcm-integration-plan.md` §6a mencatat 116 unit test lulus pada 19 Okt 2026. **Tidak dijalankan ulang** dalam analisis ini.
 
 ---
 
@@ -442,8 +443,8 @@ php artisan db:seed --class=SettingSeeder   # data kepala sekolah untuk laporan
 php artisan storage:link
 composer dev                                # serve + queue:listen + pail + vite sekaligus
 php artisan schedule:work                   # scheduler lokal (alpha/lupa absen, prune media, prune token)
-php artisan test                            # 321 test, 2.380 assertion (lulus, 2 Nov 2026, termasuk perubahan belum di-commit)
-vendor/bin/pint --test                      # cek format (dijalankan juga di CI); di Windows hasilnya terganggu CRLF, lihat §9.3 no. 13
+php artisan test                            # 328 test (lulus, 2 Nov 2026)
+vendor/bin/pint --test                      # cek format (dijalankan juga di CI); di Windows hasilnya terganggu CRLF, lihat §9.3
 ```
 
 Variabel environment yang dibutuhkan (nama saja; isi dari `.env.example` dan `config/*.php`):
@@ -457,7 +458,7 @@ Variabel environment yang dibutuhkan (nama saja; isi dari `.env.example` dan `co
 - **Domain presensi:** `FACE_THRESHOLD`, `FACE_ENFORCE_DIMENSIONS`, `FACE_MATCH_MAX_FAILURES`, `ATTENDANCE_LATE_TOLERANCE_MINUTES`, `ATTENDANCE_MEDIA_RETENTION_DAYS`, `DEVICE_LOCK_REQUIRE_ID`, `ANDROID_MIN_VERSION_CODE`, `ANDROID_MIN_VERSION_LAG`, `SANCTUM_EXPIRATION`.
 - **Anti fake GPS:** `ANTI_FAKE_GPS_BLOCK_FAKE_APPS`, `ANTI_FAKE_GPS_BLOCK_ROOT`, `ANTI_FAKE_GPS_BLOCK_HOOKING`, `ANTI_FAKE_GPS_REQUIRE_SIGNALS`.
 
-`FACE_MATCH_MAX_FAILURES`, `SANCTUM_EXPIRATION`, dan keempat `ANTI_FAKE_GPS_*` dibaca di `config/` tetapi **tidak tercantum** di `.env.example` (dicek ulang 2 Nov 2026). `SANCTUM_EXPIRATION` kini bawaannya kosong = token tidak kedaluwarsa. `ANDROID_UPDATE_URL` sudah tidak dipakai (diganti `/aplikasi/unduh`).
+Semua variabel di atas kini tercantum di `.env.example` beserta penjelasannya (2 Nov 2026). `SANCTUM_EXPIRATION` dibiarkan sebagai komentar: tidak diisi = token tidak kedaluwarsa. `ANDROID_UPDATE_URL` sudah tidak dipakai (diganti `/aplikasi/unduh`).
 
 Catatan:
 
@@ -496,18 +497,20 @@ Catatan:
 
 ## 9. Progres dan Yang Belum Selesai
 
+Bagian ini hanya berisi yang **masih terbuka**. Bug yang sudah diperbaiki ada di §13.
+
 ### 9.1 Perkiraan kelengkapan
 
 | Modul | Perkiraan | Alasan |
 |---|---|---|
-| Backend / API | **±93%** | Semua alur inti ada dan 321 test lulus. Bug data 26 Okt sudah diperbaiki dan ter-deploy. Celah arsip workcode terjadwal dan format Pint diperbaiki 2 Nov (belum di-commit). Sisa: fase 4–6 rencana (konsolidasi service, aktivasi atomik, queue FCM, backup) belum dimulai |
-| Web admin & peserta (frontend) | **±90%** | Redesign selesai (komponen `@/ui`, mode gelap). Halaman besar sudah dipecah (Report 387 baris, Workcodes 344 + `Components/Workcodes/*`). Sisa: riwayat izin peserta belum di-commit, belum ada manajemen admin, ekspor PDF, log audit. Tidak ada test frontend maupun ESLint |
-| Aplikasi Android | **±87%** | Fitur peserta lengkap, v1.2.2 (versionCode 5) dirilis lewat unduhan server. Uji end-to-end beberapa skenario belum dilakukan (`implementation_plan.md` §6b–§7). Kunci perangkat dan sinyal anti fake GPS wajib masih dimatikan sambil menunggu semua peserta update |
-| Operasional & keamanan | **±62%** | CI, gitleaks, header keamanan, disk privat, distribusi APK otomatis sudah ada. Masih terbuka: rotasi kredensial lama di history, CSP belum enforce, backup terenkripsi & uji restore, heartbeat scheduler, branch protection. Token API kini tanpa masa berlaku, dan unduhan APK tanpa throttle (§10.1) |
+| Backend / API | **±93%** | Semua alur inti ada dan 328 test lulus. Tidak ada bug terbuka yang diketahui (§9.3). Fase 4–6 rencana (konsolidasi service, aktivasi atomik, queue FCM, backup) belum dimulai |
+| Web admin & peserta (frontend) | **±90%** | Redesign selesai (komponen `@/ui`, mode gelap). Halaman besar sudah dipecah. Belum ada manajemen admin, ekspor PDF, log audit. Tidak ada test frontend maupun ESLint |
+| Aplikasi Android | **±87%** | Fitur peserta lengkap, v1.2.2 (versionCode 5) dirilis lewat unduhan server. Uji end-to-end beberapa skenario belum dilakukan (`docs/implementation/face-fcm-integration-plan.md` §6b–§7). Kunci perangkat dan sinyal anti fake GPS diwajibkan sejak 2 Nov 2026 (cek `.env` produksi, §10.1) |
+| Operasional & keamanan | **±64%** | CI, gitleaks, header keamanan, disk privat, distribusi APK otomatis + throttle unduhan sudah ada. Masih terbuka: rotasi kredensial lama di history, CSP belum enforce, backup terenkripsi & uji restore, heartbeat scheduler, branch protection, kebijakan masa berlaku token API (§10.1) |
 
 ### 9.2 TODO/FIXME di kode
 
-Pencarian `TODO|FIXME|HACK|XXX` di `app/`, `routes/`, `resources/`, `config/`, `database/`, `tests/`, `deploy/`, `scripts/` (web) dan `app/src/**/*.kt` (Android): **tidak ada temuan**. Pekerjaan tertunda dicatat di dokumen, bukan di kode:
+Pencarian `TODO|FIXME|HACK|XXX` di `app/`, `routes/`, `resources/js`, `config/`, `database/`, `tests/`, `deploy/` (web, dicek ulang 2 Nov 2026) dan `app/src/**/*.kt` (Android): **tidak ada temuan**. Pekerjaan tertunda dicatat di dokumen, bukan di kode:
 
 - `docs/implementation/phase-0-emergency.md:107,111-112`:
   - password SSH/DB lama tidak dirotasi;
@@ -524,106 +527,33 @@ Pencarian `TODO|FIXME|HACK|XXX` di `app/`, `routes/`, `resources/`, `config/`, `
   - pre-commit;
   - migrasi Tailwind 3 → 4.
 - `docs/implementation/phase-4…6`: seluruh Definition of Done masih terbuka (0/5, 0/6, 0/5).
-- `implementation_plan.md:337-…` (DoD end-to-end): 2 item belum dicentang.
+- `docs/implementation/face-fcm-integration-plan.md` (DoD end-to-end): 2 item belum dicentang.
 
-### 9.3 Bug / masalah yang terlihat di kode
+### 9.3 Bug / masalah terbuka
 
-1. ~~**KPI dashboard admin salah hitung**~~ **Diperbaiki 26 Okt 2026.**
-   - Dulu: "Sudah Hadir" menghitung baris presensi apa pun (termasuk `alpha`/`lupa_absen`/`izin`) di semua tanggal, dan "Total" = semua peserta.
-   - Sekarang `AdminDashboardStats::presence()` menghitung peserta berstatus `hadir` (harian: `tanggal` hari ini; kegiatan: sekali per kegiatan) di antara peserta yang berhak (peserta terpilih bila workcode membatasi).
-   - Dipakai di dashboard, halaman scanner, dan respons `POST /scan`, yang punya salinan hitungan keliru yang sama.
-   - Test: `tests/Feature/AdminDashboardStatsTest.php`.
-2. ~~**Statistik halaman depan**~~ **Diperbaiki 26 Okt 2026.**
-   - Dulu: route mengirim prop `initialStats`, sedangkan `Welcome.jsx` membaca `stats`, sehingga kartu selalu 0/0/0. Hitungannya pun sepanjang waktu.
-   - Sekarang: prop `stats` dari `AdminDashboardStats::presence(Workcode::getActive())`.
-   - Daftar "aktivitas terbaru" hanya memuat presensi `hadir` (sebelumnya baris `lupa_absen`/`alpha` buatan scheduler ikut tampil), diurutkan dan ditampilkan dengan `waktu_hadir`.
-3. ~~**`attendance:calculate-alpha` mengabaikan pemilihan peserta dan hari libur**~~ **Diperbaiki 26 Okt 2026.**
-   - Dulu: memakai `Participant::all()`, tidak mengecek libur nasional, memakai `is_active` saja, dan menjalankan satu query per peserta.
-   - Sekarang:
-     - hanya peserta dari `Workcode::eligibleParticipants()` (peserta terpilih, atau semua bila tidak dibatasi); method ini juga dipakai `AdminDashboardStats::presence()`;
-     - hari libur nasional dilewati lewat `App\Support\Holidays` (sumber yang sama dengan `GET /api/holidays`, kini dipakai bersama `HolidayController`);
-     - workcode disaring dengan `isEffectivelyActive()`;
-     - catatan hari ini dimuat dalam satu query per workcode, dicocokkan lewat kolom `tanggal`.
-   - Pencocokan lewat `tanggal` juga menutup crash: baris hari ini yang `created_at`-nya kemarin dulu tidak ditemukan, lalu command mencoba membuat baris baru dan melanggar unique key.
-   - Test: `tests/Feature/CalculateAttendanceStatusTest.php`.
-   - `tests/TestCase.php` kini memasang `Http::preventStrayRequests()`, sehingga test tidak pernah memanggil Google.
-   - Sabtu/Minggu tetap diatur lewat `hari_aktif` workcode.
-4. ~~**`workcode:auto-activate` tidak dijadwalkan**~~ **Diperbaiki 26 Okt 2026.**
-   - Command kini terjadwal tiap menit di `routes/console.php` (`Schedule::call`, `withoutOverlapping`), sesuai `README.md:249`.
-   - Sebelum dijadwalkan, command ditulis ulang. Versi lama **menonaktifkan semua workcode aktif lain**, termasuk workcode harian, setiap kali kegiatan terjadwal dimulai, dan hanya mengaktifkan satu kegiatan. Ini bertentangan dengan dukungan beberapa workcode aktif bersamaan.
-   - Sekarang hanya kegiatan terjadwal yang disentuh: diaktifkan di dalam jam aktifnya dan dinonaktifkan di luarnya, dengan satu push FCM per perubahan.
-   - Test: `WorkcodeScheduleTest` (harian dan kegiatan tanpa jadwal tetap aktif, kegiatan bertumpuk, idempoten, jadwal tiap menit) dan `ScheduleWithoutProcOpenTest`.
-5. ~~**Libur nasional di-cache kosong 7 hari bila Google gagal**~~ **Diperbaiki 26 Okt 2026** (`app/Support/Holidays.php`).
-   - Hasil yang berhasil disimpan 7 hari, plus salinan "terakhir yang valid" tanpa kedaluwarsa.
-   - Bila Google gagal, atau mengembalikan kalender kosong, salinan itu dipakai dan pengambilan dicoba ulang setelah 1 jam.
-   - Bila belum pernah berhasil sama sekali, dianggap tidak ada libur.
-   - Test: `tests/Feature/HolidaysTest.php`.
-6. ~~**Label ekspor menyesatkan**~~ **Diperbaiki 26 Okt 2026.**
-   - `AttendanceController::exportAttendance` kini menghasilkan `.xlsx` sungguhan (PhpSpreadsheet), dengan kolom dan baris yang sama seperti CSV lama.
-   - NIS/NIP ditulis sebagai teks, sehingga NIP 18 digit tidak menjadi notasi ilmiah.
-   - Nama file dibersihkan dari karakter seperti `/`.
-   - Test: `tests/Feature/AttendanceExportTest.php`.
-   - Catatan: ekspor kegiatan masih mencantumkan **semua** peserta (yang tanpa presensi tertulis `alpha`), tidak hanya peserta terpilih. Ini perilaku lama dan belum diubah.
-7. ~~**Penanda hari tidak konsisten**~~ **Diperbaiki 26 Okt 2026.**
-   - Dulu: hari presensi ditentukan dari `created_at`, padahal unique key memakai kolom `tanggal`. Keduanya berbeda bila admin menambah presensi manual untuk tanggal lain, atau mengubah tanggal lewat `manualUpdate`.
-   - Sekarang memakai `tanggal`:
-     - submit Android (`Api/V1/AttendanceController::submit`);
-     - status tombol Android (`AttendanceStateService`);
-     - scanner (`AttendanceController::scan`);
-     - kunci perangkat per hari dan cek sudah presensi (`AttendanceValidationService::deviceUsedByOther/checkAlreadyAttended`);
-     - rekap individu (`getIndividualRecap`);
-     - riwayat API (`AttendanceHistoryController`, `AttendanceDailyHistoryController`).
-   - Respons `GET /api/v1/attendance-history` kini memuat `tanggal` (penambahan; aplikasi lama tetap jalan). Android memakainya untuk tanggal riwayat (`HistoryRepository`), dengan `waktu_hadir`/`created_at` sebagai cadangan.
-   - Ikut diperbaiki: `jadwal_hari_ini` di `GET /api/v1/attendance-history/daily` selalu `null`, karena `jadwal_per_hari` dicari lewat field `hari` yang tidak ada. Sekarang memakai `Workcode::scheduleFor()`.
-   - Test: `tests/Feature/AttendanceDateConsistencyTest.php`, dua test baru di `AttendanceUiStateTest`, dan `HistoryRepositoryTest` (Android).
-   - Penggunaan `created_at` lain (log fake GPS, urutan daftar, notifikasi, retensi media) memang tentang waktu pembuatan baris dan tidak diubah.
-   - Diperiksa 26 Okt 2026 di database **lokal**: 485 baris presensi, 0 yang `DATE(created_at) <> tanggal`. Database produksi tidak diperiksa.
-   - Untuk mengecek produksi (hanya membaca): `SELECT attendance_method, status, COUNT(*) FROM attendances WHERE DATE(created_at) <> tanggal GROUP BY attendance_method, status;`
-   - `calculate-alpha` sudah memakai `tanggal` (no. 3). Yang masih memakai `created_at`: `Api/V1/AttendanceController::submit`, `AttendanceController::scan`, dan `AttendanceValidationService::deviceUsedByOther/checkAlreadyAttended`.
-   - Terbukti saat menulis test (26 Okt 2026): scanner admin (`AttendanceController::scan`, `whereDate('created_at', …)`) memperlakukan scan hari ini sebagai **presensi pulang pada baris kemarin** bila baris kemarin punya `created_at` hari ini. Ini terjadi misalnya bila admin menambah presensi manual untuk tanggal kemarin lewat `manualStore`.
-8. ~~**Persetujuan izin tanpa transaksi**~~ **Diperbaiki 26 Okt 2026.**
-   - `AdminLeaveController::approve/reject` kini memakai `DB::transaction` dan mengecek ulang status dengan `lockForUpdate` (klik ganda atau dua admin tidak memproses dua kali).
-   - Push FCM tetap setelah commit.
-   - Test: `LeaveApprovalTest` (rollback bila gagal di tengah rentang, pengajuan yang sudah diproses ditolak).
-9. ~~**Teks usang di kode/UI**~~ **Diperbaiki 26 Okt 2026.**
-   - Komentar kunci perangkat di `config/attendance.php` kini menjelaskan pindah HP lewat Reset kunci di halaman Perangkat.
-   - Label menu "Presensi QR & wajah" sudah hilang sendiri lewat redesign `adminMenu.jsx`.
-   - `implementation_plan.md` §7 diberi catatan bahwa `/api/face/match` web sudah dihapus.
-10. ~~**Android:** `local.properties.example` memakai kunci `API_BASE_URL` yang tidak dibaca `build.gradle.kts`~~ **Diperbaiki 26 Okt 2026.** Contoh file kini memuat `API_DEVICE_BASE_URL`, `STAGING_API_BASE_URL`, `MAPS_API_KEY`, dan `RELEASE_SIGNING_PROPERTIES`.
-11. ~~**Value binder PhpSpreadsheet bocor dari impor peserta**~~ **Diperbaiki 26 Okt 2026.**
-   - `ParticipantController::importPreview/import` memasang `StringValueBinder` global (static) dan tidak mengembalikannya. Spreadsheet lain yang ditulis di proses yang sama (ekspor laporan, queue worker, test) ikut menyimpan angka sebagai teks.
-   - Gejalanya: `AttendanceExportTest` gagal sekitar 4 dari 6 kali bila urutan test diacak.
-   - Sekarang pembacaan file lewat `loadSpreadsheetAsStrings()`, yang mengembalikan binder di `finally`. Ekspor juga menulis tipe sel secara eksplisit.
-   - Di produksi (PHP-FPM, satu request per proses) kebocoran ini tidak terjadi antar-request.
-12. ~~**Arsip tidak berlaku untuk kegiatan terjadwal**~~ **Diperbaiki 2 Nov 2026** (belum di-commit).
-   - Dulu: `WorkcodeController::archive` hanya menolak workcode yang **sedang** aktif, jadi kegiatan terjadwal yang belum mulai bisa diarsipkan. `isEffectivelyActive()` tidak mengecek `archived_at`. Saat jamnya tiba, `workcode:auto-activate` menyalakannya dan mengirim push FCM, presensi otomatis stakeholder dibuat, scan dan self check-in diterima, dan halaman Workcodes menampilkannya aktif.
-   - Sekarang:
-     - `Workcode::isEffectivelyActive()` mengembalikan `false` bila `archived_at` terisi. Validasi presensi (`validateWorkcodeActive`), `CalculateAttendanceStatus`, dan halaman Workcodes ikut benar;
-     - `AutoActivateWorkcode` (kedua query) dan `SelfCheckInController::scheduledToday()` menyaring `whereNull('archived_at')`;
-     - `Workcode::syncAutoAttendance()` tidak berbuat apa-apa untuk arsip: tidak menambah catatan otomatis, dan catatan lama tidak dihapus (data arsip tetap utuh, juga saat arsip diedit).
-   - Test: `WorkcodeArchiveTest::test_archived_scheduled_activity_stays_closed_when_its_time_comes`. Terbukti gagal tanpa perbaikan (`is_active` menjadi `true`) dan lulus dengan perbaikan.
-13. ~~**Pint gagal pada HEAD**~~ **Diperbaiki 2 Nov 2026** (belum di-commit).
-   - Dulu gagal pada salinan bersih `git archive HEAD` (jadi bukan efek CRLF di Windows): `Api/V1/FaceEnrollmentController.php` (urutan `use`), `tests/Feature/Api/MobileAttendanceAssignmentAndTimeTest.php` dan `PhaseEAttendanceTest.php` (baris kosong antar-method, newline di akhir file). Langkah `vendor/bin/pint --test` di CI kemungkinan gagal karena ini.
-   - Sekarang: `vendor/bin/pint` dijalankan pada ketiga file (perubahan format saja, 4 baris). Cek ulang pada salinan bersih working tree: **passed**.
-   - Catatan lokal: `vendor/bin/pint --test` langsung di working tree masih melaporkan banyak file karena `core.autocrlf=true` membuat file ber-CRLF. Isi repo (index) tetap LF, jadi CI tidak terpengaruh. Untuk cek lokal yang akurat, jalankan Pint pada hasil `git archive`.
-14. **Perubahan belum di-commit** (2 Nov 2026): riwayat izin per peserta (§4), perbaikan no. 12–13, dan hasil `npm run build` baru di `public/build/` (aset lama terhapus, aset baru belum dilacak). Karena `public/build` di-commit, aset baru wajib ikut di-commit bersama kodenya agar produksi tidak memuat aset yang hilang.
+Tidak ada bug terbuka yang diketahui per 2 Nov 2026. Catatan perilaku yang belum diputuskan:
+
+- **Ekspor kegiatan mencantumkan semua peserta.** Peserta tanpa presensi tertulis `alpha`, walaupun workcode membatasi peserta (`AttendanceController::exportAttendance`). Ini perilaku lama.
+- **Data produksi untuk perbaikan kolom `tanggal` belum dicek** (§13 no. 7). Database lokal bersih (0 dari 485 baris). Untuk mengecek produksi (hanya membaca): `SELECT attendance_method, status, COUNT(*) FROM attendances WHERE DATE(created_at) <> tanggal GROUP BY attendance_method, status;`
+- **Status CI GitHub belum diperiksa** setelah perbaikan Pint (`gh` tidak terpasang di mesin ini).
+- **Pint lokal di Windows:** `vendor/bin/pint --test` di working tree melaporkan banyak file karena `core.autocrlf=true` membuat file ber-CRLF. Isi repo tetap LF, jadi CI tidak terpengaruh. Untuk cek lokal yang akurat, jalankan Pint pada hasil `git archive`.
 
 ### 9.4 Fitur direncanakan tetapi belum diimplementasikan
 
 Sumber: `docs/implementation/phase-6-maintainability.md:68-78`, phase-4, dan phase-5.
 
 - Log audit perubahan presensi manual dan persetujuan.
-- Soft delete / arsip peserta.
+- Soft delete / arsip **peserta** (arsip workcode sudah ada).
 - Ekspor PDF laporan.
 - 2FA admin.
+- Manajemen akun admin di UI (sekarang hanya `php artisan user:make-admin`).
+- Hari libur nasional di laporan (laporan masih hanya menandai Sabtu/Minggu).
 - Paginasi/indeks laporan besar (index `(workcode_id, tanggal)`).
 - Dashboard statistik kehadiran per peserta.
 - `RecordAttendanceAction` tunggal dan enum `WorkcodeCategory` (Fase 4).
 - Aktivasi workcode atomik + unique guard, FCM lewat queue dengan retry, heartbeat scheduler, backup harian terenkripsi + uji restore (Fase 5).
 - PHPStan/ESLint di CI, controller ≤150 baris dengan FormRequest + Policy + Resource (Fase 6).
 - Enkripsi `face_descriptor` di database (Fase 1.3, ditunda).
-- Mewajibkan `device_id` dan sinyal anti fake GPS setelah APK baru tersebar (`DEVICE_LOCK_REQUIRE_ID`, `ANTI_FAKE_GPS_REQUIRE_SIGNALS`).
-- Tidak ada lagi item "Soft delete / arsip" untuk **workcode**: sudah ada sebagai arsip (29 Okt). Arsip **peserta** masih belum.
 
 Item "notifikasi hasil izin ke peserta" di backlog phase-6 **sudah ada** di kode (`AdminLeaveController::notifyParticipant` → FCM).
 
@@ -635,104 +565,85 @@ Item "notifikasi hasil izin ke peserta" di backlog phase-6 **sudah ada** di kode
 
 | Risiko | Lokasi | Keterangan |
 |---|---|---|
-| ~~Admin ditentukan juga oleh email tetap~~ **Diperbaiki 26 Okt 2026** | `app/Models/User.php:78-82`, migrasi `2026_10_26_000000_promote_seeded_admin_role.php`, `tests/Feature/AdminRoleTest.php` | Dulu `isAdmin()` juga bernilai true bila `email === 'admin@smaba.sch.id'`, padahal peserta bisa mengubah email lewat `/profile`. Sekarang hanya `role === 'admin'`. Migrasi menaikkan role akun seeder (username `admin` + email itu) agar tidak kehilangan akses |
-| Password awal peserta = NIS/NIP | `ParticipantController.php:188` | Mudah ditebak, tidak ada paksaan ganti password. Mitigasi sebagian: kunci perangkat (Android) dan face match |
+| Password awal peserta = NIS/NIP | `ParticipantController::syncParticipantUser` | **Dimitigasi 2 Nov 2026.** Website: selama password masih NIS/NIP, peserta hanya bisa membuka Profil untuk menggantinya (`EnsurePasswordChanged`), sehingga QR pribadi dan pengajuan izin tidak bisa dipakai orang yang tahu NIP-nya. Android: dilindungi kunci perangkat + face match, tanpa paksaan ganti password. Sisa: akun yang belum pernah login di HP mana pun bisa diambil alih lewat Android oleh orang yang tahu NIP-nya (login pertama mengunci akun ke HP orang itu); admin bisa mereset kunci di halaman Perangkat |
 | Self check-in tanpa verifikasi identitas | `SelfCheckInController::submitForm` | Siapa pun yang memegang Master QR bisa memilih peserta lain dan menandatangani. `device_hash` dibentuk dari `device_id` + User-Agent kiriman klien (`AttendanceValidationService::generateDeviceHash`), sehingga mudah diganti |
 | Semua proxy dipercaya | `bootstrap/app.php:45` | `trustProxies('*')`: `X-Forwarded-For` bisa dipalsukan bila server asal diakses langsung, sehingga batas per-IP bisa diakali (diakui di komentar) |
 | CSP masih Report-Only, dengan `unsafe-inline`/`unsafe-eval` | `app/Http/Middleware/SecurityHeaders.php` | Belum memblokir XSS |
-| Kredensial lama di history Git | `docs/implementation/phase-0-emergency.md:107,111` | Password SSH lama tidak dirotasi; password admin bawaan yang ada di history wajib diganti |
-| API key Google Maps di repo Android | `presensi_smaba_mobile/app/build.gradle.kts` (`mapsApiKey`), `AndroidManifest.xml` (`${mapsApiKey}`) | **Sebagian diperbaiki 26 Okt 2026.** Key tidak lagi ditulis di manifest; dibaca dari `MAPS_API_KEY` di `local.properties` atau Gradle property, dan build rilis gagal bila kosong. Key lama **masih ada di history Git** dan tetap terbaca di dalam APK (memang sifat key Maps Android), jadi key itu tetap **wajib dibatasi** ke package name + SHA-1 di Google Cloud Console, atau diganti. `app/google-services.json` juga dilacak Git |
+| Kredensial lama di history Git | `docs/implementation/phase-0-emergency.md:107,111` | Password SSH lama tidak dirotasi; password admin bawaan yang ada di history wajib diganti. **Perlu tindakan manual** |
+| API key Google Maps Android | `presensi_smaba_mobile/app/build.gradle.kts` (`mapsApiKey`) | Key kini dibaca dari `MAPS_API_KEY` (`local.properties` / Gradle property). Key lama **masih ada di history Git** dan selalu terbaca di dalam APK, jadi **wajib dibatasi** ke package name + SHA-1 di Google Cloud Console, atau diganti. **Perlu tindakan manual**. `app/google-services.json` juga dilacak Git |
 | Data biometrik tidak dienkripsi saat disimpan | `participants.face_descriptor` | Ditunda dengan sengaja (phase-1) |
-| Kunci perangkat & sinyal anti fake GPS masih opsional | `config/attendance.php` | APK lama/modifikasi tanpa `device_id`/sinyal masih diterima |
-| ~~`security-crypto` versi alpha~~ **Dihapus 26 Okt 2026** | Android `app/build.gradle.kts`, `libs.versions.toml` | Library ini tidak pernah dipakai di kode. `EncryptedTokenStorage` dan `EncryptedDeviceStorage` mengenkripsi sendiri dengan AndroidKeyStore + AES-GCM + DataStore |
-| File `.env`, `.env.backup`, `.env.production` ada di disk lokal | root repo | Sudah diabaikan `.gitignore` (dicek dengan `git check-ignore`). Jangan disalin ke docroot |
+| Kunci perangkat & sinyal anti fake GPS: pastikan aktif di produksi | `.env` produksi, `config/attendance.php` | Bawaan kode sejak 2 Nov 2026 = wajib. Tetapi bila `.env` produksi masih berisi `DEVICE_LOCK_REQUIRE_ID=false` atau `ANTI_FAKE_GPS_REQUIRE_SIGNALS=false` (disalin dari `.env.example` lama), nilai itu yang berlaku. **Perlu dicek manual**, lalu `php artisan config:cache` |
+| Token API Android tanpa masa berlaku (sejak 29 Okt 2026) | `config/sanctum.php` | Disengaja agar peserta tidak logout setelah update APK. Token yang bocor berlaku sampai logout, ganti perangkat, atau admin melepas perangkat. Jadwal `sanctum:prune-expired` praktis tidak menghapus apa pun. **Perlu keputusan**: tetap begini, atau isi `SANCTUM_EXPIRATION` (contoh 180 hari ada di `.env.example`) |
+| File `.env`, `.env.backup`, `.env.production` ada di disk lokal | root repo | Sudah diabaikan `.gitignore`. Jangan disalin ke docroot |
 | `/sync/signal` tanpa throttle | `routes/signal.php` | Disengaja (hanya angka versi, cache file), tetapi tetap terbuka publik |
-| Token API Android tanpa masa berlaku (sejak 29 Okt 2026) | `config/sanctum.php` | Disengaja agar peserta tidak logout setelah update APK. Token yang bocor berlaku sampai logout, ganti perangkat, atau admin melepas perangkat. Jadwal `sanctum:prune-expired` di `routes/console.php` praktis tidak menghapus apa pun lagi. Pertimbangkan masa berlaku panjang (mis. 180 hari) atau pencabutan token yang lama tidak dipakai |
-| Unduhan APK publik tanpa throttle | `routes/web.php` (`/aplikasi/unduh`), `AppReleaseController` | File ±50 MB di shared hosting. Permintaan berulang bisa menghabiskan bandwidth dan menaikkan `download_count`. Tambah `throttle` per IP (mis. 10/menit) |
 
 Sisi yang sudah baik:
 
 - Validasi input di semua endpoint API memakai `Validator`/`$request->validate`.
-- Throttle untuk login & endpoint publik.
+- Throttle untuk login, endpoint publik, dan unduhan APK (30/menit per IP).
 - Idempotency presensi.
 - File pribadi di disk privat dengan URL bertanda tangan.
 - Redaksi log (`RedactSensitiveData`), dan CI menolak log descriptor/jarak serta penyimpanan ke disk publik.
-- Token Sanctum dicabut saat logout, ganti perangkat, dan reset perangkat oleh admin (tidak lagi kedaluwarsa otomatis, lihat tabel di atas).
+- Admin hanya ditentukan oleh `role` (bukan email).
+- Token Sanctum dicabut saat logout, ganti perangkat, dan reset perangkat oleh admin.
 - APK yang diterbitkan diverifikasi header ZIP + SHA-256 dari PC sebelum didaftarkan (`apk:publish`).
 
 ### 10.2 Duplikasi kode
 
-- `storeIdempotencyAndReturn()` ditulis tiga kali: `Api/V1/AttendanceController.php:417`, `Api/V1/LeaveRequestController.php:236`, `Api/V1/PhotoController.php:370`.
+- `storeIdempotencyAndReturn()` ditulis tiga kali: `Api/V1/AttendanceController.php`, `Api/V1/LeaveRequestController.php`, `Api/V1/PhotoController.php`.
 - Pola error "exception berisi JSON" (`throw new \Exception(json_encode([...]), code)` lalu `json_decode($e->getMessage())`) berulang di `AttendanceValidationService`, `Api/V1/AttendanceController`, `AttendanceController::scan`, dan `SelfCheckInController`.
 - Pemeriksaan role peserta (`tokenCan('role:participant') && role === 'participant' && participant_id`) diulang per controller API. Belum ada Policy (`app/Policies/` tidak ada).
 - Perhitungan jadwal hari ini untuk dashboard admin ditulis inline di closure `routes/web.php` (`jadwal` di `boards`), sebagian menduplikasi `ParticipantToday::schedule`.
-- Pencarian workcode aktif tersebar: `getActiveWorkcodes()` (menyaring arsip), `isEffectivelyActive()` (tidak), query langsung di `AutoActivateWorkcode`, `CalculateAttendanceStatus`, `ParticipantToday::dailyWorkcode`, `SelfCheckInController::scheduledToday`. Inilah penyebab celah arsip (§9.3 no. 12, kini ditambal di tiap tempat). Workcode baru yang perlu menyaring arsip harus diingat manual sampai ada satu scope bersama.
-- ~~Label `tipe_izin`/`jenis_izin` hanya di `AdminLeaveController`~~ dipindah ke `LeaveRequest::tipeIzinLabel/jenisIzinLabel` (belum di-commit).
-- ~~Android: `feature/attendance/Location*.kt` menduplikasi `core/location/`~~ **Dihapus 26 Okt 2026**, bersama `FakeLocationProvider.kt` di test yang juga tidak dipakai. Semua pemakai memakai `core.location`.
+- Pencarian workcode aktif tersebar: `getActiveWorkcodes()`, `isEffectivelyActive()`, query langsung di `AutoActivateWorkcode`, `CalculateAttendanceStatus`, `ParticipantToday::dailyWorkcode`, `SelfCheckInController::scheduledToday`. Penyaringan arsip harus diingat manual di tiap query baru sampai ada satu scope bersama (§13 no. 12).
 
 ### 10.3 Kode mati / artefak usang
 
-- Endpoint API tanpa pemakai di klien yang ada: `GET /api/v1/attendance-history/daily`, `POST /api/v1/attendances/leave`, dan tiga route `/api/v1/admin/photo-change-requests*`. Semua masih diuji di `tests/`.
-- Android:
-  - ~~duplikat lokasi di `feature/attendance/`~~ (dihapus 26 Okt 2026);
-  - `scratch_test.kt` di root (masih ada, 2 Nov 2026).
-  - ~~permission `FOREGROUND_SERVICE` tidak dipakai~~: ternyata dipakai (§7.3).
-- Web:
-  - `start_server.bat` kosong;
-  - `scratch/` (termasuk `Index.jsx.bak`), `deploy/.htaccess.bak`;
-  - dokumen analisis lama di root (`business_logic_audit.md`, `face_recognition_analysis.md`);
-  - dua `implementation_plan.md` berbeda (root vs `docs/implementation/`);
-  - artisan `inspire` bawaan;
-  - kolom `workcodes.deskripsi` tidak lagi diisi dari form, tetapi masih ada di DB, `$fillable`, dan respons API riwayat (`AttendanceHistoryResource`, `AttendanceDailyHistoryController`);
-  - `.agent/skills/impeccable/` (±13 ribu baris skrip alat desain) ikut di-commit di `5808896`; bukan bagian aplikasi.
-  (Semua artefak di atas dicek ulang 2 Nov 2026 dan masih ada.)
-- ~~Halaman `Auth/Login.jsx` (kode mati)~~ **Dihapus 26 Okt 2026**, bersama `AuthenticatedSessionController::create()` yang tidak dipasang ke route mana pun. Login lewat `Components/LoginModal.jsx` di `Welcome.jsx`.
+Dibersihkan 2 Nov 2026: `start_server.bat`, `deploy/.htaccess.bak`, command `inspire`, Android `scratch_test.kt`. `scratch/` dan dua audit lama di root (`business_logic_audit.md`, `face_recognition_analysis.md`, sengaja tidak dilacak Git karena berisi rincian celah) dipindah ke `backups/` (lokal, tidak dilacak). `implementation_plan.md` di root dipindah ke `docs/implementation/face-fcm-integration-plan.md`.
+
+Yang tersisa, sengaja dibiarkan:
+
+- Endpoint API tanpa pemakai di aplikasi sekarang: `GET /api/v1/attendance-history/daily`, `POST /api/v1/attendances/leave`, dan tiga route `/api/v1/admin/photo-change-requests*`. Masih diuji di `tests/`. Jangan dihapus selama APK lama masih diizinkan (jendela 5 versi).
+- Kolom `workcodes.deskripsi`: tidak lagi diisi dari form, tetapi masih dikirim di respons API riwayat (`AttendanceHistoryResource`, `AttendanceDailyHistoryController`).
+- `deploy/.htaccess.new`, `deploy/.htaccess.staging_prepend`: dihapus setelah Fase 5.6 dipastikan (`docs/implementation/phase-5-data-ops.md:67`).
+- `.agent/skills/impeccable/` (58 file alat desain) di Git: dipakai agent desain. Menunggu keputusan apakah dikeluarkan dari Git.
 
 ### 10.4 Kekurangan test
 
-- Backend: 320 test fitur lulus (`php artisan test`, 2 Nov 2026; 26 Okt: 250). Unit test murni hanya `tests/Unit/ExampleTest.php`.
-- Celah lama sudah tertutup: `CalculateAttendanceStatusTest`, `AdminDashboardStatsTest`, `HolidaysTest`, `DashboardBoardTest` kini ada.
-- Arsip kegiatan terjadwal kini teruji (§9.3 no. 12).
-- Celah yang tersisa: throttle/abuse pada `/aplikasi/unduh`.
+- Backend: 328 test fitur lulus (`php artisan test`, 2 Nov 2026). Unit test murni hanya `tests/Unit/ExampleTest.php`.
 - Frontend React: tidak ada test sama sekali, tidak ada ESLint.
 - Tidak ada analisis statis PHP (PHPStan/Larastan).
-- Android: unit test cukup lengkap. Uji end-to-end di HP baru sebagian (lihat §9.1). Android **tidak punya CI** (dipastikan 26 Okt 2026): tidak ada folder `.github/` atau konfigurasi CI lain di repo `presensi_smaba_mobile` (remote GitHub `dioalifal0208/Presensi-App`). Build dan test hanya dijalankan manual di laptop developer.
+- Android: unit test cukup lengkap. Uji end-to-end di HP baru sebagian (lihat §9.1). Android **tidak punya CI**: tidak ada folder `.github/` di repo `presensi_smaba_mobile` (remote GitHub `dioalifal0208/Presensi-App`). Build dan test dijalankan oleh perintah `deploy` di laptop developer.
 
 ### 10.5 Kemudahan perawatan
 
 - File besar (2 Nov 2026):
-  - Frontend jauh mengecil setelah redesign: `Report/Index.jsx` 1.715 → 387 baris (cetak dipindah ke `lib/reportPrint.js`, 686), `Workcodes/Index.jsx` 995 → 344 (+ `Components/Workcodes/*`, 688), `Scanner/Index.jsx` 783 → 492. Terbesar kini `SelfCheckIn/Form.jsx` (688). Catatan: `Workcodes/Index.jsx` barisnya panjang (±19 KB), jadi tetap jangan dibaca utuh (`CLAUDE.md`).
-  - Backend justru membesar: `ParticipantController.php` 865 → **1.061**, `AttendanceController.php` 735 → 778.
-  - Android `FaceRecognitionScreen.kt` (631), `DashboardScreen.kt` (500).
-- Closure route dengan logika query di `routes/web.php` (dashboard admin dengan `boards`/jadwal, dashboard peserta). Halaman depan kini tinggal satu baris.
+  - Frontend: `SelfCheckIn/Form.jsx` (688), `lib/reportPrint.js` (686), `Scanner/Index.jsx` (492), `LeaveApprovals/Index.jsx` (471). `Workcodes/Index.jsx` hanya 344 baris tetapi barisnya panjang (±19 KB), jadi jangan dibaca utuh (`CLAUDE.md`).
+  - Backend: `ParticipantController.php` (**1.061**), `AttendanceController.php` (778).
+  - Android: `FaceRecognitionScreen.kt` (631), `DashboardScreen.kt` (500).
+- Closure route dengan logika query di `routes/web.php` (dashboard admin dengan `boards`/jadwal, dashboard peserta).
 - Literal kategori/status (`'harian'`, `'workcode'`, `'hadir'`, …) tersebar; belum ada enum PHP.
 
 ---
 
 ## 11. Rekomendasi Langkah Berikutnya
 
-Diperbarui 2 Nov 2026. Rekomendasi 26 Okt yang sudah selesai: fallback email `isAdmin()`, KPI dashboard & statistik halaman depan, `CalculateAttendanceStatus`, penyeragaman kolom `tanggal`, jadwal `workcode:auto-activate`, cache libur, transaksi persetujuan izin, `local.properties.example`, ekspor `.xlsx`, label usang, dan pemecahan halaman React besar.
+Diperbarui 2 Nov 2026. Urutan prioritas:
 
-Urutan prioritas:
-
-1. **Commit dan deploy yang sedang berjalan**: riwayat izin per peserta, perbaikan arsip terjadwal dan format Pint (§9.3 no. 12–13), beserta aset `public/build` yang baru (§9.3 no. 14).
-2. ~~Perbaiki celah arsip workcode terjadwal~~ dan ~~format Pint~~: selesai 2 Nov 2026.
-3. **Keamanan**
-   - Pastikan password admin produksi sudah diganti dan kredensial lama di history dirotasi.
-   - Pastikan API key Maps Android dibatasi ke package name + SHA-1.
-   - Tambah `throttle` di `/aplikasi/unduh`.
-   - Tentukan kebijakan token API: tetap tanpa masa berlaku, atau masa berlaku panjang + cabut token yang lama tidak dipakai.
-4. **Pengetatan Android** (unduhan server + versi minimum bergeser sudah ada, jadi peserta lama kini terdorong update)
+1. **Tindakan manual (keamanan)** — tidak bisa dikerjakan dari kode:
+   - Pastikan password admin produksi sudah diganti, dan password SSH/DB lama di history dirotasi.
+   - Batasi API key Maps Android ke package name + SHA-1 di Google Cloud Console.
+   - Cek status CI di GitHub Actions.
+   - Putuskan kebijakan masa berlaku token API (`SANCTUM_EXPIRATION`).
+2. **Pengetatan Android**
    - Selesaikan skenario uji end-to-end yang tersisa.
-   - Pantau kolom versi di halaman Perangkat. Setelah semua peserta di versi yang mengirim `device_id` + sinyal, aktifkan `DEVICE_LOCK_REQUIRE_ID` dan `ANTI_FAKE_GPS_REQUIRE_SIGNALS`.
-5. **Fase 5 (operasional)**: aktivasi workcode atomik, FCM via queue, backup terenkripsi + uji restore, heartbeat scheduler, proteksi branch `main`.
-6. **Fase 4/6 (perawatan)**
+   - Pastikan `.env` produksi tidak menimpa `DEVICE_LOCK_REQUIRE_ID` / `ANTI_FAKE_GPS_REQUIRE_SIGNALS` dengan `false` (§10.1). Setelah deploy, pantau halaman Perangkat: peserta yang dulu belum terkunci akan login ulang dan terkunci ke HP-nya.
+3. **Fase 5 (operasional)**: backup database terenkripsi + uji restore (belum ada backup otomatis di kode), heartbeat scheduler, aktivasi workcode atomik, FCM via queue, proteksi branch `main`.
+4. **Fase 4/6 (perawatan)**
    - Satukan sumber kebenaran "workcode aktif" (satu scope/method yang menyaring arsip, jadwal, dan `is_active`).
    - Satukan helper idempotency dan ganti pola exception-JSON dengan exception domain bertipe.
    - Tambah Policy/FormRequest dan enum kategori/status. Pecah `ParticipantController` (1.061 baris).
    - Tambah PHPStan + ESLint ke CI.
-   - Hapus artefak usang (§10.3), termasuk kolom `deskripsi` bila API tidak membutuhkannya lagi.
-7. **Fitur backlog** (perlu konfirmasi prioritas sekolah): log audit, arsip/soft delete **peserta**, ekspor PDF, 2FA admin, manajemen admin di UI, self check-in dengan verifikasi identitas yang lebih kuat, hari libur nasional di laporan.
+5. **Fitur backlog** (perlu konfirmasi prioritas sekolah): log audit, arsip peserta, ekspor PDF, 2FA admin, manajemen admin di UI, self check-in dengan verifikasi identitas yang lebih kuat, hari libur nasional di laporan.
 
 ---
 
@@ -777,3 +688,28 @@ Urutan prioritas:
 - DTO `@Serializable` di `core/network/dto/*Dtos.kt`. Interface Retrofit di `core/network/api/*Api.kt`. Hasil operasi dibungkus sealed class `*Result` / `AttendanceOutcome`.
 - Test unit memakai fake buatan sendiri (`FakeAuthApi`, `FakeSecureTokenStorage`, …) dan MockWebServer, bukan library mocking.
 - Konfigurasi per lingkungan lewat product flavor + `BuildConfig`. Rahasia (signing, URL, API key Maps) dibaca dari `local.properties` / Gradle property, tidak ditulis di repo (key Maps lama masih ada di history Git).
+
+---
+
+## 13. Riwayat Perbaikan Bug
+
+Ringkasan bug yang sudah diperbaiki, dengan test yang menjaganya. Rincian ada di commit masing-masing.
+
+| No. | Tanggal | Masalah lama | Perbaikan | Test |
+|---|---|---|---|---|
+| 1 | 26 Okt | KPI dashboard menghitung baris presensi apa pun di semua tanggal, terhadap semua peserta | `AdminDashboardStats::presence()`: hanya `hadir`, hari ini (harian) atau sekali per kegiatan, di antara peserta yang berhak. Dipakai dashboard, scanner, `POST /scan` | `AdminDashboardStatsTest` |
+| 2 | 26 Okt | Statistik halaman depan selalu 0 (prop salah nama) | Diperbaiki, lalu sejak 28 Okt halaman depan tidak lagi mengirim data kehadiran ke publik | — |
+| 3 | 26 Okt | `attendance:calculate-alpha` mengabaikan pemilihan peserta dan libur nasional, N+1 query, crash unique key | `eligibleParticipants()`, `Holidays`, `isEffectivelyActive()`, satu query per workcode, cocok lewat `tanggal` | `CalculateAttendanceStatusTest` |
+| 4 | 26 Okt | `workcode:auto-activate` tidak terjadwal, dan versi lamanya mematikan semua workcode lain | Terjadwal tiap menit; hanya menyentuh kegiatan terjadwal | `WorkcodeScheduleTest`, `ScheduleWithoutProcOpenTest` |
+| 5 | 26 Okt | Libur nasional di-cache kosong 7 hari bila Google gagal | Salinan "terakhir yang valid", coba ulang tiap 1 jam | `HolidaysTest` |
+| 6 | 26 Okt | Tombol "Excel" menghasilkan CSV | Ekspor `.xlsx` sungguhan, NIP sebagai teks | `AttendanceExportTest` |
+| 7 | 26 Okt | Hari presensi ditentukan dari `created_at`, unique key dari `tanggal`; scanner bisa mencatat scan hari ini sebagai pulang di baris kemarin | Semua jalur presensi, status, kunci perangkat, rekap, dan riwayat API memakai `tanggal`; API riwayat mengirim `tanggal`; `jadwal_hari_ini` di riwayat harian diperbaiki | `AttendanceDateConsistencyTest`, `AttendanceUiStateTest`, Android `HistoryRepositoryTest` |
+| 8 | 26 Okt | Persetujuan/penolakan izin tanpa transaksi | `DB::transaction` + `lockForUpdate`, push FCM setelah commit | `LeaveApprovalTest` |
+| 9 | 26 Okt | Teks usang di config/menu/rencana | Diperbarui | — |
+| 10 | 26 Okt | Android `local.properties.example` memakai kunci yang tidak dibaca | Contoh berisi kunci yang benar | — |
+| 11 | 26 Okt | Value binder PhpSpreadsheet bocor dari impor peserta (test ekspor gagal acak) | `loadSpreadsheetAsStrings()` mengembalikan binder di `finally` | `AttendanceExportTest` |
+| 12 | 2 Nov | Acara terjadwal yang diarsipkan tetap aktif saat jamnya tiba (scheduler menyalakan + push, presensi otomatis dibuat, scan diterima) | `isEffectivelyActive()` menolak arsip; `AutoActivateWorkcode` dan `SelfCheckInController::scheduledToday()` menyaring arsip; `syncAutoAttendance()` membekukan arsip | `WorkcodeArchiveTest` (terbukti gagal tanpa perbaikan) |
+| 13 | 2 Nov | Pint gagal di 3 file pada HEAD, sehingga CI format kemungkinan merah | `vendor/bin/pint` (format saja) | CI `pint --test` |
+| — | 26 Okt | `isAdmin()` juga true untuk email tetap yang bisa diubah peserta | Hanya `role === 'admin'` + migrasi menaikkan role akun seeder | `AdminRoleTest` |
+| — | 2 Nov | Unduhan APK publik tanpa throttle | `throttle:30,1` per IP | `AppReleaseTest::test_download_is_rate_limited_per_ip` |
+| — | 26 Okt | Android: dependency `security-crypto` alpha tak terpakai, duplikat `feature/attendance/Location*.kt` | Dihapus | — |

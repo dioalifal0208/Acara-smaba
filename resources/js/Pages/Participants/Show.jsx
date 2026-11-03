@@ -342,7 +342,7 @@ function PasswordSection({ participant }) {
     const handleReset = async () => {
         const confirmed = await confirm({
             title: `Kembalikan kata sandi ke ${idName}?`,
-            message: `Kata sandi akun ${participant.account.username} menjadi ${idName}-nya (${participant.nis_nip}).`,
+            message: `Kata sandi akun ${participant.account.username} menjadi ${idName}-nya (${participant.nis_nip}). Saat membuka website, peserta wajib menggantinya dulu.`,
             type: 'warning',
             confirmText: `Kembalikan ke ${idName}`,
         });

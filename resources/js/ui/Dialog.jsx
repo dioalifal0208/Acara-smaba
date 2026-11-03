@@ -10,12 +10,14 @@ const widths = { sm: 'sm:max-w-sm', md: 'sm:max-w-md', lg: 'sm:max-w-lg', xl: 's
  * pemicu. Di HP muncul dari bawah selebar layar; di layar lebar di tengah.
  *
  * `initialFocus` (ref) menentukan elemen yang difokus pertama; untuk aksi berbahaya arahkan ke Batal.
+ * `headerAside`: kontrol kecil di kanan judul (di HP turun ke bawah judul).
+ * `align="top"`: di layar lebar menempel di atas, sehingga tepi atas tidak melompat saat tinggi isi berubah.
  */
-export default function Dialog({ open, onClose, title, description, footer, size = 'md', initialFocus, dismissible = true, children }) {
+export default function Dialog({ open, onClose, title, description, headerAside, footer, size = 'md', align = 'center', initialFocus, dismissible = true, children }) {
     return (
         <HDialog open={open} onClose={dismissible ? onClose : () => {}} initialFocus={initialFocus} className="relative z-50">
             <DialogBackdrop transition className="fixed inset-0 bg-black/40 transition-opacity duration-200 data-[closed]:opacity-0 motion-reduce:transition-none" />
-            <div className="fixed inset-0 flex items-end justify-center overflow-y-auto sm:items-center sm:p-4">
+            <div className={cx('fixed inset-0 flex items-end justify-center overflow-y-auto sm:p-4', align === 'top' ? 'sm:items-start sm:pt-[4dvh]' : 'sm:items-center')}>
                 <DialogPanel
                     transition
                     className={cx(
@@ -25,11 +27,12 @@ export default function Dialog({ open, onClose, title, description, footer, size
                         widths[size],
                     )}
                 >
-                    <div className="flex items-start gap-3 px-5 pb-2 pt-4">
+                    <div className="flex flex-wrap items-start gap-x-3 gap-y-2 px-5 pb-2 pt-4 sm:flex-nowrap">
                         <div className="min-w-0 flex-1 pt-1.5">
                             <DialogTitle className="text-lg font-semibold text-ink">{title}</DialogTitle>
                             {description && <Description className="mt-1 text-sm text-ink-2">{description}</Description>}
                         </div>
+                        {headerAside && <div className="order-last w-full sm:order-none sm:w-auto sm:shrink-0 sm:pt-1">{headerAside}</div>}
                         {dismissible && <IconButton icon={X} label="Tutup" onClick={onClose} className="-mr-2" />}
                     </div>
                     <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3">{children}</div>

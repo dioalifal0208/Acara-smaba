@@ -99,6 +99,18 @@ class AppReleaseTest extends TestCase
         $this->get('/')->assertInertia(fn (Assert $page) => $page->where('apkUrl', route('apk.download')));
     }
 
+    public function test_download_is_rate_limited_per_ip(): void
+    {
+        $this->publish(4, 'baru');
+
+        for ($i = 0; $i < 30; $i++) {
+            $this->get(route('apk.download'))->assertOk();
+        }
+
+        $this->get(route('apk.download'))->assertStatus(429);
+        $this->assertSame(30, AppRelease::where('version_code', 4)->value('download_count'));
+    }
+
     public function test_minimum_version_slides_with_releases(): void
     {
         config(['attendance.android_app.min_version_lag' => 5, 'attendance.android_app.min_version_code' => 0]);

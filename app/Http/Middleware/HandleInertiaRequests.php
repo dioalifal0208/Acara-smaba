@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Http\Controllers\SyncController;
 use App\Models\Workcode;
 use App\Support\AdminNotifications;
+use App\Support\DefaultPassword;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Inertia\Middleware;
@@ -39,6 +40,8 @@ class HandleInertiaRequests extends Middleware
                 'user' => $request->user(),
             ],
             'activeWorkcode' => Workcode::getActive(),
+            // Peserta masih memakai password awal (NIS/NIP): halaman Profil meminta menggantinya.
+            'mustChangePassword' => fn () => DefaultPassword::inUse($request),
             // Pekerjaan admin yang menunggu verifikasi (lonceng notifikasi); null untuk non-admin.
             'adminNotifications' => fn () => $request->user()?->isAdmin() ? AdminNotifications::summary() : null,
             // Sinkronisasi web → Android terakhir (tombol Sync); null untuk non-admin.

@@ -224,6 +224,18 @@ export default function WorkcodeEditor({ workcode, participants, toleranceMinute
                 ? 'Presensi datang dan pulang setiap hari kerja, dengan jam yang bisa berbeda per hari.'
                 : 'Peserta presensi sekali, misalnya untuk upacara, rapat, seminar, atau ujian.'}
             size="7xl"
+            align="top"
+            headerAside={
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                    <p className="text-sm font-medium text-ink" aria-hidden="true">Jenis workcode</p>
+                    <Segmented
+                        label="Jenis workcode"
+                        value={data.kategori}
+                        onChange={(value) => setData('kategori', value)}
+                        options={[{ value: 'workcode', label: 'Workcode Acara' }, { value: 'harian', label: 'Workcode Work From Office' }]}
+                    />
+                </div>
+            }
             footer={
                 <>
                     {!editing && daily && (
@@ -239,17 +251,9 @@ export default function WorkcodeEditor({ workcode, participants, toleranceMinute
             {/* Layar lebar: form di kiri, lokasi di kanan, muat satu layar tanpa gulir. */}
             {/* autoComplete off + atribut pengelola sandi: cegah username akun terisi ke nama workcode */}
             <form id="workcode-form" onSubmit={submit} autoComplete="off" className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,32rem)]">
-                <div className="space-y-4">
-                    <div className="grid gap-4 sm:grid-cols-[auto_minmax(0,1fr)]">
-                        <div>
-                            <p className="mb-1.5 text-sm font-medium text-ink">Jenis presensi</p>
-                            <Segmented
-                                label="Jenis presensi"
-                                value={data.kategori}
-                                onChange={(value) => setData('kategori', value)}
-                                options={[{ value: 'workcode', label: 'Workcode Acara' }, { value: 'harian', label: 'Workcode Work From Office' }]}
-                            />
-                        </div>
+                {/* Jenis workcode ada di kepala popup, sehingga nama mendapat baris selebar kolom form. */}
+                <div className="flex min-w-0 flex-col gap-4">
+                    <div>
                         <Field label="Nama" required error={errors.nama_workcode}>
                             <Input
                                 value={data.nama_workcode}
@@ -264,10 +268,11 @@ export default function WorkcodeEditor({ workcode, participants, toleranceMinute
                         </Field>
                     </div>
 
-                    {/* Kedua isian ditumpuk di sel yang sama agar ukuran popup tetap saat jenis diganti (layar lebar).
+                    {/* Hanya isian jenis terpilih yang tampil, sehingga tinggi popup mengikuti isinya (Acara tidak
+                        menyisakan ruang kosong setinggi jadwal mingguan). Popup menempel di atas agar tidak melompat.
                         Yang tidak aktif dinonaktifkan: tidak bisa difokus dan tidak ikut validasi browser. */}
-                    <div className="grid">
-                        <fieldset disabled={!daily} aria-hidden={!daily || undefined} className={cx('flex min-w-0 flex-col gap-4 [grid-area:1/1]', !daily && 'max-lg:hidden lg:invisible')}>
+                    <div className="grid flex-1">
+                        <fieldset disabled={!daily} aria-hidden={!daily || undefined} className={cx('flex min-w-0 flex-col gap-4 [grid-area:1/1]', !daily && 'hidden')}>
                             <WeekSchedule
                                 activeDays={data.hari_aktif}
                                 schedule={data.jadwal_per_hari}
@@ -282,7 +287,7 @@ export default function WorkcodeEditor({ workcode, participants, toleranceMinute
                         </fieldset>
                         {/* Kegiatan: waktu + ringkasan di atas, peserta di dasar sel, sehingga sel setinggi jadwal
                             harian terisi rata tanpa ruang kosong di bawah. */}
-                        <fieldset disabled={daily} aria-hidden={daily || undefined} className={cx('flex min-w-0 flex-col gap-4 [grid-area:1/1]', daily && 'max-lg:hidden lg:invisible')}>
+                        <fieldset disabled={daily} aria-hidden={daily || undefined} className={cx('flex min-w-0 flex-col gap-4 [grid-area:1/1]', daily && 'hidden')}>
                             <legend className="sr-only">Waktu acara</legend>
                             <p className="-mb-1 text-sm font-medium text-ink" aria-hidden="true">Waktu acara</p>
                             <div className="grid gap-3 sm:grid-cols-3">
@@ -338,7 +343,7 @@ export default function WorkcodeEditor({ workcode, participants, toleranceMinute
                             <Input type="number" min={10} max={5000} inputMode="numeric" value={data.radius_meters} onChange={(e) => setData('radius_meters', parseInt(e.target.value, 10) || 10)} />
                         </Field>
                     </div>
-                    <div className="relative h-72 overflow-hidden rounded-xl border border-line bg-surface-2 lg:h-auto lg:min-h-[18rem] lg:flex-1">
+                    <div className="relative h-72 overflow-hidden rounded-xl border border-line bg-surface-2 lg:h-auto lg:min-h-[15rem] lg:flex-1">
                         {/* absolute: di lg tinggi kotak hanya dari min-h/flex-1, sehingga h-full pada peta akan bernilai 0. */}
                         <div className="absolute inset-0">
                             <MapErrorBoundary>
@@ -352,6 +357,19 @@ export default function WorkcodeEditor({ workcode, participants, toleranceMinute
                                 />
                             </MapErrorBoundary>
                         </div>
+                        {/* Mengapung di peta (kiri atas; tombol GPS di kanan atas) agar tidak menambah baris:
+                            saat mengubah workcode tombol ini hampir selalu muncul dan dulu membuat popup bergulir. */}
+                        {fallbackLocation && !(mapPosition?.lat === fallbackLocation.lat && mapPosition?.lng === fallbackLocation.lng) && (
+                            <Button
+                                size="sm"
+                                icon={History}
+                                onClick={() => choosePosition({ lat: fallbackLocation.lat, lng: fallbackLocation.lng })}
+                                title={`Pakai lokasi ${fallbackLocation.nama}`}
+                                className="absolute left-3 top-3 z-10 max-w-[calc(100%-5rem)] shadow-lg"
+                            >
+                                <span className="min-w-0 truncate">Pakai lokasi {fallbackLocation.nama}</span>
+                            </Button>
+                        )}
                     </div>
                     <p className="flex items-start gap-1.5 text-sm text-ink-2" role="status">
                         <LocateFixed className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
@@ -362,11 +380,6 @@ export default function WorkcodeEditor({ workcode, participants, toleranceMinute
                         </span>
                     </p>
                     <CoordinateFields position={mapPosition} onChange={choosePosition} error={locationError} />
-                    {fallbackLocation && !(mapPosition?.lat === fallbackLocation.lat && mapPosition?.lng === fallbackLocation.lng) && (
-                        <Button size="sm" variant="ghost" icon={History} onClick={() => choosePosition({ lat: fallbackLocation.lat, lng: fallbackLocation.lng })} className="-ml-2 self-start">
-                            Pakai lokasi {fallbackLocation.nama}
-                        </Button>
-                    )}
                 </fieldset>
             </form>
 

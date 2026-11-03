@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\AdminMiddleware;
 use App\Http\Middleware\BumpWebSyncOnWrite;
+use App\Http\Middleware\EnsurePasswordChanged;
 use App\Http\Middleware\EnsureSupportedAppVersion;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\RoleMiddleware;
@@ -34,6 +35,8 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->web(append: [
             HandleInertiaRequests::class,
+            // Di dalam HandleInertiaRequests agar redirect-nya ditangani Inertia (303 untuk PUT/PATCH/DELETE).
+            EnsurePasswordChanged::class,
             AddLinkHeadersForPreloadedAssets::class,
             SecurityHeaders::class,
         ]);

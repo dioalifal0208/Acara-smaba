@@ -31,5 +31,8 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <!-- Test lama memakai peserta tanpa HP terkunci; test penegakan menyalakannya lewat config(). -->
+        <env name="DEVICE_LOCK_REQUIRE_ID" value="false"/>
+        <env name="ANTI_FAKE_GPS_REQUIRE_SIGNALS" value="false"/>
     </php>
 </phpunit>

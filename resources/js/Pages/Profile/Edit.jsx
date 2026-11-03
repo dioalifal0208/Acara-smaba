@@ -7,7 +7,7 @@ import UpdateProfileInformationForm from './Partials/UpdateProfileInformationFor
 
 /** Profil akun yang sedang masuk: tiga bagian pendek dalam satu halaman (tanpa tab). */
 export default function Edit({ mustVerifyEmail, status }) {
-    const { auth } = usePage().props;
+    const { auth, mustChangePassword } = usePage().props;
     const user = auth.user;
 
     return (
@@ -16,6 +16,13 @@ export default function Edit({ mustVerifyEmail, status }) {
 
             <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 sm:px-6">
                 <PageHeader title="Profil" description="Nama, email, dan kata sandi akun Anda." />
+
+                {mustChangePassword && (
+                    <div role="alert" className="rounded-xl border border-danger/30 bg-danger-soft p-4 text-sm text-ink">
+                        <p className="font-semibold">Ganti kata sandi awal Anda</p>
+                        <p className="mt-1 text-ink-2">Kata sandi Anda masih sama dengan NIS/NIP, yang mudah ditebak orang lain. Isi bagian Kata sandi di bawah: kata sandi saat ini = NIS/NIP Anda. Setelah diganti, menu lain bisa dipakai lagi.</p>
+                    </div>
+                )}
 
                 <div className="flex items-center gap-4">
                     <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-surface-2 text-xl font-semibold text-ink-2" aria-hidden="true">

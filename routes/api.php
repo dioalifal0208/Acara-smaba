@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\V1\PhotoController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\WorkcodeController;
 use App\Http\Controllers\WebSyncController;
+use App\Http\Middleware\EnsureDeviceBound;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
@@ -20,7 +21,7 @@ Route::prefix('v1')->group(function () {
         ->middleware('throttle:api-login')
         ->name('api.v1.login');
 
-    Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
+    Route::middleware(['auth:sanctum', 'throttle:api', EnsureDeviceBound::class])->group(function () {
         Route::post('/auth/logout', [AuthController::class, 'logout'])
             ->name('api.v1.logout');
 

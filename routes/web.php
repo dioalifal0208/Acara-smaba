@@ -33,8 +33,10 @@ use Inertia\Inertia;
 // Halaman depan publik: hanya informasi umum. Data kehadiran tidak dikirim ke publik (privasi).
 Route::get('/', fn () => Inertia::render('Welcome', ['apkUrl' => AppRelease::downloadUrl()]));
 
-// APK Android terbaru, diunggah otomatis oleh deploy (php artisan apk:publish).
-Route::get('/aplikasi/unduh', [AppReleaseController::class, 'download'])->name('apk.download');
+// APK Android terbaru, diunggah otomatis oleh deploy (php artisan apk:publish). Dibatasi per IP karena
+// file ±50 MB di shared hosting; tetap longgar karena banyak peserta bisa berbagi IP WiFi sekolah (NAT).
+Route::get('/aplikasi/unduh', [AppReleaseController::class, 'download'])
+    ->middleware('throttle:30,1')->name('apk.download');
 
 Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     // Dashboard route
